@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IBNO Coder — Station 849</title>
+  <link rel="manifest" href="ibno.webmanifest">
+  <meta name="theme-color" content="#4D148C">
+  <link rel="apple-touch-icon" href="icons/ibno-icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    header {
+      background: #4D148C;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.01em; }
+    #file-label { font-size: 12px; opacity: 0.75; max-width: 500px; text-align: right; }
+
+    #drop-zone {
+      border: 2px dashed #4D148C;
+      border-radius: 10px;
+      padding: 56px 24px;
+      text-align: center;
+      background: white;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      margin-bottom: 20px;
+      user-select: none;
+    }
+    #drop-zone.dragover { background: #f3eeff; border-color: #FF6200; }
+    #drop-zone h2 { color: #4D148C; font-size: 17px; margin-bottom: 6px; }
+    #drop-zone p { color: #888; font-size: 13px; }
+    #drop-zone .hint { margin-top: 10px; font-size: 11px; color: #bbb; }
+    #file-input { display: none; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:active { opacity: 0.85; }
+    .btn-purple { background: #4D148C; color: white; }
+    .btn-purple:hover { background: #3a0f6a; }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-gray { background: #e4e4e7; color: #333; }
+    .btn-gray:hover { background: #d1d1d6; }
+
+    #reset-btn { display: none; margin-bottom: 16px; }
+
+    #summary {
+      display: none;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 14px 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid #e0e0e0;
+    }
+    .stat-card.green { border-color: #16a34a; }
+    .stat-card.orange { border-color: #FF6200; }
+    .stat-card.purple { border-color: #4D148C; }
+    .stat-card.blue { border-color: #1d4ed8; }
+    .stat-card .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .stat-card .value { font-size: 30px; font-weight: 700; color: #1a1a2e; line-height: 1; }
+    .stat-card.green .value { color: #16a34a; }
+    .stat-card.orange .value { color: #FF6200; }
+    .stat-card.purple .value { color: #4D148C; }
+    .stat-card.blue .value { color: #1d4ed8; }
+    .stat-card[data-target] {
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .stat-card[data-target]:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.12); }
+    .stat-card[data-target]:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    @keyframes section-ping {
+      0%   { box-shadow: 0 0 0 0 rgba(77,20,140,0.35); }
+      70%  { box-shadow: 0 0 0 10px rgba(77,20,140,0); }
+      100% { box-shadow: 0 0 0 0 rgba(77,20,140,0); }
+    }
+    .section.ping { animation: section-ping 0.55s ease-out; }
+
+    .day-banner {
+      display: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .day-banner.weekend { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .day-banner.weekday { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+
+    .section {
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: none;
+    }
+    /* Clickable, sticky section header (collapse + whole-page sticky, #166).
+       NOTE: .section must NOT set overflow:hidden, or position:sticky here would
+       be clipped to the section box instead of pinning to the viewport. */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      user-select: none;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: #fff;
+      border-radius: 8px 8px 0 0;
+    }
+    .section-header:hover { background: #faf8ff; }
+    .chev {
+      display: inline-block;
+      font-size: 11px;
+      color: #bbb;
+      margin-right: 9px;
+      transition: transform 0.15s;
+      vertical-align: middle;
+    }
+    .section.collapsed > table { display: none; }
+    .section.collapsed .section-header { border-bottom: none; border-radius: 8px; }
+    .section.collapsed .chev { transform: rotate(-90deg); }
+    .section-header h2 { font-size: 15px; font-weight: 700; }
+    .section-header .right { display: flex; align-items: center; gap: 10px; }
+    .badge {
+      background: #f0f0f0;
+      color: #555;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: #fafafa;
+      padding: 9px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #666;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #ececec;
+    }
+    td {
+      padding: 9px 16px;
+      border-bottom: 1px solid #f5f5f5;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; }
+    .label-copy { cursor: pointer; border-radius: 3px; padding: 1px 2px; transition: background 0.1s, color 0.1s; }
+    .label-copy:hover { background: #ece8ff; color: #4D148C; }
+    .label-copy.copied { background: #dcfce7; color: #15803d; }
+    .code-pill {
+      display: inline-block;
+      background: #4D148C;
+      color: white;
+      padding: 2px 11px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+    }
+    .flag-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 4px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+    }
+    .flag-pill-work  { background: #fff3e0; color: #b45309; }
+    .flag-pill-label { background: #fef2f2; color: #dc2626; }
+    .flag-pill-849   { background: #fef9c3; color: #854d0e; }
+    .repeat-pill {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 6px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      white-space: nowrap;
+      cursor: help;
+    }
+    .cat-text { color: #888; font-size: 11px; }
+
+    tbody tr:nth-child(even) td { background: #f8f7fd; }
+    tr:hover td { background: #ece8ff !important; }
+
+    .copy-row-btn {
+      background: none;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      color: #6b7280;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 2px 7px;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .copy-row-btn:hover { background: #4D148C; border-color: #4D148C; color: white; }
+    .copy-row-btn.copied { background: #16a34a; border-color: #16a34a; color: white; }
+
+    /* ── Closure Portal code select (auto-code or 34 override) ──────────────── */
+    .code-select {
+      background: #4D148C;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      padding: 2px 6px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .code-select:focus { outline: 2px solid #FF6200; outline-offset: 1px; }
+    .code-select.override-34 { background: #c05621; }
+
+    #manual-section { border-top: 3px solid #FF6200; }
+    #manual-section .section-header h2 { color: #c2410c; }
+
+    .empty-state { padding: 36px; text-align: center; color: #bbb; font-size: 13px; }
+
+    /* ── Ready-to-Enter filter chips (view-only) ─────────────────────────────── */
+    .filter-note { font-size: 12px; color: #888; }
+    .chips { padding: 11px 18px; border-bottom: 1px solid #f0f0f3; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .chips .grp-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; }
+    .chip { border: 1px solid #d8d3e6; background: white; color: #4a4a5a; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; display: inline-flex; align-items: center; gap: 6px; }
+    .chip:hover { border-color: #4D148C; }
+    .chip.active { background: #4D148C; border-color: #4D148C; color: white; }
+    .chip .n { font-size: 11px; opacity: 0.7; }
+    .chip-divider { width: 1px; height: 22px; background: #e5e5ea; margin: 0 2px; }
+    .chip-clear { border: none; background: none; color: #4D148C; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px; }
+
+    /* ── Settings panel ──────────────────────────────────────────────────────── */
+    #settings-panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+      border: 1px solid #e0d4f5;
+      margin-bottom: 20px;
+      overflow: hidden;
+      display: none;
+    }
+    #settings-panel .panel-body { padding: 18px 20px; }
+    #settings-panel label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #4D148C;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    #settings-panel .hint-text { font-size: 11px; color: #999; margin-bottom: 10px; }
+    #flagged-areas-input {
+      width: 100%;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      border: 1px solid #d1c4e9;
+      border-radius: 5px;
+      padding: 8px 10px;
+      resize: vertical;
+      min-height: 72px;
+      color: #1a1a2e;
+      background: #faf8ff;
+      transition: border-color 0.15s;
+    }
+    #flagged-areas-input:focus { outline: none; border-color: #4D148C; background: #fff; }
+    .settings-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    #settings-status {
+      font-size: 12px;
+      color: #16a34a;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #settings-status.show { opacity: 1; }
+    #settings-toggle { margin-bottom: 16px; }
+
+    /* ── Manual review action cell ───────────────────────────────────────────── */
+    .action-cell { white-space: nowrap; padding: 6px 12px !important; }
+    .code-input-mini {
+      width: 60px;
+      padding: 3px 6px;
+      border: 1px solid #d1c4e9;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      text-align: center;
+      color: #1a1a2e;
+      transition: border-color 0.15s;
+      margin-right: 4px;
+    }
+    .code-input-mini:focus { outline: none; border-color: #4D148C; }
+    .btn-apply-mini {
+      padding: 3px 9px;
+      background: #16a34a;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 4px;
+      transition: background 0.12s;
+    }
+    .btn-apply-mini:hover { background: #15803d; }
+    .btn-done-mini {
+      padding: 3px 9px;
+      background: #e4e4e7;
+      color: #444;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .btn-done-mini:hover { background: #d1d1d6; }
+    .status-pill  { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .status-coded { background: #dcfce7; color: #15803d; }
+    .status-done  { background: #f0f0f0; color: #666; }
+    .express-pill { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .express-yes  { background: #dbeafe; color: #1e40af; }
+    .express-no   { background: #f3f4f6; color: #6b7280; }
+    .btn-undo-mini {
+      padding: 3px 9px;
+      background: none;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #6b7280;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .btn-undo-mini:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    #resolved-section { border-top: 3px solid #16a34a; }
+    #resolved-section .section-header h2 { color: #15803d; }
+    #repeat-section { border-top: 3px solid #1d4ed8; }
+    #repeat-section .section-header h2 { color: #1d4ed8; }
+
+    /* ── Expandable row detail ───────────────────────────────────────────────── */
+    tr.expandable { cursor: pointer; }
+    tr.expandable:hover td { background: #ece8ff !important; }
+    .expand-indicator {
+      display: inline-block;
+      font-size: 9px;
+      color: #bbb;
+      margin-right: 6px;
+      transition: transform 0.15s;
+      vertical-align: middle;
+    }
+    tr.row-open .expand-indicator { transform: rotate(90deg); color: #4D148C; }
+    .detail-row td { padding: 0 !important; border-bottom: 1px solid #ececec; }
+    .detail-panel {
+      background: #f8f7fd;
+      border-top: 1px solid #e0d4f5;
+      padding: 14px 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px 28px;
+    }
+    .detail-field .detail-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 3px;
+    }
+    .detail-field .detail-value {
+      font-size: 13px;
+      color: #1a1a2e;
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+
+    /* ── Repeat History panel (#166, ADR-0007) ───────────────────────────────── */
+    #history-toggle { margin-bottom: 16px; margin-left: 8px; }
+    #history-panel {
+      display: none;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+      border-top: 3px solid #1d4ed8;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .hist-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
+    .hist-head h2 { font-size: 15px; font-weight: 700; color: #1d4ed8; }
+    .hist-sub { font-size: 11px; color: #aaa; }
+    .hist-toolbar { display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px solid #f4f4f6; flex-wrap: wrap; }
+    .hist-toolbar .hint-text { font-size: 12px; color: #999; }
+    .hist-spacer { flex: 1; }
+    .hist-search { padding: 7px 11px; border: 1px solid #d1c4e9; border-radius: 6px; font-size: 13px; min-width: 220px; }
+    .hist-search:focus { outline: none; border-color: #4D148C; }
+    .hist-seg { display: inline-flex; border: 1px solid #d1c4e9; border-radius: 6px; overflow: hidden; }
+    .hist-seg button { border: none; background: #fff; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: #666; }
+    .hist-seg button.on { background: #1d4ed8; color: #fff; }
+    .times-pill { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #dbeafe; color: #1d4ed8; }
+    .times-pill.warn2 { background: #fff3e0; color: #c2410c; }
+    .times-pill.hot { background: #fee2e2; color: #dc2626; }
+    .today-tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; text-transform: uppercase; letter-spacing: 0.04em; }
+    .hist-dates { color: #555; font-size: 12px; }
+    .hist-prune { background: none; border: 1px solid #e3e3e8; border-radius: 6px; color: #aaa; cursor: pointer; padding: 3px 9px; font-size: 13px; }
+    .hist-prune:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    .hist-foot { padding: 10px 18px; font-size: 11px; color: #aaa; border-top: 1px solid #f4f4f6; }
+    .ibno-sync-status { font-size: 12px; font-weight: 600; color: #999; white-space: nowrap; }
+    .ibno-sync-status.ok { color: #16a34a; } .ibno-sync-status.syncing { color: #4D148C; }
+    .ibno-sync-status.error { color: #dc2626; } .ibno-sync-status.off { color: #aaa; }
+    .settings-divider { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+    .sync-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .sync-field { width: 100%; max-width: 420px; font-size: 13px; border: 1px solid #d1c4e9; border-radius: 5px; padding: 7px 10px; }
+    .sync-field:focus { outline: none; border-color: #4D148C; }
+    #sync-settings-status { font-size: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
+    #sync-settings-status.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:14px">
+    <h1>IBNO Coder &mdash; Station 849</h1>
+  </div>
+  <span id="file-label">No file loaded</span>
+</header>
+
+<button class="btn btn-gray" id="settings-toggle" onclick="toggleSettings()">&#9881; Settings</button>
+<button class="btn btn-gray" id="history-toggle" onclick="toggleHistory()">&#128257; Repeat History</button>
+
+<div id="history-panel">
+  <div class="hist-head">
+    <h2>&#128257; Repeat History</h2>
+    <span class="hist-sub">device-local &middot; 30-day detection window</span>
+  </div>
+  <div class="hist-toolbar">
+    <input type="text" id="hist-search" class="hist-search" placeholder="Search tracking #&hellip;" oninput="renderHistory()">
+    <span class="hint-text">Window:</span>
+    <span class="hist-seg" id="hist-window">
+      <button data-w="7" onclick="setHistWindow(7)">7d</button>
+      <button data-w="14" onclick="setHistWindow(14)">14d</button>
+      <button data-w="30" class="on" onclick="setHistWindow(30)">30d</button>
+    </span>
+    <span class="hist-spacer"></span>
+    <span id="ibno-sync-status" class="ibno-sync-status" title="Cross-device sync status"></span>
+    <button class="btn btn-purple" id="ibno-sync-now" onclick="ibnoSyncNow()">&#8635; Sync now</button>
+    <button class="btn btn-purple" onclick="exportHistory()">&#8595; Export TSV</button>
+    <button class="btn btn-gray" onclick="clearRepeatHistory()">Clear all</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Tracking #</th><th>Times Seen</th><th>Last Seen</th><th>Inbound Dates</th><th>Category</th><th></th></tr>
+    </thead>
+    <tbody id="hist-tbody"></tbody>
+  </table>
+  <div class="hist-foot" id="hist-foot"></div>
+</div>
+
+<div id="settings-panel">
+  <div class="panel-body">
+    <label for="flagged-areas-input">Flagged Work Areas</label>
+    <div class="hint-text">One per line or comma-separated. Packages whose IB_WORK_AREA matches any of these are sent to Manual Review.</div>
+    <textarea id="flagged-areas-input" spellcheck="false"></textarea>
+    <div class="settings-actions">
+      <button class="btn btn-purple" onclick="saveSettings()">Save</button>
+      <button class="btn btn-gray" onclick="resetSettings()">Reset to defaults</button>
+      <button class="btn btn-gray" onclick="clearRepeatHistory()">Clear repeat history</button>
+      <span id="settings-status">&#10003; Saved</span>
+    </div>
+
+    <hr class="settings-divider">
+    <label>Repeat History sync (cross-device)</label>
+    <div class="hint-text">Optional. Syncs the Repeat History across devices via a private GitHub file. The token is stored only on this device and never written to any file. Leave blank to keep history local-only.</div>
+    <div class="sync-fields">
+      <input type="password" id="sync-token" class="sync-field" placeholder="GitHub token (fine-grained, Contents R/W)" autocomplete="off" spellcheck="false">
+      <input type="text" id="sync-owner" class="sync-field" placeholder="Repo owner" autocomplete="off" spellcheck="false">
+      <input type="text" id="sync-repo" class="sync-field" placeholder="Repo name" autocomplete="off" spellcheck="false">
+      <input type="text" id="sync-branch" class="sync-field" placeholder="Data branch (e.g. ibno-data)" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="settings-actions">
+      <button class="btn btn-purple" onclick="saveSyncSettings()">Save sync settings</button>
+      <span id="sync-settings-status">&#10003; Saved</span>
+    </div>
+  </div>
+</div>
+
+<button class="btn btn-gray" id="reset-btn" onclick="resetApp()">&larr; Load New File</button>
+<button class="btn btn-gray" id="rerun-btn" style="display:none;margin-bottom:16px;" onclick="rerunRules()">&#8635; Re-run Rules</button>
+<button class="btn btn-gray" id="collapse-all-btn" style="display:none;margin-bottom:16px;" onclick="toggleAllSections()">&#10996; Collapse all</button>
+
+<div id="drop-zone"
+     onclick="document.getElementById('file-input').click()"
+     ondragover="onDragOver(event)"
+     ondragleave="onDragLeave(event)"
+     ondrop="onDrop(event)">
+  <h2>Drop your CSV here</h2>
+  <p>or click to browse</p>
+  <div class="hint">Inbound and Van Scans &mdash; Full Detail by Date</div>
+</div>
+<input type="file" id="file-input" accept=".csv" onchange="handleFile(this.files[0])">
+
+<div id="summary">
+  <div class="stat-card green" data-target="auto-section">
+    <div class="label">Ready to Enter</div>
+    <div class="value" id="stat-auto">0</div>
+  </div>
+  <div class="stat-card orange" data-target="manual-section">
+    <div class="label">Needs Review</div>
+    <div class="value" id="stat-manual">0</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="label">Total Flagged</div>
+    <div class="value" id="stat-total">0</div>
+  </div>
+  <div class="stat-card blue" data-target="repeat-section">
+    <div class="label">Repeats</div>
+    <div class="value" id="stat-repeat">0</div>
+  </div>
+</div>
+
+<div class="day-banner" id="day-banner"></div>
+
+<!-- SECTION 1: AUTO-CODED -->
+<div class="section" id="auto-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#10003; Ready to Enter</h2>
+      <span class="badge" id="auto-badge">0</span>
+      <span class="filter-note" id="auto-filter-note"></span>
+    </div>
+    <div class="right">
+      <button class="btn btn-purple" id="copy-btn" onclick="copyAutoTable()">Copy All</button>
+      <button class="btn btn-purple" onclick="downloadAutoTable()">&#8595; TSV</button>
+    </div>
+  </div>
+  <!-- Filter chips (#filter-ready-to-enter): slice the VIEW by code/category.
+       View-only — Copy All / TSV still export the full model. -->
+  <div class="chips" id="auto-chips" style="display:none"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Tracking #</th>
+        <th>Code</th>
+        <th>Category</th>
+        <th>Recipient / Address</th>
+        <th style="width:54px"></th>
+      </tr>
+    </thead>
+    <tbody id="auto-tbody"></tbody>
+  </table>
+</div>
+
+<!-- SECTION 2: MANUAL REVIEW -->
+<div class="section" id="manual-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#9888; Needs Manual Review</h2>
+      <span class="badge" id="manual-badge">0</span>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Tracking #</th>
+        <th>Category</th>
+        <th>IB_WORK_AREA</th>
+        <th>Reason</th>
+        <th>Recipient / Address</th>
+        <th>Express</th>
+        <th style="width:180px">Resolve</th>
+      </tr>
+    </thead>
+    <tbody id="manual-tbody"></tbody>
+  </table>
+</div>
+
+<!-- SECTION 3: MANUALLY RESOLVED -->
+<div class="section" id="resolved-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#10003; Manually Resolved</h2>
+      <span class="badge" id="resolved-badge">0</span>
+    </div>
+    <div class="right">
+      <button class="btn btn-purple" id="copy-resolved-btn" onclick="copyResolvedTable()">Copy Coded</button>
+      <button class="btn btn-purple" onclick="downloadResolvedTable()">&#8595; TSV</button>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Tracking #</th>
+        <th>Code</th>
+        <th>Category</th>
+        <th>IB_WORK_AREA</th>
+        <th>Reason</th>
+        <th>Recipient / Address</th>
+        <th>Express</th>
+        <th style="width:72px"></th>
+      </tr>
+    </thead>
+    <tbody id="resolved-tbody"></tbody>
+  </table>
+</div>
+
+<!-- SECTION 4: RECURRING IBNO (REPEAT PACKAGES) -->
+<div class="section" id="repeat-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#128257; Repeat Packages</h2>
+      <span class="badge" id="repeat-badge">0</span>
+    </div>
+    <div class="right">
+      <button class="btn btn-purple" id="copy-repeat-btn" onclick="copyRepeatTable()">Copy All</button>
+      <button class="btn btn-purple" onclick="downloadRepeatTable()">&#8595; TSV</button>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Tracking #</th>
+        <th>Times Seen</th>
+        <th>Inbound Dates</th>
+        <th>Category</th>
+        <th>Recipient / Address</th>
+      </tr>
+    </thead>
+    <tbody id="repeat-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Options populated from KNOWN_CODES at init (single source, #158). -->
+<datalist id="common-codes"></datalist>
+
+<script src="lib/tool-helpers.js"></script>
+<script src="lib/csv.js"></script>
+<script src="lib/ibno-rules.js"></script>
+<script src="lib/ibno-sync.js"></script>
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const toolStorage = ToolHelpers.createStorage();
+const DEFAULT_FLAGGED_WORK_AREAS = IbnoRules.DEFAULT_FLAGGED_WORK_AREAS.slice();
+// Canonical IBNO code set — single source for the datalist suggestions and the
+// manual-entry sanity check (#158). A code outside this set is allowed but warns,
+// so a typo (665 for 65) can't flow silently into the entered record.
+const KNOWN_CODES = ['11', '33', '34', '39', '59', '60', '65', '94', '99'];
+function isKnownCode(code) { return KNOWN_CODES.indexOf(String(code).trim()) !== -1; }
+const HISTORY_KEY  = IbnoRules.HISTORY_KEY;
+let FLAGGED_WORK_AREAS = IbnoRules.getFlaggedWorkAreas();
+let lastRows = null; // stores the last parsed CSV rows for re-run
+let lastRecurring = {}; // recurring-IBNO map from the last upload, reused on re-run
+
+// ─── SETTINGS PANEL ───────────────────────────────────────────────────────────
+function toggleSettings() {
+  const panel = document.getElementById('settings-panel');
+  const open  = panel.style.display === 'block';
+  if (!open) {
+    document.getElementById('flagged-areas-input').value = FLAGGED_WORK_AREAS.join('\n');
+    fillSyncSettings();
+  }
+  panel.style.display = open ? 'none' : 'block';
+}
+
+function saveSettings() {
+  const raw = document.getElementById('flagged-areas-input').value;
+  FLAGGED_WORK_AREAS = raw.split(/[\n,]+/).map(v => v.trim()).filter(v => v.length > 0);
+  IbnoRules.setFlaggedWorkAreas(FLAGGED_WORK_AREAS);
+  toolStorage.set('ibno_flagged_areas', FLAGGED_WORK_AREAS);
+  const status = document.getElementById('settings-status');
+  status.textContent = '✓ Saved';
+  status.classList.add('show');
+  setTimeout(() => status.classList.remove('show'), 2000);
+}
+
+function resetSettings() {
+  FLAGGED_WORK_AREAS = IbnoRules.setFlaggedWorkAreas(DEFAULT_FLAGGED_WORK_AREAS);
+  toolStorage.remove('ibno_flagged_areas');
+  document.getElementById('flagged-areas-input').value = FLAGGED_WORK_AREAS.join('\n');
+  const status = document.getElementById('settings-status');
+  status.textContent = '↺ Reset';
+  status.classList.add('show');
+  setTimeout(() => { status.classList.remove('show'); status.textContent = '✓ Saved'; }, 2000);
+}
+
+function clearRepeatHistory() {
+  toolStorage.remove(HISTORY_KEY);
+  lastRecurring = {};
+  currentRecurringMap = {};
+  const status = document.getElementById('settings-status');
+  status.textContent = '🔁 History cleared';
+  status.classList.add('show');
+  setTimeout(() => { status.classList.remove('show'); status.textContent = '✓ Saved'; }, 2000);
+  renderHistory();
+}
+
+function loadHistory() {
+  const parsed = toolStorage.get(HISTORY_KEY, {});
+  return (parsed && typeof parsed === 'object') ? parsed : {};
+}
+
+function saveHistory(history) {
+  toolStorage.set(HISTORY_KEY, history);
+}
+
+// ─── REPEAT HISTORY PANEL (#166, ADR-0007) ────────────────────────────────────
+// Browse/search/export/prune the rolling Repeat History, independent of the
+// report currently loaded. Browse list = Recurring IBNOs (2+ inbound dates);
+// search spans every tracked tracking #. The display window (7/14/30) only
+// narrows what's shown — detection/retention stays at 30 days (ADR-0007).
+let histWindow = 30;
+
+function toggleHistory() {
+  const panel = document.getElementById('history-panel');
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) { renderHistory(); refreshSyncStatus(); }
+}
+
+function setHistWindow(w) {
+  histWindow = w;
+  document.querySelectorAll('#hist-window button').forEach(b => b.classList.toggle('on', Number(b.dataset.w) === w));
+  renderHistory();
+}
+
+// Tracking numbers surfaced from the report loaded right now — used to tag
+// history rows whose package is also in today's work.
+function todaysLabelSet() {
+  const s = new Set();
+  autoItems.forEach(i => { if (i && i.label) s.add(i.label); });
+  manualItems.forEach(i => { if (i && i.label) s.add(i.label); });
+  resolvedItems.forEach(i => { if (i && i.label) s.add(i.label); });
+  Object.keys(currentRecurringMap || {}).forEach(l => s.add(l));
+  return s;
+}
+
+function daysAgoLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return dateStr;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((today - d) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days + 'd ago';
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('hist-tbody');
+  if (!tbody) return;
+  const all = IbnoRules.historyRows(loadHistory(), histWindow, new Date());
+  const q = (document.getElementById('hist-search').value || '').trim();
+  const rows = q ? all.filter(r => r.tracking.includes(q)) : all.filter(r => r.timesSeen >= 2);
+  const today = todaysLabelSet();
+  tbody.innerHTML = '';
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">' +
+      (q ? 'No tracked package matches “' + ToolHelpers.escapeHtml(q) + '”'
+         : 'No repeat packages in the last ' + histWindow + ' days. History builds as you code reports.') +
+      '</td></tr>';
+  } else {
+    rows.forEach(r => tbody.appendChild(buildHistoryRow(r, today.has(r.tracking))));
+  }
+  const repeatCount = all.filter(r => r.timesSeen >= 2).length;
+  document.getElementById('hist-foot').textContent =
+    (q ? 'Searching all ' + all.length + ' tracked package(s) in the last ' + histWindow + ' days.'
+       : repeatCount + ' recurring package(s) in the last ' + histWindow + ' days.') +
+    ' Device-local; 30-day detection window.';
+}
+
+function buildHistoryRow(r, inToday) {
+  const esc = ToolHelpers.escapeHtml;
+  const tr = document.createElement('tr');
+  const cls = r.timesSeen >= 3 ? 'hot' : (r.timesSeen === 2 ? 'warn2' : '');
+  tr.innerHTML =
+    '<td class="mono"><span class="label-copy" title="Click to copy">' + esc(r.tracking) + '</span>' +
+      (inToday ? '<span class="today-tag" title="Also in the report loaded now">in today</span>' : '') + '</td>' +
+    '<td><span class="times-pill ' + cls + '">&times;' + r.timesSeen + '</span></td>' +
+    '<td class="hist-dates">' + esc(daysAgoLabel(r.lastSeen)) + '</td>' +
+    '<td class="hist-dates">' + r.dates.map(esc).join(' · ') + '</td>' +
+    '<td class="cat-text">' + esc(r.category || '—') + '</td>' +
+    '<td><button class="hist-prune" title="Remove from history" data-prune="' + esc(r.tracking) + '">&times;</button></td>';
+  attachLabelCopy(tr, r.tracking);
+  tr.querySelector('.hist-prune').addEventListener('click', () => pruneHistoryEntry(r.tracking));
+  return tr;
+}
+
+function pruneHistoryEntry(tracking) {
+  const h = loadHistory();
+  if (h[tracking] !== undefined) { delete h[tracking]; saveHistory(h); scheduleHistorySync(); }
+  renderHistory();
+}
+
+function exportHistory() {
+  const all = IbnoRules.historyRows(loadHistory(), histWindow, new Date());
+  const rows = all.filter(r => r.timesSeen >= 2).map(r => [r.tracking, r.timesSeen, r.dates.join(' '), r.category || '']);
+  if (!rows.length) return;
+  const content = ToolHelpers.buildTSV(['TRACKING', 'TIMES_SEEN', 'INBOUND_DATES', 'CATEGORY'], rows) + '\n';
+  const today = new Date().toISOString().slice(0, 10);
+  ToolHelpers.downloadTSV('ibno-repeat-history-' + today + '.tsv', content);
+}
+
+// ─── REPEAT HISTORY CROSS-DEVICE SYNC (#173, PRD #170, ADR-0005 pattern) ──────
+// Opt-in: with no token + repo coordinates entered, the tool is purely local.
+// The token lives only in localStorage and only ever travels in the Authorization
+// header — it is never written to ibno-history.json (the file is the history map).
+const SYNC_TOKEN_KEY  = 'ibno_gh_token';
+const SYNC_COORDS_KEY = 'ibno_repo_coords';
+const SYNC_SHA_KEY    = 'ibno_gh_sha';
+let ibnoKnownSha = toolStorage.get(SYNC_SHA_KEY, null);
+let ibnoSyncing = false;
+
+function getSyncToken()  { return toolStorage.get(SYNC_TOKEN_KEY, ''); }
+function getSyncCoords() { return toolStorage.get(SYNC_COORDS_KEY, { owner: '', repo: '', branch: '' }); }
+function hasSyncCoords() { const c = getSyncCoords(); return !!(c && c.owner && c.repo && c.branch); }
+function syncReady()     { return !!getSyncToken() && hasSyncCoords(); }
+
+function setSyncStatus(kind, text) {
+  const el = document.getElementById('ibno-sync-status');
+  if (el) { el.className = 'ibno-sync-status ' + kind; el.textContent = text; }
+}
+function refreshSyncStatus() {
+  if (ibnoSyncing) return;
+  setSyncStatus(syncReady() ? 'ok' : 'off', syncReady() ? 'sync on' : 'sync off');
+}
+
+function fillSyncSettings() {
+  const c = getSyncCoords();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('sync-token', getSyncToken());
+  set('sync-owner', c.owner); set('sync-repo', c.repo); set('sync-branch', c.branch);
+}
+
+function saveSyncSettings() {
+  const val = id => (document.getElementById(id).value || '').trim();
+  const token = val('sync-token');
+  if (token) toolStorage.set(SYNC_TOKEN_KEY, token); else toolStorage.remove(SYNC_TOKEN_KEY);
+  toolStorage.set(SYNC_COORDS_KEY, { owner: val('sync-owner'), repo: val('sync-repo'), branch: val('sync-branch') });
+  const st = document.getElementById('sync-settings-status');
+  if (st) { st.textContent = '✓ Saved'; st.classList.add('show'); setTimeout(() => st.classList.remove('show'), 2000); }
+  refreshSyncStatus();
+}
+
+// Write-through (#174): after the local history changes (a coded report or a
+// prune), push it to the shared file in the background — debounced, offline-safe
+// (local already saved; a sync failure only updates the status). No-op when sync
+// isn't configured, so the tool stays purely local until set up.
+let ibnoSyncTimer = null;
+function scheduleHistorySync() {
+  if (!syncReady()) return;
+  if (ibnoSyncTimer) clearTimeout(ibnoSyncTimer);
+  ibnoSyncTimer = setTimeout(function () { ibnoSyncTimer = null; ibnoSyncNow(); }, 800);
+}
+
+async function ibnoSyncNow() {
+  if (!syncReady()) { setSyncStatus('off', 'sync off — add token + repo in Settings'); return; }
+  if (ibnoSyncing) return;
+  ibnoSyncing = true;
+  setSyncStatus('syncing', 'syncing…');
+  try {
+    const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
+    const result = await IbnoSync.pushMergeHistory(getSyncToken(), loadHistory(), ibnoKnownSha, 3, getSyncCoords(), prune);
+    saveHistory(result.history);            // localStorage is the cache; merged result lands locally
+    ibnoKnownSha = result.sha;
+    toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
+    ibnoSyncing = false;
+    renderHistory();
+    setSyncStatus('ok', 'synced ✓');
+  } catch (e) {
+    ibnoSyncing = false;
+    if (e && e.code === 'auth')          setSyncStatus('error', 'token invalid — update in Settings');
+    else if (e && e.code === 'coords')   setSyncStatus('error', 'add repo in Settings');
+    else if (e && e.code === 'conflict') setSyncStatus('error', 'sync conflict — tap Sync now');
+    else                                 setSyncStatus('error', 'offline — history saved locally');
+  }
+}
+
+// Pull-merge on load (#176): if sync is configured, fetch the shared history and
+// merge it into the local cache so the session starts with the cross-device
+// picture. Pull-only (no PUT) — subsequent changes write through (#174). Offline
+// falls back to the local cache with a status note; never throws into load.
+async function ibnoPullOnLoad() {
+  if (!syncReady()) { refreshSyncStatus(); return; }
+  setSyncStatus('syncing', 'syncing…');
+  try {
+    const remote = await IbnoSync.fetchRemote(getSyncToken(), getSyncCoords());
+    const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
+    const merged = prune(IbnoSync.mergeHistory(remote.history, loadHistory()));
+    saveHistory(merged);
+    ibnoKnownSha = remote.sha;
+    toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
+    if (document.getElementById('history-panel').style.display === 'block') renderHistory();
+    setSyncStatus('ok', 'synced ✓');
+  } catch (e) {
+    if (e && e.code === 'auth') setSyncStatus('error', 'token invalid — update in Settings');
+    else setSyncStatus('error', 'offline — working locally');
+  }
+}
+
+// ─── CSV PARSER ───────────────────────────────────────────────────────────────
+// parseCSV is provided by lib/csv.js (loaded above as a global).
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+let currentRecurringMap = {}; // recurring map for the report currently on screen
+let autoItems = [];           // data model for Ready-to-Enter rows (incl. 34 override)
+let autoFilter = { codes: [], categories: [] }; // ephemeral view filter for the auto table
+let manualItems = [];         // data model for the unresolved Manual Review rows
+let currentDayType = 'weekday'; // day banner context, persisted with the session
+
+const SESSION_KEY = 'ibno_session';
+
+function renderResults({ auto, manual, dayType }, recurringMap = {}) {
+  currentRecurringMap = recurringMap || {};
+  autoItems = auto;           // hold the model; exports + overrides read/write here
+  manualItems = manual;       // hold the unresolved manual rows for persistence
+  currentDayType = dayType;
+
+  // Stats
+  document.getElementById('stat-auto').textContent  = auto.length;
+  document.getElementById('stat-manual').textContent = manual.length;
+  document.getElementById('stat-total').textContent  = auto.length + manual.length + resolvedItems.length;
+  document.getElementById('stat-repeat').textContent = Object.keys(currentRecurringMap).length;
+  document.getElementById('summary').style.display   = 'grid';
+
+  // Day banner
+  const banner = document.getElementById('day-banner');
+  if (dayType === 'weekend') {
+    banner.textContent = 'Weekend detected — Closure Portal coded as 11';
+    banner.className = 'day-banner weekend';
+  } else {
+    banner.textContent = 'Weekday detected — Closure Portal coded as 59 (default 1-day)';
+    banner.className = 'day-banner weekday';
+  }
+  banner.style.display = 'block';
+
+  // Auto table
+  document.getElementById('auto-badge').textContent = auto.length;
+  const autoTbody = document.getElementById('auto-tbody');
+  autoTbody.innerHTML = '';
+  if (auto.length === 0) {
+    autoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">No packages to auto-code</td></tr>';
+  } else {
+    auto.forEach((item, idx) => autoTbody.appendChild(buildAutoRow(item, idx)));
+  }
+  // Fresh render starts unfiltered; rebuild chips from this report's facets.
+  autoFilter = { codes: [], categories: [] };
+  renderAutoChips();
+  applyAutoFilter();
+  document.getElementById('auto-section').style.display = 'block';
+
+  // Manual table
+  const manualBadge = document.getElementById('manual-badge');
+  manualBadge.textContent = manual.length;
+  if (manual.length > 0) {
+    manualBadge.style.background = '#FF6200';
+    manualBadge.style.color = 'white';
+  } else {
+    manualBadge.style.background = '';
+    manualBadge.style.color = '';
+  }
+  const manualTbody = document.getElementById('manual-tbody');
+  manualTbody.innerHTML = '';
+  if (manual.length === 0) {
+    manualTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages need manual review</td></tr>';
+  } else {
+    manual.forEach(item => manualTbody.appendChild(buildManualRow(item)));
+  }
+  document.getElementById('manual-section').style.display = 'block';
+
+  renderRecurringSection(currentRecurringMap);
+
+  // Resolved section: shown only when something has been resolved (so it stays
+  // hidden on a fresh upload, but restores when a persisted session has resolves).
+  if (resolvedItems.length) {
+    renderResolvedSection();
+  } else {
+    document.getElementById('resolved-section').style.display = 'none';
+    document.getElementById('resolved-badge').textContent = '0';
+  }
+
+  persistSession();
+}
+
+// ─── SESSION PERSISTENCE (#157) ─────────────────────────────────────────────
+// The in-progress coding session (parsed report → auto/manual/resolved + the
+// day context and recurring map) is held in the data models above and mirrored
+// to localStorage on every mutation, so a reload / tab-close / phone-lock
+// mid-shift restores the work instead of forcing a re-upload and re-code.
+function persistSession() {
+  toolStorage.set(SESSION_KEY, {
+    auto: autoItems,
+    manual: manualItems,
+    resolved: resolvedItems,
+    dayType: currentDayType,
+    recurring: currentRecurringMap,
+  });
+}
+
+function restoreSession() {
+  const s = toolStorage.get(SESSION_KEY, null);
+  if (!s || typeof s !== 'object') return false;
+  if (!Array.isArray(s.auto) || !Array.isArray(s.manual) || !Array.isArray(s.resolved)) return false;
+  if (!s.auto.length && !s.manual.length && !s.resolved.length) return false;
+  // Set resolved first so renderResults computes the right total and shows the
+  // resolved section. Restore renders from the persisted models — it never
+  // re-runs detectRecurring, so the 30-day history is not re-touched.
+  resolvedItems = s.resolved;
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('reset-btn').style.display = 'inline-flex';
+  document.getElementById('collapse-all-btn').style.display = 'inline-flex';
+  // Re-run needs the original CSV (lastRows), which a restore doesn't have, so
+  // the Re-run button stays hidden until a fresh upload.
+  renderResults({ auto: s.auto, manual: s.manual, dayType: s.dayType || 'weekday' }, s.recurring || {});
+  return true;
+}
+
+// Build the small "🔁 Repeat" pill shown next to a recurring tracking number.
+function recurringPill(label) {
+  const entry = currentRecurringMap[label];
+  if (!entry) return '';
+  const title = 'Recurring IBNO — inbound dates: ' + entry.inboundDates.join(', ');
+  return ' <span class="repeat-pill" title="' + ToolHelpers.escapeHtml(title) + '">&#128257; &times;' + entry.timesSeen + '</span>';
+}
+
+function renderRecurringSection(recurringMap) {
+  const labels = Object.keys(recurringMap);
+  document.getElementById('repeat-badge').textContent = labels.length;
+  const tbody = document.getElementById('repeat-tbody');
+  tbody.innerHTML = '';
+  if (labels.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No recurring packages in this report</td></tr>';
+  } else {
+    labels.forEach(label => {
+      const item = recurringMap[label];
+      const tr = document.createElement('tr');
+      const recipHtml = item.firm
+        ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(item.firm) + '</div>' +
+          '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(item.address || '') + '</div>'
+        : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(item.address || '—') + '</div>';
+      tr.innerHTML =
+        '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span></td>' +
+        '<td><span class="code-pill">&times;' + item.timesSeen + '</span></td>' +
+        '<td class="cat-text">' + item.inboundDates.map(ToolHelpers.escapeHtml).join(', ') + '</td>' +
+        '<td class="cat-text">' + ToolHelpers.escapeHtml(item.category || '—') + '</td>' +
+        '<td>' + recipHtml + '</td>';
+      attachLabelCopy(tr, label);
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById('repeat-section').style.display = 'block';
+}
+
+function copyRepeatTable() {
+  const lines = Object.keys(currentRecurringMap).map(label => {
+    const e = currentRecurringMap[label];
+    return label + '\t' + e.timesSeen + '\t' + e.inboundDates.join(' ');
+  });
+  if (!lines.length) return;
+  copyText(lines.join('\n'));
+  const btn = document.getElementById('copy-repeat-btn');
+  btn.textContent = '✓ Copied!';
+  btn.className = 'btn btn-success';
+  setTimeout(() => { btn.textContent = 'Copy All'; btn.className = 'btn btn-purple'; }, 2000);
+}
+
+function downloadRepeatTable() {
+  const rows = Object.keys(currentRecurringMap).map(label => {
+    const e = currentRecurringMap[label];
+    return [label, e.timesSeen, e.inboundDates.join(' ')];
+  });
+  if (!rows.length) return;
+  const content = ToolHelpers.buildTSV(['TRACKING', 'TIMES_SEEN', 'INBOUND_DATES'], rows) + '\n';
+  const today = new Date().toISOString().slice(0, 10);
+  ToolHelpers.downloadTSV('ibno-repeats-' + today + '.tsv', content);
+}
+
+function toggleDetailRow(tr, item, colspan) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('detail-row')) {
+    next.remove();
+    tr.classList.remove('row-open');
+  } else {
+    tr.parentNode.insertBefore(buildDetailRow(item, colspan), tr.nextSibling);
+    tr.classList.add('row-open');
+  }
+}
+
+function buildDetailRow(item, colspan) {
+  const { issueType, ibWork, sortSid, ibScanName, category, vanTime, vanWork, vanName, weight } = item;
+
+  const workSort  = [ibWork, sortSid].filter(Boolean).join('-') || '—';
+  const vanParts  = [vanTime, vanWork, vanName].filter(Boolean);
+  const vanDisplay = vanParts.length ? vanParts.join(' · ') : '—';
+
+  const fields = [
+    { label: 'Issue Type',      value: issueType  || '—' },
+    { label: 'Work Area / Sort', value: workSort },
+    { label: 'IB Scanner',      value: ibScanName || '—' },
+    { label: 'PLA Lookup',      value: category   || '—' },
+    { label: 'Van Scan',        value: vanDisplay },
+    { label: 'Weight',          value: weight     || '—' },
+  ];
+
+  const fieldsHtml = fields.map(f =>
+    '<div class="detail-field">' +
+      '<div class="detail-label">' + ToolHelpers.escapeHtml(f.label) + '</div>' +
+      '<div class="detail-value">' + ToolHelpers.escapeHtml(String(f.value)) + '</div>' +
+    '</div>'
+  ).join('');
+
+  const tr = document.createElement('tr');
+  tr.className = 'detail-row';
+  tr.innerHTML = '<td colspan="' + colspan + '"><div class="detail-panel">' + fieldsHtml + '</div></td>';
+  return tr;
+}
+
+function reasonPills(reason) {
+  return reason.split(' | ').map(r => {
+    let cls = 'flag-pill ';
+    if (r.startsWith('Work area'))      cls += 'flag-pill-work';
+    else if (r.includes('849'))         cls += 'flag-pill-849';
+    else                                cls += 'flag-pill-label';
+    return '<span class="' + cls + '">' + ToolHelpers.escapeHtml(r) + '</span>';
+  }).join('');
+}
+
+function copyText(text) {
+  const doCopy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(doCopy);
+  } else {
+    doCopy();
+  }
+}
+
+function attachLabelCopy(tr, label) {
+  const span = tr.querySelector('.label-copy');
+  if (!span) return;
+  span.addEventListener('click', e => {
+    e.stopPropagation();
+    copyText(label);
+    span.classList.add('copied');
+    span.title = 'Copied!';
+    setTimeout(() => { span.classList.remove('copied'); span.title = 'Click to copy'; }, 1200);
+  });
+}
+
+function copyRowBtn(e) {
+  const btn = e.currentTarget;
+  const text = btn.dataset.label + '\t' + btn.dataset.code;
+  const doCopy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(doCopy);
+  } else {
+    doCopy();
+  }
+  btn.textContent = '✓';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 1500);
+}
+
+// ─── MANUAL RESOLVE ───────────────────────────────────────────────────────────
+let resolvedItems = [];
+
+function buildAutoRow(item, idx) {
+  const { label, code, category, firm, address } = item;
+  const isClosure = category === 'Closure Portal';
+  const tr = document.createElement('tr');
+  tr.className = 'expandable';
+  tr.dataset.idx = idx; // index into autoItems — the override + export read the model by this
+  const recipHtml = firm
+    ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div>' +
+      '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+    : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+  // Closure rows expose a code override. Always offer the day-appropriate base
+  // code (59 weekday / 11 weekend) AND 34, regardless of the row's current code —
+  // so a 34 override stays revertable after a session restore, where item.code
+  // is already 34 (#164). The active option is whichever equals item.code.
+  let codeCellHtml;
+  if (isClosure) {
+    const base = currentDayType === 'weekend' ? '11' : '59';
+    const opts = [];
+    [base, '34', code].forEach(function (v) { if (v && opts.indexOf(v) === -1) opts.push(v); });
+    const selCls = code === '34' ? 'code-select override-34' : 'code-select';
+    codeCellHtml = '<select class="' + selCls + '" onchange="updateRowCode(this)">' +
+      opts.map(function (v) {
+        return '<option value="' + ToolHelpers.escapeHtml(v) + '"' + (v === code ? ' selected' : '') + '>' + ToolHelpers.escapeHtml(v) + '</option>';
+      }).join('') +
+      '</select>';
+  } else {
+    codeCellHtml = '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>';
+  }
+  tr.innerHTML =
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+    '<td>' + codeCellHtml + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
+    '<td>' + recipHtml + '</td>' +
+    '<td></td>';
+  const btn = document.createElement('button');
+  btn.className = 'copy-row-btn';
+  btn.title = 'Copy row';
+  btn.textContent = '⎘';
+  btn.dataset.label = label;
+  btn.dataset.code  = code;
+  btn.addEventListener('click', copyRowBtn);
+  tr.lastElementChild.appendChild(btn);
+  attachLabelCopy(tr, label);
+  tr.addEventListener('click', e => {
+    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy')) return;
+    toggleDetailRow(tr, item, 5);
+  });
+  return tr;
+}
+
+function updateRowCode(sel) {
+  if (sel.value === '34') {
+    sel.classList.add('override-34');
+  } else {
+    sel.classList.remove('override-34');
+  }
+  const tr = sel.closest('tr');
+  if (tr) {
+    // Write the override into the data model (the export reads this, not the DOM).
+    const item = autoItems[tr.dataset.idx];
+    if (item) item.code = sel.value;
+    // Keep the per-row copy button in sync.
+    const copyBtn = tr.querySelector('[data-code]');
+    if (copyBtn) copyBtn.setAttribute('data-code', sel.value);
+  }
+  persistSession(); // the override lives in the model now — keep the session in sync
+}
+
+// autoExportPairs() -> [[label, code], …] for every Ready-to-Enter row, read
+// from the data model (not scraped from rendered cells). Single source for the
+// Copy All + TSV exports, so the records entered into the system can't drift
+// from a markup change, and the 34 override (now in the model) is reflected.
+function autoExportPairs() {
+  return autoItems
+    .filter(item => item && item.label && item.code)
+    .map(item => [item.label, item.code]);
+}
+
+// ─── READY-TO-ENTER FILTER CHIPS (view-only) ──────────────────────────────────
+// Slice the auto table by code and/or category. Selections OR within a group and
+// AND across groups (IbnoRules.autoItemMatchesFilter). View-only: rows are hidden
+// in the DOM, never removed from autoItems, so Copy All / TSV still export the
+// full set and the 34-override dataset.idx mapping stays intact.
+function renderAutoChips() {
+  const host = document.getElementById('auto-chips');
+  const facets = IbnoRules.autoFilterFacets(autoItems);
+  // Nothing to slice by (0/1 code AND 0/1 category) — hide the bar entirely.
+  if (!autoItems.length || (facets.codes.length <= 1 && facets.categories.length <= 1)) {
+    host.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
+  const chip = (kind, value, count) =>
+    '<button class="chip" data-kind="' + kind + '" data-val="' + ToolHelpers.escapeHtml(value) + '">' +
+    ToolHelpers.escapeHtml(value) + ' <span class="n">' + count + '</span></button>';
+  let html = '';
+  if (facets.codes.length) {
+    html += '<span class="grp-label">Code</span>' +
+      facets.codes.map(c => chip('codes', c.value, c.count)).join('');
+  }
+  if (facets.codes.length && facets.categories.length) html += '<span class="chip-divider"></span>';
+  if (facets.categories.length) {
+    html += '<span class="grp-label">Category</span>' +
+      facets.categories.map(c => chip('categories', c.value, c.count)).join('');
+  }
+  html += '<button class="chip-clear" id="auto-chip-clear">Clear</button>';
+  host.innerHTML = html;
+  host.style.display = 'flex';
+  host.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    const arr = autoFilter[c.dataset.kind];
+    const i = arr.indexOf(c.dataset.val);
+    if (i === -1) arr.push(c.dataset.val); else arr.splice(i, 1);
+    applyAutoFilter();
+  }));
+  host.querySelector('#auto-chip-clear').addEventListener('click', () => {
+    autoFilter = { codes: [], categories: [] };
+    applyAutoFilter();
+  });
+}
+
+// Toggle row visibility against autoFilter. Detail rows (inserted after their
+// expandable parent) inherit the parent's visibility; rows with no dataset.idx
+// (the empty-state row) always show.
+function applyAutoFilter() {
+  const tbody = document.getElementById('auto-tbody');
+  const active = autoFilter.codes.length + autoFilter.categories.length > 0;
+  let shown = 0;
+  let lastVisible = true;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
+    if (tr.dataset.idx === undefined) { tr.style.display = ''; lastVisible = true; return; }
+    const match = IbnoRules.autoItemMatchesFilter(autoItems[tr.dataset.idx], autoFilter);
+    tr.style.display = match ? '' : 'none';
+    lastVisible = match;
+    if (match) shown++;
+  });
+  document.getElementById('auto-filter-note').textContent =
+    active ? 'showing ' + shown + ' of ' + autoItems.length : '';
+  document.querySelectorAll('#auto-chips .chip').forEach(chip => {
+    chip.classList.toggle('active', autoFilter[chip.dataset.kind].indexOf(chip.dataset.val) !== -1);
+  });
+  const clear = document.getElementById('auto-chip-clear');
+  if (clear) clear.style.display = active ? '' : 'none';
+}
+
+function buildManualRow(item) {
+  const { label, category, ibWork, firm, reason, address, express } = item;
+  const tr = document.createElement('tr');
+  tr.className = 'expandable';
+  tr.dataset.label    = label;
+  tr.dataset.category = category;
+  const expressHtml = express
+    ? '<span class="express-pill express-yes">Express</span>'
+    : '<span class="express-pill express-no">Ground</span>';
+  const recipHtml = firm
+    ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div>' +
+      '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+    : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+  tr.innerHTML =
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork) + '</td>' +
+    '<td>' + reasonPills(reason) + '</td>' +
+    '<td>' + recipHtml + '</td>' +
+    '<td>' + expressHtml + '</td>';
+  tr.appendChild(buildActionCell(item, tr));
+  attachLabelCopy(tr, label);
+  tr.addEventListener('click', e => {
+    if (e.target.closest('.action-cell') || e.target.closest('.label-copy')) return;
+    toggleDetailRow(tr, item, 7);
+  });
+  return tr;
+}
+
+function buildActionCell(item, tr) {
+  const td = document.createElement('td');
+  td.className = 'action-cell';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'code-input-mini';
+  input.setAttribute('list', 'common-codes');
+  input.maxLength = 5;
+  input.placeholder = 'Code…';
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      applyBtn.click();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const inputs = Array.from(document.querySelectorAll('#manual-tbody .code-input-mini'));
+      const idx = inputs.indexOf(input);
+      const next = e.shiftKey ? inputs[idx - 1] : inputs[idx + 1];
+      if (next) next.focus();
+    }
+  });
+
+  const applyBtn = document.createElement('button');
+  applyBtn.className = 'btn-apply-mini';
+  applyBtn.textContent = 'Apply';
+  applyBtn.addEventListener('click', () => {
+    const code = input.value.trim();
+    if (!code) { input.focus(); return; }
+    // Sanity-check against the known code set — non-blocking, so a deliberate
+    // override still goes through, but a typo gets a chance to be caught (#158).
+    if (!isKnownCode(code) && !confirm('"' + code + '" isn’t a standard IBNO code. Apply it anyway?')) {
+      input.focus();
+      return;
+    }
+    resolveItem(Object.assign({}, item, { code, skipped: false }), tr);
+  });
+
+  const doneBtn = document.createElement('button');
+  doneBtn.className = 'btn-done-mini';
+  doneBtn.textContent = 'Done';
+  doneBtn.title = 'Mark resolved without entering a code';
+  doneBtn.addEventListener('click', () => resolveItem(Object.assign({}, item, { code: '', skipped: true }), tr));
+
+  td.appendChild(input);
+  td.appendChild(applyBtn);
+  td.appendChild(doneBtn);
+  return td;
+}
+
+function resolveItem(item, tr) {
+  if (tr) tr.remove();
+
+  // Drop the item from the unresolved manual model so the persisted session
+  // reflects only what's still pending.
+  const mi = manualItems.findIndex(m => m.label === item.label);
+  if (mi !== -1) manualItems.splice(mi, 1);
+  resolvedItems.push(item);
+
+  const remaining = document.querySelectorAll('#manual-tbody tr[data-label]').length;
+  const manualBadge = document.getElementById('manual-badge');
+  manualBadge.textContent = remaining;
+  document.getElementById('stat-manual').textContent = remaining;
+  if (remaining === 0) {
+    manualBadge.style.background = '';
+    manualBadge.style.color = '';
+    document.getElementById('manual-tbody').innerHTML =
+      '<tr><td colspan="7" class="empty-state">All packages resolved ✓</td></tr>';
+  }
+
+  renderResolvedSection();
+  persistSession();
+}
+
+function undoResolve(label) {
+  const idx = resolvedItems.findIndex(i => i.label === label);
+  if (idx === -1) return;
+  const item = resolvedItems.splice(idx, 1)[0];
+  manualItems.push(item); // back into the unresolved model
+
+  const manualTbody = document.getElementById('manual-tbody');
+  const emptyTr = manualTbody.querySelector('tr:not([data-label])');
+  if (emptyTr) emptyTr.remove();
+
+  manualTbody.appendChild(buildManualRow(item));
+
+  const remaining = document.querySelectorAll('#manual-tbody tr[data-label]').length;
+  const manualBadge = document.getElementById('manual-badge');
+  manualBadge.textContent = remaining;
+  document.getElementById('stat-manual').textContent = remaining;
+  manualBadge.style.background = '#FF6200';
+  manualBadge.style.color = 'white';
+
+  if (resolvedItems.length === 0) {
+    document.getElementById('resolved-section').style.display = 'none';
+  } else {
+    renderResolvedSection();
+  }
+  persistSession();
+}
+
+function renderResolvedSection() {
+  document.getElementById('resolved-badge').textContent = resolvedItems.length;
+  const tbody = document.getElementById('resolved-tbody');
+  tbody.innerHTML = '';
+  resolvedItems.forEach(item => {
+    const { label, code, category, ibWork, reason, firm, address, express } = item;
+    const tr = document.createElement('tr');
+    tr.className = 'expandable';
+    const codeHtml    = code
+      ? '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>'
+      : '<span class="cat-text">—</span>';
+    const expressHtml = express
+      ? '<span class="express-pill express-yes">Express</span>'
+      : '<span class="express-pill express-no">Ground</span>';
+    tr.innerHTML =
+      '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+      '<td>' + codeHtml + '</td>' +
+      '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
+      '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork || '—') + '</td>' +
+      '<td>' + reasonPills(reason) + '</td>' +
+      '<td>' + (firm
+        ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div><div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+        : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>') + '</td>' +
+      '<td>' + expressHtml + '</td>' +
+      '<td></td>';
+    const undoBtn = document.createElement('button');
+    undoBtn.className = 'btn-undo-mini';
+    undoBtn.textContent = '↩ Undo';
+    undoBtn.addEventListener('click', () => undoResolve(label));
+    tr.lastElementChild.appendChild(undoBtn);
+    attachLabelCopy(tr, label);
+    tr.addEventListener('click', e => {
+      if (e.target.closest('.btn-undo-mini') || e.target.closest('.label-copy')) return;
+      toggleDetailRow(tr, item, 8);
+    });
+    tbody.appendChild(tr);
+  });
+  document.getElementById('resolved-section').style.display = 'block';
+}
+
+function copyResolvedTable() {
+  const lines = resolvedItems
+    .filter(i => !i.skipped && i.code)
+    .map(i => i.label + '\t' + i.code);
+  if (!lines.length) return;
+  const text = lines.join('\n');
+  const doCopy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(doCopy);
+  } else {
+    doCopy();
+  }
+  const btn = document.getElementById('copy-resolved-btn');
+  btn.textContent = '✓ Copied!';
+  btn.className = 'btn btn-success';
+  setTimeout(() => { btn.textContent = 'Copy Coded'; btn.className = 'btn btn-purple'; }, 2000);
+}
+
+function downloadResolvedTable() {
+  const rows = resolvedItems
+    .filter(i => !i.skipped && i.code)
+    .map(i => [i.label, i.code]);
+  if (!rows.length) return;
+  const content = ToolHelpers.buildTSV([], rows).split('\n').slice(1).join('\n') + '\n';
+  const today = new Date().toISOString().slice(0, 10);
+  ToolHelpers.downloadTSV('ibno-resolved-' + today + '.tsv', content);
+}
+
+// ─── COPY ─────────────────────────────────────────────────────────────────────
+function copyAutoTable() {
+  const lines = autoExportPairs().map(p => p[0] + '\t' + p[1]);
+  if (!lines.length) return;
+  const text = lines.join('\n');
+  const doCopy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).catch(doCopy);
+  } else {
+    doCopy();
+  }
+  const btn = document.getElementById('copy-btn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Copied!';
+  btn.className = 'btn btn-success';
+  setTimeout(() => { btn.textContent = orig; btn.className = 'btn btn-purple'; }, 2000);
+}
+
+
+function downloadAutoTable() {
+  const outRows = autoExportPairs();
+  if (!outRows.length) return;
+  const content = ToolHelpers.buildTSV([], outRows).split('\n').slice(1).join('\n') + '\n';
+  const today = new Date().toISOString().slice(0, 10);
+  ToolHelpers.downloadTSV('ibno-ready-' + today + '.tsv', content);
+}
+
+// ─── RERUN ────────────────────────────────────────────────────────────────────
+function rerunRules() {
+  if (!lastRows) return;
+  if (resolvedItems.length > 0) {
+    if (!confirm('Re-running rules will clear ' + resolvedItems.length + ' resolved item(s). Continue?')) return;
+    resolvedItems = [];
+    document.getElementById('resolved-section').style.display = 'none';
+    document.getElementById('resolved-badge').textContent = '0';
+  }
+  const results = processRows(lastRows);
+  renderResults(results, lastRecurring);
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  document.getElementById('file-label').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows    = parseCSV(e.target.result);
+      const results = processRows(rows);
+      const { recurringMap, updatedHistory } = detectRecurring(rows, loadHistory());
+      saveHistory(updatedHistory);
+      scheduleHistorySync(); // write the new inbound dates through to other devices (#174)
+      lastRows = rows;
+      lastRecurring = recurringMap;
+      document.getElementById('drop-zone').style.display  = 'none';
+      document.getElementById('reset-btn').style.display  = 'inline-flex';
+      document.getElementById('rerun-btn').style.display  = 'inline-flex';
+      document.getElementById('collapse-all-btn').style.display = 'inline-flex';
+      renderResults(results, recurringMap);
+    } catch (err) {
+      alert('Error processing file: ' + err.message);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function resetApp() {
+  document.getElementById('drop-zone').style.display       = 'block';
+  document.getElementById('reset-btn').style.display       = 'none';
+  document.getElementById('rerun-btn').style.display       = 'none';
+  document.getElementById('collapse-all-btn').style.display = 'none';
+  document.getElementById('collapse-all-btn').textContent  = '✄ Collapse all';
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('collapsed'));
+  document.getElementById('summary').style.display         = 'none';
+  document.getElementById('day-banner').style.display      = 'none';
+  document.getElementById('auto-section').style.display    = 'none';
+  document.getElementById('manual-section').style.display  = 'none';
+  document.getElementById('resolved-section').style.display = 'none';
+  document.getElementById('repeat-section').style.display  = 'none';
+  document.getElementById('file-label').textContent = 'No file loaded';
+  document.getElementById('file-input').value = '';
+  resolvedItems = [];
+  autoItems = [];
+  manualItems = [];
+  autoFilter = { codes: [], categories: [] };
+  document.getElementById('auto-chips').style.display = 'none';
+  document.getElementById('auto-chips').innerHTML = '';
+  document.getElementById('auto-filter-note').textContent = '';
+  currentDayType = 'weekday';
+  toolStorage.remove(SESSION_KEY); // "Load New File" discards the persisted session
+  lastRows = null;
+  lastRecurring = {};
+  currentRecurringMap = {};
+  document.getElementById('resolved-tbody').innerHTML = '';
+  document.getElementById('resolved-badge').textContent = '0';
+  document.getElementById('repeat-tbody').innerHTML = '';
+  document.getElementById('repeat-badge').textContent = '0';
+}
+
+// ─── COLLAPSIBLE SECTIONS (#166) ──────────────────────────────────────────────
+// Each result section folds in place when its header is clicked (clicks on the
+// header's action buttons are ignored). Headers are sticky (CSS) so they pin
+// while scrolling. The count badge lives in the header, so it stays visible when
+// collapsed. Collapse state is ephemeral — fresh load/restore starts expanded.
+function initCollapsibleSections() {
+  document.querySelectorAll('.section').forEach(sec => {
+    const h2 = sec.querySelector('.section-header h2');
+    if (h2 && !h2.querySelector('.chev')) {
+      const chev = document.createElement('span');
+      chev.className = 'chev';
+      chev.textContent = '▼';
+      h2.insertBefore(chev, h2.firstChild);
+    }
+    const header = sec.querySelector('.section-header');
+    if (header) header.addEventListener('click', e => {
+      if (e.target.closest('button, a, select, input')) return; // action controls, not a collapse
+      sec.classList.toggle('collapsed');
+    });
+  });
+}
+
+function toggleAllSections() {
+  const secs = Array.from(document.querySelectorAll('.section')).filter(s => s.style.display !== 'none');
+  const anyOpen = secs.some(s => !s.classList.contains('collapsed'));
+  secs.forEach(s => s.classList.toggle('collapsed', anyOpen));
+  document.getElementById('collapse-all-btn').textContent = anyOpen ? '✢ Expand all' : '✄ Collapse all';
+}
+
+// ─── STAT CARD NAVIGATION ─────────────────────────────────────────────────────
+document.getElementById('summary').addEventListener('click', e => {
+  const card = e.target.closest('[data-target]');
+  if (!card) return;
+  const target = document.getElementById(card.dataset.target);
+  if (!target || target.style.display === 'none') return;
+  target.classList.remove('collapsed'); // a jump always reveals the section (#166)
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target.classList.remove('ping');
+  void target.offsetWidth; // force reflow to restart animation
+  target.classList.add('ping');
+  target.addEventListener('animationend', () => target.classList.remove('ping'), { once: true });
+});
+
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('dragover');
+}
+function onDragLeave() {
+  document.getElementById('drop-zone').classList.remove('dragover');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.toLowerCase().endsWith('.csv')) {
+    handleFile(file);
+  } else {
+    alert('Please drop a .csv file.');
+  }
+}
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(function initSettings() {
+  const saved = toolStorage.get('ibno_flagged_areas', null);
+  if (Array.isArray(saved) && saved.length > 0) {
+    FLAGGED_WORK_AREAS = IbnoRules.setFlaggedWorkAreas(saved);
+  }
+})();
+
+// Populate the code-suggestion datalist from the single KNOWN_CODES source (#158).
+(function initCodeDatalist() {
+  const dl = document.getElementById('common-codes');
+  if (dl) dl.innerHTML = KNOWN_CODES.map(c => '<option value="' + c + '">').join('');
+})();
+
+// Wire collapsible result sections (#166).
+initCollapsibleSections();
+
+// Restore an in-progress session if one was persisted (#157), so a mid-shift
+// reload lands back on the work instead of the empty drop zone.
+restoreSession();
+
+// Cross-device: pull-merge the shared Repeat History on load (#176). No-op unless
+// sync is configured; offline degrades to the local cache.
+ibnoPullOnLoad();
+</script>
+</body>
+</html>

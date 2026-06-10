@@ -1,0 +1,16 @@
+{
+  "name": "IBNO Coder — Station 849",
+  "short_name": "IBNO",
+  "description": "Code IBNO (Inbound No Van Scan) packages from the Inbound and Van Scans report, with a cross-device Repeat History.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0f2f5",
+  "theme_color": "#4D148C",
+  "icons": [
+    { "src": "icons/ibno-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/ibno-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/ibno-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
