@@ -19,6 +19,9 @@
     }
 
     header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
       background: #4D148C;
       color: white;
       padding: 14px 20px;
@@ -135,7 +138,7 @@
       cursor: pointer;
       user-select: none;
       position: sticky;
-      top: 0;
+      top: var(--header-h, 56px);
       z-index: 5;
       background: #fff;
       border-radius: 8px 8px 0 0;
@@ -428,6 +431,31 @@
       margin-bottom: 20px;
       overflow: hidden;
     }
+    /* ── Search Data panel (#286): global search over all loaded CSVs ────────── */
+    #search-toggle { margin-bottom: 16px; margin-left: 8px; }
+    #search-panel {
+      display: none; background: white; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10); border-top: 3px solid #047857;
+      margin-bottom: 20px; overflow: hidden;
+    }
+    #search-panel .hist-head h2 { color: #047857; }
+    #search-results { padding: 4px 18px 16px; }
+    .search-rec { border: 1px solid #eee; border-radius: 6px; margin-top: 10px; overflow: hidden; }
+    .search-rec-head { display: flex; gap: 14px; align-items: center; padding: 9px 12px; background: #f8f8fb; cursor: pointer; font-size: 13px; }
+    .search-rec-head .mono { font-weight: 700; }
+    .search-rec-head .srec-addr { color: #666; flex: 1; }
+    .search-rec-head .srec-toggle { color: #047857; font-size: 12px; }
+    .search-rec-fields { display: none; padding: 10px 12px; }
+    .search-rec.open .search-rec-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 18px; }
+    .search-rec.open .srec-toggle::after { content: ' ▲'; }
+    .srec-field { font-size: 12px; line-height: 1.4; }
+    .srec-field .k { color: #999; text-transform: uppercase; letter-spacing: 0.03em; font-size: 10px; display: block; }
+    .srec-field .v { color: #222; word-break: break-word; }
+    .hist-row { cursor: pointer; }
+    .hist-caret { color: #1d4ed8; font-size: 11px; }
+    .hist-detail td { background: #f8fafc; padding: 10px 14px; }
+    .hist-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 18px; }
+    .hist-detail-empty { font-size: 12px; color: #999; font-style: italic; }
     .hist-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
     .hist-head h2 { font-size: 15px; font-weight: 700; color: #1d4ed8; }
     .hist-sub { font-size: 11px; color: #aaa; }
@@ -457,6 +485,9 @@
     #sync-settings-status { font-size: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
     #sync-settings-status.show { opacity: 1; }
   </style>
+  <link rel="stylesheet" href="theme.css">
+  <script>(function(){try{if(localStorage.getItem('dashboard_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+  <script src="lib/theme.js"></script>
 </head>
 <body>
 
@@ -469,6 +500,21 @@
 
 <button class="btn btn-gray" id="settings-toggle" onclick="toggleSettings()">&#9881; Settings</button>
 <button class="btn btn-gray" id="history-toggle" onclick="toggleHistory()">&#128257; Repeat History</button>
+<button class="btn btn-gray" id="search-toggle" onclick="toggleSearch()">&#128269; Search Data</button>
+
+<div id="search-panel">
+  <div class="hist-head">
+    <h2>&#128269; Search Data</h2>
+    <span class="hist-sub">all loaded CSVs &middot; device-local &middot; not synced</span>
+  </div>
+  <div class="hist-toolbar">
+    <input type="text" id="data-search" class="hist-search" placeholder="Search any tracking # or address&hellip;" oninput="renderSearch()">
+    <span class="hist-spacer"></span>
+    <span class="hint-text" id="search-count"></span>
+    <button class="btn btn-gray" onclick="clearSearchData()">Clear search data</button>
+  </div>
+  <div id="search-results"></div>
+</div>
 
 <div id="history-panel">
   <div class="hist-head">
@@ -584,6 +630,8 @@
         <th>Tracking #</th>
         <th>Code</th>
         <th>Category</th>
+        <th>Inbound Date</th>
+        <th>Scan Time</th>
         <th>Recipient / Address</th>
         <th style="width:54px"></th>
       </tr>
@@ -605,6 +653,8 @@
       <tr>
         <th>Tracking #</th>
         <th>Category</th>
+        <th>Inbound Date</th>
+        <th>Scan Time</th>
         <th>IB_WORK_AREA</th>
         <th>Reason</th>
         <th>Recipient / Address</th>
@@ -671,22 +721,25 @@
   </table>
 </div>
 
-<!-- Options populated from KNOWN_CODES at init (single source, #158). -->
+<!-- Options populated from lib/scan-codes.js at init (single source, #158/#200). -->
 <datalist id="common-codes"></datalist>
 
 <script src="lib/tool-helpers.js"></script>
 <script src="lib/csv.js"></script>
+<script src="lib/github-json-sync.js"></script>
 <script src="lib/ibno-rules.js"></script>
+<script src="lib/ibno-archive.js"></script>
+<script src="lib/ibno-session.js"></script>
+<script src="lib/scan-codes.js"></script>
 <script src="lib/ibno-sync.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
 const DEFAULT_FLAGGED_WORK_AREAS = IbnoRules.DEFAULT_FLAGGED_WORK_AREAS.slice();
-// Canonical IBNO code set — single source for the datalist suggestions and the
-// manual-entry sanity check (#158). A code outside this set is allowed but warns,
-// so a typo (665 for 65) can't flow silently into the entered record.
-const KNOWN_CODES = ['11', '33', '34', '39', '59', '60', '65', '94', '99'];
-function isKnownCode(code) { return KNOWN_CODES.indexOf(String(code).trim()) !== -1; }
+// Canonical QA apply-code set lives in lib/scan-codes.js (issue #200) — the single
+// source for the datalist suggestions and the manual-entry sanity check (#158).
+// A code outside the set is allowed but warns, so a typo (665 for 65) can't flow
+// silently into the entered record. ScanCodes.isKnownCode / .listApplyCodes.
 const HISTORY_KEY  = IbnoRules.HISTORY_KEY;
 let FLAGGED_WORK_AREAS = IbnoRules.getFlaggedWorkAreas();
 let lastRows = null; // stores the last parsed CSV rows for re-run
@@ -764,6 +817,72 @@ function setHistWindow(w) {
   renderHistory();
 }
 
+// ─── GLOBAL SEARCH ARCHIVE (#286) ────────────────────────────────────────────
+// Every loaded CSV's rows accumulate here (device-local, deduped, 30-day pruned)
+// so any tracking or address is searchable with all columns. PRIVACY: this store
+// is localStorage-only and is NEVER part of the cross-device sync payload.
+const ARCHIVE_KEY = 'ibno_search_archive';
+function loadArchive() { const a = toolStorage.get(ARCHIVE_KEY, []); return Array.isArray(a) ? a : []; }
+function saveArchive(a) { toolStorage.set(ARCHIVE_KEY, a); }
+
+// Fold a freshly parsed file's rows into the archive. Called on every load.
+function ingestArchive(rows) {
+  try { saveArchive(IbnoArchive.addRows(loadArchive(), rows, new Date())); }
+  catch (e) { /* archive is best-effort; never block coding on it */ }
+}
+
+function toggleSearch() {
+  const panel = document.getElementById('search-panel');
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) renderSearch();
+}
+
+function clearSearchData() {
+  if (!confirm('Clear all saved search data (every row from every CSV loaded so far)?')) return;
+  saveArchive([]);
+  renderSearch();
+}
+
+function renderSearch() {
+  const host = document.getElementById('search-results');
+  const countEl = document.getElementById('search-count');
+  if (!host) return;
+  const archive = loadArchive();
+  const q = (document.getElementById('data-search').value || '').trim();
+  if (!q) {
+    host.innerHTML = '<div class="empty-state">' + archive.length +
+      ' row(s) saved from loaded CSVs. Type a tracking # or address to search.</div>';
+    countEl.textContent = '';
+    return;
+  }
+  const hits = IbnoArchive.searchArchive(archive, q);
+  countEl.textContent = hits.length + ' match(es)';
+  if (!hits.length) {
+    host.innerHTML = '<div class="empty-state">No row matches “' + ToolHelpers.escapeHtml(q) + '”.</div>';
+    return;
+  }
+  host.innerHTML = hits.slice(0, 200).map(buildSearchRecord).join('');
+}
+
+function buildSearchRecord(rec) {
+  const esc = ToolHelpers.escapeHtml;
+  const addr = [rec.LABEL_ADDRESS1, rec.LABEL_CITY, rec.LABEL_STATE, rec.POSTAL_CODE].filter(Boolean).join(' ');
+  const fields = Object.keys(rec).filter(function (k) { return String(rec[k]) !== ''; })
+    .map(function (k) {
+      return '<div class="srec-field"><span class="k">' + esc(k) + '</span>' +
+             '<span class="v">' + esc(rec[k]) + '</span></div>';
+    }).join('');
+  return '<div class="search-rec">' +
+    '<div class="search-rec-head" onclick="this.parentNode.classList.toggle(\'open\')">' +
+      '<span class="mono">' + esc(rec.PKG_LABEL_XREF || '—') + '</span>' +
+      '<span class="srec-addr">' + esc(rec.LABEL_FIRM_NAME ? rec.LABEL_FIRM_NAME + ' · ' : '') + esc(addr) + '</span>' +
+      '<span class="srec-toggle">all fields</span>' +
+    '</div>' +
+    '<div class="search-rec-fields">' + fields + '</div>' +
+  '</div>';
+}
+
 // Tracking numbers surfaced from the report loaded right now — used to tag
 // history rows whose package is also in today's work.
 function todaysLabelSet() {
@@ -810,19 +929,47 @@ function renderHistory() {
 
 function buildHistoryRow(r, inToday) {
   const esc = ToolHelpers.escapeHtml;
+  const frag = document.createDocumentFragment();
   const tr = document.createElement('tr');
+  tr.className = 'hist-row';
   const cls = r.timesSeen >= 3 ? 'hot' : (r.timesSeen === 2 ? 'warn2' : '');
   tr.innerHTML =
-    '<td class="mono"><span class="label-copy" title="Click to copy">' + esc(r.tracking) + '</span>' +
+    '<td class="mono"><span class="hist-caret">▸</span> <span class="label-copy" title="Click to copy">' + esc(r.tracking) + '</span>' +
       (inToday ? '<span class="today-tag" title="Also in the report loaded now">in today</span>' : '') + '</td>' +
     '<td><span class="times-pill ' + cls + '">&times;' + r.timesSeen + '</span></td>' +
     '<td class="hist-dates">' + esc(daysAgoLabel(r.lastSeen)) + '</td>' +
     '<td class="hist-dates">' + r.dates.map(esc).join(' · ') + '</td>' +
     '<td class="cat-text">' + esc(r.category || '—') + '</td>' +
     '<td><button class="hist-prune" title="Remove from history" data-prune="' + esc(r.tracking) + '">&times;</button></td>';
+
+  // Detail row: full info like Ready-to-Enter / Manual Review (#287). Hidden
+  // until the row is clicked. Older entries with no captured detail say so.
+  const detailTr = document.createElement('tr');
+  detailTr.className = 'hist-detail';
+  detailTr.style.display = 'none';
+  const d = r.detail;
+  const inner = d
+    ? [['Recipient', d.firm], ['Address', d.address], ['Work Area', d.ibWork],
+       ['Category', d.category || r.category], ['Scan Time', d.scanTime], ['Last Inbound', d.lastDate]]
+        .map(function (p) {
+          return '<div class="srec-field"><span class="k">' + esc(p[0]) + '</span>' +
+                 '<span class="v">' + esc(p[1] || '—') + '</span></div>';
+        }).join('')
+    : '<div class="hist-detail-empty">No detail captured yet — it fills in the next time this package is coded.</div>';
+  detailTr.innerHTML = '<td colspan="6"><div class="hist-detail-grid">' + inner + '</div></td>';
+
+  // Click the row to expand; the copy span and prune button keep their own jobs.
+  tr.addEventListener('click', function (e) {
+    if (e.target.closest('.label-copy') || e.target.closest('.hist-prune')) return;
+    const open = detailTr.style.display !== 'none';
+    detailTr.style.display = open ? 'none' : 'table-row';
+    tr.querySelector('.hist-caret').textContent = open ? '▸' : '▾';
+  });
   attachLabelCopy(tr, r.tracking);
-  tr.querySelector('.hist-prune').addEventListener('click', () => pruneHistoryEntry(r.tracking));
-  return tr;
+  tr.querySelector('.hist-prune').addEventListener('click', (e) => { e.stopPropagation(); pruneHistoryEntry(r.tracking); });
+  frag.appendChild(tr);
+  frag.appendChild(detailTr);
+  return frag;
 }
 
 function pruneHistoryEntry(tracking) {
@@ -836,7 +983,7 @@ function exportHistory() {
   const rows = all.filter(r => r.timesSeen >= 2).map(r => [r.tracking, r.timesSeen, r.dates.join(' '), r.category || '']);
   if (!rows.length) return;
   const content = ToolHelpers.buildTSV(['TRACKING', 'TIMES_SEEN', 'INBOUND_DATES', 'CATEGORY'], rows) + '\n';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ToolHelpers.isoDate();
   ToolHelpers.downloadTSV('ibno-repeat-history-' + today + '.tsv', content);
 }
 
@@ -899,8 +1046,10 @@ async function ibnoSyncNow() {
   setSyncStatus('syncing', 'syncing…');
   try {
     const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
-    const result = await IbnoSync.pushMergeHistory(getSyncToken(), loadHistory(), ibnoKnownSha, 3, getSyncCoords(), prune);
-    saveHistory(result.history);            // localStorage is the cache; merged result lands locally
+    const localBefore = loadHistory();
+    // Send only dates/category over the wire (#287 privacy: detail never leaves the device).
+    const result = await IbnoSync.pushMergeHistory(getSyncToken(), IbnoRules.historyForSync(localBefore), ibnoKnownSha, 3, getSyncCoords(), prune);
+    saveHistory(IbnoRules.reattachDetail(result.history, localBefore)); // restore device-local detail after the merge
     ibnoKnownSha = result.sha;
     toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
     ibnoSyncing = false;
@@ -925,8 +1074,9 @@ async function ibnoPullOnLoad() {
   try {
     const remote = await IbnoSync.fetchRemote(getSyncToken(), getSyncCoords());
     const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
-    const merged = prune(IbnoSync.mergeHistory(remote.history, loadHistory()));
-    saveHistory(merged);
+    const localBefore = loadHistory();
+    const merged = prune(IbnoSync.mergeHistory(remote.history, IbnoRules.historyForSync(localBefore)));
+    saveHistory(IbnoRules.reattachDetail(merged, localBefore)); // keep device-local detail across the pull
     ibnoKnownSha = remote.sha;
     toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
     if (document.getElementById('history-panel').style.display === 'block') renderHistory();
@@ -978,7 +1128,7 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
   const autoTbody = document.getElementById('auto-tbody');
   autoTbody.innerHTML = '';
   if (auto.length === 0) {
-    autoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">No packages to auto-code</td></tr>';
+    autoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages to auto-code</td></tr>';
   } else {
     auto.forEach((item, idx) => autoTbody.appendChild(buildAutoRow(item, idx)));
   }
@@ -1001,7 +1151,7 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
   const manualTbody = document.getElementById('manual-tbody');
   manualTbody.innerHTML = '';
   if (manual.length === 0) {
-    manualTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages need manual review</td></tr>';
+    manualTbody.innerHTML = '<tr><td colspan="9" class="empty-state">No packages need manual review</td></tr>';
   } else {
     manual.forEach(item => manualTbody.appendChild(buildManualRow(item)));
   }
@@ -1027,20 +1177,19 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
 // to localStorage on every mutation, so a reload / tab-close / phone-lock
 // mid-shift restores the work instead of forcing a re-upload and re-code.
 function persistSession() {
-  toolStorage.set(SESSION_KEY, {
+  // Session shape lives in lib/ibno-session.js; this page only does storage I/O.
+  toolStorage.set(SESSION_KEY, IbnoSession.snapshot({
     auto: autoItems,
     manual: manualItems,
     resolved: resolvedItems,
     dayType: currentDayType,
     recurring: currentRecurringMap,
-  });
+  }));
 }
 
 function restoreSession() {
-  const s = toolStorage.get(SESSION_KEY, null);
-  if (!s || typeof s !== 'object') return false;
-  if (!Array.isArray(s.auto) || !Array.isArray(s.manual) || !Array.isArray(s.resolved)) return false;
-  if (!s.auto.length && !s.manual.length && !s.resolved.length) return false;
+  const s = IbnoSession.restore(toolStorage.get(SESSION_KEY, null));
+  if (!s) return false;
   // Set resolved first so renderResults computes the right total and shows the
   // resolved section. Restore renders from the persisted models — it never
   // re-runs detectRecurring, so the 30-day history is not re-touched.
@@ -1110,7 +1259,7 @@ function downloadRepeatTable() {
   });
   if (!rows.length) return;
   const content = ToolHelpers.buildTSV(['TRACKING', 'TIMES_SEEN', 'INBOUND_DATES'], rows) + '\n';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ToolHelpers.isoDate();
   ToolHelpers.downloadTSV('ibno-repeats-' + today + '.tsv', content);
 }
 
@@ -1219,7 +1368,7 @@ function copyRowBtn(e) {
 let resolvedItems = [];
 
 function buildAutoRow(item, idx) {
-  const { label, code, category, firm, address } = item;
+  const { label, code, category, firm, address, inboundDate, ibScanTime } = item;
   const isClosure = category === 'Closure Portal';
   const tr = document.createElement('tr');
   tr.className = 'expandable';
@@ -1250,6 +1399,8 @@ function buildAutoRow(item, idx) {
     '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
     '<td>' + codeCellHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
     '<td>' + recipHtml + '</td>' +
     '<td></td>';
   const btn = document.createElement('button');
@@ -1263,7 +1414,7 @@ function buildAutoRow(item, idx) {
   attachLabelCopy(tr, label);
   tr.addEventListener('click', e => {
     if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy')) return;
-    toggleDetailRow(tr, item, 5);
+    toggleDetailRow(tr, item, 7);
   });
   return tr;
 }
@@ -1286,21 +1437,25 @@ function updateRowCode(sel) {
   persistSession(); // the override lives in the model now — keep the session in sync
 }
 
-// autoExportPairs() -> [[label, code], …] for every Ready-to-Enter row, read
-// from the data model (not scraped from rendered cells). Single source for the
-// Copy All + TSV exports, so the records entered into the system can't drift
-// from a markup change, and the 34 override (now in the model) is reflected.
+// autoExportPairs() -> [[label, code], …] for the Ready-to-Enter rows, read from
+// the data model (not scraped from rendered cells) so records can't drift from a
+// markup change and the 34 override (in the model) is reflected. WYSIWYG: while a
+// filter is active the export carries only the shown rows; with no filter it
+// carries every auto row. applyAutoFilter relabels the Copy button to match.
 function autoExportPairs() {
+  const active = autoFilter.codes.length + autoFilter.categories.length > 0;
   return autoItems
     .filter(item => item && item.label && item.code)
+    .filter(item => !active || IbnoRules.autoItemMatchesFilter(item, autoFilter))
     .map(item => [item.label, item.code]);
 }
 
-// ─── READY-TO-ENTER FILTER CHIPS (view-only) ──────────────────────────────────
+// ─── READY-TO-ENTER FILTER CHIPS ──────────────────────────────────────────────
 // Slice the auto table by code and/or category. Selections OR within a group and
-// AND across groups (IbnoRules.autoItemMatchesFilter). View-only: rows are hidden
-// in the DOM, never removed from autoItems, so Copy All / TSV still export the
-// full set and the 34-override dataset.idx mapping stays intact.
+// AND across groups (IbnoRules.autoItemMatchesFilter). Rows are hidden in the DOM,
+// never removed from autoItems, so the 34-override dataset.idx mapping stays
+// intact. Copy All / TSV are WYSIWYG — they export the shown rows while a filter
+// is active (autoExportPairs), and every row when unfiltered.
 function renderAutoChips() {
   const host = document.getElementById('auto-chips');
   const facets = IbnoRules.autoFilterFacets(autoItems);
@@ -1344,6 +1499,9 @@ function renderAutoChips() {
 function applyAutoFilter() {
   const tbody = document.getElementById('auto-tbody');
   const active = autoFilter.codes.length + autoFilter.categories.length > 0;
+  // Drop any prior empty-state row before measuring (it has no dataset.idx).
+  const priorEmpty = document.getElementById('auto-filter-empty');
+  if (priorEmpty) priorEmpty.remove();
   let shown = 0;
   let lastVisible = true;
   tbody.querySelectorAll('tr').forEach(tr => {
@@ -1354,6 +1512,13 @@ function applyAutoFilter() {
     lastVisible = match;
     if (match) shown++;
   });
+  // Filter active but nothing matches — show a placeholder so the table isn't blank.
+  if (active && shown === 0 && autoItems.length > 0) {
+    const empty = document.createElement('tr');
+    empty.id = 'auto-filter-empty';
+    empty.innerHTML = '<td colspan="5" class="empty-state">No packages match this filter</td>';
+    tbody.appendChild(empty);
+  }
   document.getElementById('auto-filter-note').textContent =
     active ? 'showing ' + shown + ' of ' + autoItems.length : '';
   document.querySelectorAll('#auto-chips .chip').forEach(chip => {
@@ -1361,10 +1526,14 @@ function applyAutoFilter() {
   });
   const clear = document.getElementById('auto-chip-clear');
   if (clear) clear.style.display = active ? '' : 'none';
+  // Copy All exports the full set; while filtering it exports only the shown
+  // rows, so relabel the button to make the narrowed scope obvious.
+  const copyBtn = document.getElementById('copy-btn');
+  if (copyBtn) copyBtn.textContent = active ? 'Copy shown' : 'Copy All';
 }
 
 function buildManualRow(item) {
-  const { label, category, ibWork, firm, reason, address, express } = item;
+  const { label, category, ibWork, firm, reason, address, express, inboundDate, ibScanTime } = item;
   const tr = document.createElement('tr');
   tr.className = 'expandable';
   tr.dataset.label    = label;
@@ -1379,6 +1548,8 @@ function buildManualRow(item) {
   tr.innerHTML =
     '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork) + '</td>' +
     '<td>' + reasonPills(reason) + '</td>' +
     '<td>' + recipHtml + '</td>' +
@@ -1387,7 +1558,7 @@ function buildManualRow(item) {
   attachLabelCopy(tr, label);
   tr.addEventListener('click', e => {
     if (e.target.closest('.action-cell') || e.target.closest('.label-copy')) return;
-    toggleDetailRow(tr, item, 7);
+    toggleDetailRow(tr, item, 9);
   });
   return tr;
 }
@@ -1422,7 +1593,7 @@ function buildActionCell(item, tr) {
     if (!code) { input.focus(); return; }
     // Sanity-check against the known code set — non-blocking, so a deliberate
     // override still goes through, but a typo gets a chance to be caught (#158).
-    if (!isKnownCode(code) && !confirm('"' + code + '" isn’t a standard IBNO code. Apply it anyway?')) {
+    if (!ScanCodes.isKnownCode(code) && !confirm('"' + code + '" isn’t a standard IBNO code. Apply it anyway?')) {
       input.focus();
       return;
     }
@@ -1444,11 +1615,11 @@ function buildActionCell(item, tr) {
 function resolveItem(item, tr) {
   if (tr) tr.remove();
 
-  // Drop the item from the unresolved manual model so the persisted session
-  // reflects only what's still pending.
-  const mi = manualItems.findIndex(m => m.label === item.label);
-  if (mi !== -1) manualItems.splice(mi, 1);
-  resolvedItems.push(item);
+  // Move the item from the unresolved manual model into resolved (the
+  // transition lives in lib/ibno-session.js); this page only re-renders.
+  const next = IbnoSession.resolve(manualItems, resolvedItems, item);
+  manualItems = next.manual;
+  resolvedItems = next.resolved;
 
   const remaining = document.querySelectorAll('#manual-tbody tr[data-label]').length;
   const manualBadge = document.getElementById('manual-badge');
@@ -1466,10 +1637,12 @@ function resolveItem(item, tr) {
 }
 
 function undoResolve(label) {
-  const idx = resolvedItems.findIndex(i => i.label === label);
-  if (idx === -1) return;
-  const item = resolvedItems.splice(idx, 1)[0];
-  manualItems.push(item); // back into the unresolved model
+  const item = resolvedItems.find(i => i.label === label);
+  if (!item) return;
+  // Move it back into the unresolved model (transition in lib/ibno-session.js).
+  const next = IbnoSession.undo(manualItems, resolvedItems, label);
+  manualItems = next.manual;
+  resolvedItems = next.resolved;
 
   const manualTbody = document.getElementById('manual-tbody');
   const emptyTr = manualTbody.querySelector('tr:not([data-label])');
@@ -1564,7 +1737,7 @@ function downloadResolvedTable() {
     .map(i => [i.label, i.code]);
   if (!rows.length) return;
   const content = ToolHelpers.buildTSV([], rows).split('\n').slice(1).join('\n') + '\n';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ToolHelpers.isoDate();
   ToolHelpers.downloadTSV('ibno-resolved-' + today + '.tsv', content);
 }
 
@@ -1599,7 +1772,7 @@ function downloadAutoTable() {
   const outRows = autoExportPairs();
   if (!outRows.length) return;
   const content = ToolHelpers.buildTSV([], outRows).split('\n').slice(1).join('\n') + '\n';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ToolHelpers.isoDate();
   ToolHelpers.downloadTSV('ibno-ready-' + today + '.tsv', content);
 }
 
@@ -1612,7 +1785,9 @@ function rerunRules() {
     document.getElementById('resolved-section').style.display = 'none';
     document.getElementById('resolved-badge').textContent = '0';
   }
-  const results = processRows(lastRows);
+  // Re-apply the (possibly edited) rules to the same rows — the coding state
+  // machine lives in lib/ibno-session.js; this page only renders.
+  const results = IbnoSession.rerun(lastRows);
   renderResults(results, lastRecurring);
 }
 
@@ -1623,18 +1798,19 @@ function handleFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const rows    = parseCSV(e.target.result);
-      const results = processRows(rows);
-      const { recurringMap, updatedHistory } = detectRecurring(rows, loadHistory());
-      saveHistory(updatedHistory);
+      // Parse + code + detect recurring in one call (lib/ibno-session.js); the
+      // page keeps the side effects (persist history, schedule sync, render).
+      const snap = IbnoSession.applyFile(e.target.result, { history: loadHistory() });
+      saveHistory(snap.updatedHistory);
       scheduleHistorySync(); // write the new inbound dates through to other devices (#174)
-      lastRows = rows;
-      lastRecurring = recurringMap;
+      ingestArchive(snap.rows); // accumulate raw rows for global search (#286) — local only, not synced
+      lastRows = snap.rows;
+      lastRecurring = snap.recurring;
       document.getElementById('drop-zone').style.display  = 'none';
       document.getElementById('reset-btn').style.display  = 'inline-flex';
       document.getElementById('rerun-btn').style.display  = 'inline-flex';
       document.getElementById('collapse-all-btn').style.display = 'inline-flex';
-      renderResults(results, recurringMap);
+      renderResults(snap, snap.recurring);
     } catch (err) {
       alert('Error processing file: ' + err.message);
     }
@@ -1664,6 +1840,7 @@ function resetApp() {
   document.getElementById('auto-chips').style.display = 'none';
   document.getElementById('auto-chips').innerHTML = '';
   document.getElementById('auto-filter-note').textContent = '';
+  document.getElementById('copy-btn').textContent = 'Copy All';
   currentDayType = 'weekday';
   toolStorage.remove(SESSION_KEY); // "Load New File" discards the persisted session
   lastRows = null;
@@ -1743,10 +1920,10 @@ function onDrop(e) {
   }
 })();
 
-// Populate the code-suggestion datalist from the single KNOWN_CODES source (#158).
+// Populate the code-suggestion datalist from the scan-codes module (#158, #200).
 (function initCodeDatalist() {
   const dl = document.getElementById('common-codes');
-  if (dl) dl.innerHTML = KNOWN_CODES.map(c => '<option value="' + c + '">').join('');
+  if (dl) dl.innerHTML = ScanCodes.listApplyCodes().map(c => '<option value="' + c + '">').join('');
 })();
 
 // Wire collapsible result sections (#166).
@@ -1760,5 +1937,6 @@ restoreSession();
 // sync is configured; offline degrades to the local cache.
 ibnoPullOnLoad();
 </script>
+<script>ToolHelpers.pinHeader();</script>
 </body>
 </html>
