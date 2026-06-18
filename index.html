@@ -820,14 +820,126 @@ function setHistWindow(w) {
 // ─── GLOBAL SEARCH ARCHIVE (#286) ────────────────────────────────────────────
 // Every loaded CSV's rows accumulate here (device-local, deduped, 30-day pruned)
 // so any tracking or address is searchable with all columns. PRIVACY: this store
-// is localStorage-only and is NEVER part of the cross-device sync payload.
-const ARCHIVE_KEY = 'ibno_search_archive';
-function loadArchive() { const a = toolStorage.get(ARCHIVE_KEY, []); return Array.isArray(a) ? a : []; }
-function saveArchive(a) { toolStorage.set(ARCHIVE_KEY, a); }
+// is device-local and is NEVER part of the cross-device sync payload.
+//
+// Storage is IndexedDB, NOT localStorage: a real Inbound-and-Van-Scans report is
+// thousands of rows and one day alone can exceed localStorage's ~5MB cap, which
+// overflowed and silently dropped everything (the "0 rows saved" bug). IndexedDB
+// holds far more. An in-memory fallback covers environments without IndexedDB
+// (e.g. the jsdom test harness), so search still works there within a session.
+const ArchiveStore = (function () {
+  const DB_NAME = 'ibno_archive', STORE = 'rows', VERSION = 1;
+  let hasIDB = false;
+  try { hasIDB = !!window.indexedDB; } catch (e) { hasIDB = false; }
+  const mem = new Map(); // fallback: key -> { iso, rec }
+
+  function openDB() {
+    return new Promise(function (resolve, reject) {
+      const req = window.indexedDB.open(DB_NAME, VERSION);
+      req.onupgradeneeded = function () {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          const os = db.createObjectStore(STORE, { keyPath: 'key' });
+          os.createIndex('iso', 'iso', { unique: false });
+        }
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  // ── in-memory backend (fallback when IndexedDB is unavailable/blocked) ──
+  function memAdd(records, cutoff) {
+    records.forEach(function (rec) { mem.set(IbnoArchive.keyOf(rec), { iso: IbnoArchive.recordIso(rec), rec: rec }); });
+    for (const [k, v] of mem) if (v.iso < cutoff) mem.delete(k);
+  }
+  function memSearch(q, cap) {
+    const out = [];
+    for (const v of mem.values()) { if (IbnoArchive.recordMatches(v.rec, q)) { out.push(v.rec); if (out.length >= cap) break; } }
+    return out;
+  }
+
+  // ── IndexedDB backend ──
+  async function idbAdd(records, cutoff) {
+    const db = await openDB();
+    try {
+      await new Promise(function (resolve, reject) {
+        const tx = db.transaction(STORE, 'readwrite');
+        const os = tx.objectStore(STORE);
+        records.forEach(function (rec) { os.put({ key: IbnoArchive.keyOf(rec), iso: IbnoArchive.recordIso(rec), rec: rec }); });
+        os.index('iso').openCursor(IDBKeyRange.upperBound(cutoff, true)).onsuccess = function (e) {
+          const cur = e.target.result; if (cur) { os.delete(cur.primaryKey); cur.continue(); }
+        };
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    } finally { db.close(); }
+  }
+  async function idbSearch(q, cap) {
+    const db = await openDB();
+    const out = [];
+    try {
+      await new Promise(function (resolve) {
+        const tx = db.transaction(STORE, 'readonly');
+        tx.objectStore(STORE).openCursor().onsuccess = function (e) {
+          const cur = e.target.result;
+          if (cur && out.length < cap) { if (IbnoArchive.recordMatches(cur.value.rec, q)) out.push(cur.value.rec); cur.continue(); }
+          else resolve();
+        };
+      });
+    } finally { db.close(); }
+    return out;
+  }
+  async function idbCount() {
+    const db = await openDB();
+    try {
+      return await new Promise(function (resolve, reject) {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).count();
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      });
+    } finally { db.close(); }
+  }
+  async function idbClear() {
+    const db = await openDB();
+    try {
+      await new Promise(function (resolve) {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).clear();
+        tx.oncomplete = function () { resolve(); };
+      });
+    } finally { db.close(); }
+  }
+
+  // Each op tries IndexedDB; if it throws (file:// blocked, private mode, etc.)
+  // we permanently fall back to the in-memory store so search still works.
+  async function addAll(records, today) {
+    const cutoff = IbnoArchive.cutoffIso(today);
+    if (hasIDB) { try { return await idbAdd(records, cutoff); } catch (e) { hasIDB = false; } }
+    memAdd(records, cutoff);
+  }
+  async function search(query, cap) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return [];
+    if (hasIDB) { try { return await idbSearch(q, cap); } catch (e) { hasIDB = false; } }
+    return memSearch(q, cap);
+  }
+  async function count() {
+    if (hasIDB) { try { return await idbCount(); } catch (e) { hasIDB = false; } }
+    return mem.size;
+  }
+  async function clear() {
+    mem.clear();
+    if (hasIDB) { try { return await idbClear(); } catch (e) { hasIDB = false; } }
+  }
+
+  return { addAll: addAll, search: search, count: count, clear: clear };
+})();
 
 // Fold a freshly parsed file's rows into the archive. Called on every load.
-function ingestArchive(rows) {
-  try { saveArchive(IbnoArchive.addRows(loadArchive(), rows, new Date())); }
+async function ingestArchive(rows) {
+  try { await ArchiveStore.addAll(IbnoArchive.recordsFromRows(rows), new Date()); renderSearchCount(); }
   catch (e) { /* archive is best-effort; never block coding on it */ }
 }
 
@@ -838,31 +950,36 @@ function toggleSearch() {
   if (!open) renderSearch();
 }
 
-function clearSearchData() {
+async function clearSearchData() {
   if (!confirm('Clear all saved search data (every row from every CSV loaded so far)?')) return;
-  saveArchive([]);
+  await ArchiveStore.clear();
   renderSearch();
 }
 
-function renderSearch() {
+// Update just the "N row(s) saved" hint (after an ingest, even if no query yet).
+async function renderSearchCount() {
+  const host = document.getElementById('search-results');
+  if (!host || (document.getElementById('data-search').value || '').trim()) return;
+  const total = await ArchiveStore.count();
+  host.innerHTML = '<div class="empty-state">' + total +
+    ' row(s) saved from loaded CSVs. Type a tracking # or address to search.</div>';
+}
+
+async function renderSearch() {
   const host = document.getElementById('search-results');
   const countEl = document.getElementById('search-count');
   if (!host) return;
-  const archive = loadArchive();
   const q = (document.getElementById('data-search').value || '').trim();
   if (!q) {
-    host.innerHTML = '<div class="empty-state">' + archive.length +
-      ' row(s) saved from loaded CSVs. Type a tracking # or address to search.</div>';
     countEl.textContent = '';
+    await renderSearchCount();
     return;
   }
-  const hits = IbnoArchive.searchArchive(archive, q);
+  const hits = await ArchiveStore.search(q, 200);
   countEl.textContent = hits.length + ' match(es)';
-  if (!hits.length) {
-    host.innerHTML = '<div class="empty-state">No row matches “' + ToolHelpers.escapeHtml(q) + '”.</div>';
-    return;
-  }
-  host.innerHTML = hits.slice(0, 200).map(buildSearchRecord).join('');
+  host.innerHTML = hits.length
+    ? hits.map(buildSearchRecord).join('')
+    : '<div class="empty-state">No row matches “' + ToolHelpers.escapeHtml(q) + '”.</div>';
 }
 
 function buildSearchRecord(rec) {
