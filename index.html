@@ -1531,18 +1531,19 @@ function persistSession() {
     dayType: currentDayType,
     recurring: currentRecurringMap,
   });
+  // Free the PREVIOUS session's bytes before writing the new one: replacing a key
+  // in a near-full store needs transient room for BOTH copies at once, so an
+  // in-place overwrite can fail (QuotaExceededError) even when the new value is
+  // the same size. Removing first guarantees the write can reuse that space — and
+  // this alone fixes the common "storage full, session same size" case.
+  toolStorage.remove(SESSION_KEY);
   if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
 
-  // The write was DROPPED — on a busy device this is localStorage hitting its
-  // ~5MB cap (QuotaExceededError), and toolStorage.set returns false. The
-  // in-progress session is what a mid-shift reload needs, so reclaim room from
-  // the Repeat History (the bulk of this origin's storage) and retry:
-  //      Strip its OPTIONAL device-local `detail` (recipient/address shown only
-  //      in the Repeat History viewer, #287). Recurrence (dates/category) is
-  //      untouched, so repeat DETECTION still works — only the viewer loses the
-  //      address until a label is seen again. REMOVE the full key before writing
-  //      the lean copy: when storage is 100% full a browser can refuse to replace
-  //      a key in place (it needs transient room for both), so free it first.
+  // Still no room — reclaim from the Repeat History, the bulk of this origin's
+  // storage. Strip its OPTIONAL device-local `detail` (recipient/address shown
+  // only in the Repeat History viewer, #287); recurrence (dates/category) is
+  // untouched, so repeat DETECTION still works. Remove before writing the lean
+  // copy so a 100%-full store doesn't refuse the in-place replace.
   try {
     const lean = IbnoRules.historyForSync(loadHistory());
     toolStorage.remove(HISTORY_KEY);
@@ -1550,16 +1551,14 @@ function persistSession() {
   } catch (e) {}
   if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
 
-  //   2) Still full — when sync is configured the whole local history is just a
-  //      cache (ibnoPullOnLoad refetches it on the next load), so it is safe to
-  //      drop entirely to guarantee the session saves.
-  if (syncReady()) {
-    toolStorage.remove(HISTORY_KEY);
-    if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
-  }
+  // Last resort — the in-progress session matters more than a re-buildable history
+  // cache, so drop the history entirely to guarantee the session saves (it
+  // re-pulls from sync, or rebuilds as reports are processed). After this the
+  // freed ~MBs easily hold the session, so the warning below is effectively
+  // unreachable unless the session alone exceeds the quota.
+  toolStorage.remove(HISTORY_KEY);
+  if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
 
-  //   3) Couldn't save even after reclaiming space — surface it plainly instead
-  //      of silently losing the work on the next refresh.
   showStorageWarning(true);
 }
 
