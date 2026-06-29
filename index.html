@@ -513,6 +513,13 @@
   <span id="file-label">No file loaded</span>
 </header>
 
+<!-- Shown only when the session can't be saved even after reclaiming storage
+     (storageWarning, set by persistSession). Plain warning so a full-storage
+     device never silently drops the report on refresh. -->
+<div id="storage-warning" style="display:none;margin:12px 16px 0;padding:10px 14px;background:#FFF4E5;border:1px solid #FF6200;border-radius:8px;color:#8a3b00;font-size:13px;font-weight:600;">
+  &#9888; This browser's storage is full, so your loaded report won't survive a refresh. Code and <strong>Copy</strong> what you have now. (Older Repeat History detail was trimmed to try to make room.)
+</div>
+
 <button class="btn btn-gray" id="settings-toggle" onclick="toggleSettings()">&#9881; Settings</button>
 <button class="btn btn-gray" id="history-toggle" onclick="toggleHistory()">&#128257; Repeat History</button>
 <button class="btn btn-gray" id="search-toggle" onclick="toggleSearch()">&#128269; Search Data</button>
@@ -1517,13 +1524,51 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
 // mid-shift restores the work instead of forcing a re-upload and re-code.
 function persistSession() {
   // Session shape lives in lib/ibno-session.js; this page only does storage I/O.
-  toolStorage.set(SESSION_KEY, IbnoSession.snapshot({
+  const snap = IbnoSession.snapshot({
     auto: autoItems,
     manual: manualItems,
     resolved: resolvedItems,
     dayType: currentDayType,
     recurring: currentRecurringMap,
-  }));
+  });
+  if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
+
+  // The write was DROPPED — on a busy device this is localStorage hitting its
+  // ~5MB cap (QuotaExceededError), and toolStorage.set returns false. The
+  // in-progress session is what a mid-shift reload needs, so reclaim room from
+  // the Repeat History (the bulk of this origin's storage) and retry:
+  //      Strip its OPTIONAL device-local `detail` (recipient/address shown only
+  //      in the Repeat History viewer, #287). Recurrence (dates/category) is
+  //      untouched, so repeat DETECTION still works — only the viewer loses the
+  //      address until a label is seen again. REMOVE the full key before writing
+  //      the lean copy: when storage is 100% full a browser can refuse to replace
+  //      a key in place (it needs transient room for both), so free it first.
+  try {
+    const lean = IbnoRules.historyForSync(loadHistory());
+    toolStorage.remove(HISTORY_KEY);
+    saveHistory(lean);
+  } catch (e) {}
+  if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
+
+  //   2) Still full — when sync is configured the whole local history is just a
+  //      cache (ibnoPullOnLoad refetches it on the next load), so it is safe to
+  //      drop entirely to guarantee the session saves.
+  if (syncReady()) {
+    toolStorage.remove(HISTORY_KEY);
+    if (toolStorage.set(SESSION_KEY, snap)) { showStorageWarning(false); return; }
+  }
+
+  //   3) Couldn't save even after reclaiming space — surface it plainly instead
+  //      of silently losing the work on the next refresh.
+  showStorageWarning(true);
+}
+
+// Visible banner shown only when the session genuinely cannot be persisted (full
+// storage that reclaiming the Repeat History didn't fix). Hidden on every
+// successful save so it never lingers once room is freed.
+function showStorageWarning(show) {
+  const el = document.getElementById('storage-warning');
+  if (el) el.style.display = show ? 'block' : 'none';
 }
 
 function restoreSession() {
