@@ -351,6 +351,10 @@
       margin-right: 4px;
     }
     .code-input-mini:focus { outline: none; border-color: #4D148C; }
+    /* Pre-filled suggested code (#fast-entry): a soft amber tint flags it as a
+       suggestion to review, not a value the user typed. Clears on focus/typing. */
+    .code-input-mini.code-suggested { border-color: #FF6200; background: #FFF6EE; color: #8a3b00; font-weight: 600; }
+    .code-input-mini.code-suggested:focus { background: #fff; color: #1a1a2e; }
     .btn-apply-mini {
       padding: 3px 9px;
       background: #16a34a;
@@ -507,7 +511,7 @@
 
 <header>
   <div style="display:flex;align-items:center;gap:14px">
-    <a href="https://tylerm08martinez-wq.github.io/station-dashboard/" style="color:rgba(255,255,255,0.7);font-size:12px;text-decoration:none;font-weight:600;letter-spacing:0.02em;transition:color 0.12s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.7)'">&larr; Dashboard</a>
+    
     <h1>IBNO Coder &mdash; Station 849</h1>
   </div>
   <span id="file-label">No file loaded</span>
@@ -1978,6 +1982,19 @@ function buildManualRow(item) {
   return tr;
 }
 
+// Suggested manual code (#fast-entry): most flagged rows come out the same way —
+// Unassigned Zip → 65, a flagged work area → 33 — so pre-fill that into the input.
+// It is only a SUGGESTION in an editable box: the user still reviews each row and
+// presses Apply (or overtypes), so nothing is auto-coded. Unassigned Zip wins over
+// the work-area flag (a zip row flagged on work area is still coded 65).
+function suggestedManualCode(item) {
+  const category = (item && item.category) || '';
+  const reason   = (item && item.reason) || '';
+  if (category === 'Unassigned Zip') return '65';
+  if (/Work area:/i.test(reason)) return '33';
+  return '';
+}
+
 function buildActionCell(item, tr) {
   const td = document.createElement('td');
   td.className = 'action-cell';
@@ -1988,6 +2005,15 @@ function buildActionCell(item, tr) {
   input.setAttribute('list', 'common-codes');
   input.maxLength = 5;
   input.placeholder = 'Code…';
+  // Pre-fill the usual code so rapid entry is just review-and-Apply (#fast-entry).
+  const suggested = suggestedManualCode(item);
+  if (suggested) {
+    input.value = suggested;
+    input.title = 'Suggested ' + suggested + ' — review, then Apply (or overtype)';
+    input.classList.add('code-suggested');
+    // Once the user edits it, it's no longer the suggestion — drop the tint.
+    input.addEventListener('input', () => input.classList.remove('code-suggested'));
+  }
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       applyBtn.click();
@@ -2028,7 +2054,16 @@ function buildActionCell(item, tr) {
 }
 
 function resolveItem(item, tr) {
-  if (tr) tr.remove();
+  // Remove ONLY the applied row (and its detail row, if expanded). Do NOT rebuild
+  // the whole manual table — that would wipe every OTHER row's <input> and the
+  // codes typed-but-not-yet-applied into them, which is exactly the rapid-entry
+  // workflow (type several, then apply each). Removing one row leaves the others'
+  // sort order and search visibility unchanged, so a rebuild is never needed here.
+  if (tr) {
+    const detail = tr.nextElementSibling;
+    if (detail && detail.classList.contains('detail-row')) detail.remove();
+    tr.remove();
+  }
 
   // Move the item from the unresolved manual model into resolved (the
   // transition lives in lib/ibno-session.js); this page only re-renders.
@@ -2037,8 +2072,12 @@ function resolveItem(item, tr) {
   manualItems = next.manual;
   resolvedItems = next.resolved;
 
-  renderManualSectionRows();
-  applyManualSearch();
+  updateManualBadge();
+  if (manualItems.length === 0) {
+    document.getElementById('manual-tbody').innerHTML =
+      '<tr><td colspan="9" class="empty-state">All packages resolved ✓</td></tr>';
+  }
+  applyManualSearch();          // refresh the "showing N of M" note (no rebuild)
   renderResolvedSection();
   persistSession();
 }
@@ -2051,7 +2090,15 @@ function undoResolve(label) {
   manualItems = next.manual;
   resolvedItems = next.resolved;
 
-  renderManualSectionRows();
+  // Append the restored row instead of rebuilding, so the other rows' typed codes
+  // survive (an undo during rapid entry must not wipe in-progress inputs). It
+  // lands at the end rather than its sorted slot until the next full render —
+  // acceptable for an occasional undo.
+  const tbody = document.getElementById('manual-tbody');
+  const emptyRow = tbody.querySelector('tr:not([data-label])');
+  if (emptyRow) emptyRow.remove();
+  tbody.appendChild(buildManualRow(item));
+  updateManualBadge();
   applyManualSearch();
 
   if (resolvedItems.length === 0) {
