@@ -267,6 +267,20 @@
 
     /* ── Ready-to-Enter filter chips (view-only) ─────────────────────────────── */
     .filter-note { font-size: 12px; color: #888; }
+    .sort-select, .manual-search {
+      border: 1px solid #d1c4e9;
+      border-radius: 5px;
+      background: white;
+      color: #333;
+      font-size: 12px;
+      padding: 6px 9px;
+    }
+    .sort-select:focus, .manual-search:focus { outline: none; border-color: #4D148C; }
+    .manual-search { min-width: 220px; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: #4D148C; background: #f3eeff; }
+    th.sort-active::after { content: ' ▲'; font-size: 9px; color: #4D148C; }
+    th.sort-active.sort-desc::after { content: ' ▼'; }
     .chips { padding: 11px 18px; border-bottom: 1px solid #f0f0f3; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .chips .grp-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; }
     .chip { border: 1px solid #d8d3e6; background: white; color: #4a4a5a; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; display: inline-flex; align-items: center; gap: 6px; }
@@ -493,6 +507,7 @@
 
 <header>
   <div style="display:flex;align-items:center;gap:14px">
+    <a href="https://tylerm08martinez-wq.github.io/station-dashboard/" style="color:rgba(255,255,255,0.7);font-size:12px;text-decoration:none;font-weight:600;letter-spacing:0.02em;transition:color 0.12s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.7)'">&larr; Dashboard</a>
     <h1>IBNO Coder &mdash; Station 849</h1>
   </div>
   <span id="file-label">No file loaded</span>
@@ -617,6 +632,12 @@
       <span class="filter-note" id="auto-filter-note"></span>
     </div>
     <div class="right">
+      <select class="sort-select" id="auto-sort" aria-label="Sort Ready to Enter">
+        <option value="report">Report order</option>
+        <option value="time">Newest scan first</option>
+        <option value="time-asc">Oldest scan first</option>
+        <option value="address">Address (group destination)</option>
+      </select>
       <button class="btn btn-purple" id="copy-btn" onclick="copyAutoTable()">Copy All</button>
       <button class="btn btn-purple" onclick="downloadAutoTable()">&#8595; TSV</button>
     </div>
@@ -630,9 +651,9 @@
         <th>Tracking #</th>
         <th>Code</th>
         <th>Category</th>
-        <th>Inbound Date</th>
-        <th>Scan Time</th>
-        <th>Recipient / Address</th>
+        <th class="sortable" data-table="auto" data-sort="time">Inbound Date</th>
+        <th class="sortable" data-table="auto" data-sort="time">Scan Time</th>
+        <th class="sortable" data-table="auto" data-sort="address">Recipient / Address</th>
         <th style="width:54px"></th>
       </tr>
     </thead>
@@ -646,6 +667,16 @@
     <div style="display:flex;align-items:center;gap:10px">
       <h2>&#9888; Needs Manual Review</h2>
       <span class="badge" id="manual-badge">0</span>
+      <span class="filter-note" id="manual-search-note"></span>
+    </div>
+    <div class="right">
+      <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
+      <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
+        <option value="report">Report order</option>
+        <option value="time">Newest scan first</option>
+        <option value="time-asc">Oldest scan first</option>
+        <option value="address">Address (group destination)</option>
+      </select>
     </div>
   </div>
   <table>
@@ -653,11 +684,11 @@
       <tr>
         <th>Tracking #</th>
         <th>Category</th>
-        <th>Inbound Date</th>
-        <th>Scan Time</th>
+        <th class="sortable" data-table="manual" data-sort="time">Inbound Date</th>
+        <th class="sortable" data-table="manual" data-sort="time">Scan Time</th>
         <th>IB_WORK_AREA</th>
         <th>Reason</th>
-        <th>Recipient / Address</th>
+        <th class="sortable" data-table="manual" data-sort="address">Recipient / Address</th>
         <th>Express</th>
         <th style="width:180px">Resolve</th>
       </tr>
@@ -674,6 +705,11 @@
       <span class="badge" id="resolved-badge">0</span>
     </div>
     <div class="right">
+      <select class="sort-select" id="resolved-sort" aria-label="Sort Manually Resolved">
+        <option value="resolve">Resolve order</option>
+        <option value="address">Address</option>
+        <option value="category">Category</option>
+      </select>
       <button class="btn btn-purple" id="copy-resolved-btn" onclick="copyResolvedTable()">Copy Coded</button>
       <button class="btn btn-purple" onclick="downloadResolvedTable()">&#8595; TSV</button>
     </div>
@@ -683,10 +719,10 @@
       <tr>
         <th>Tracking #</th>
         <th>Code</th>
-        <th>Category</th>
+        <th class="sortable" data-table="resolved" data-sort="category">Category</th>
         <th>IB_WORK_AREA</th>
         <th>Reason</th>
-        <th>Recipient / Address</th>
+        <th class="sortable" data-table="resolved" data-sort="address">Recipient / Address</th>
         <th>Express</th>
         <th style="width:72px"></th>
       </tr>
@@ -703,6 +739,11 @@
       <span class="badge" id="repeat-badge">0</span>
     </div>
     <div class="right">
+      <select class="sort-select" id="repeat-sort" aria-label="Sort Repeat Packages">
+        <option value="count">Most seen first</option>
+        <option value="address">Address</option>
+        <option value="date">Newest date first</option>
+      </select>
       <button class="btn btn-purple" id="copy-repeat-btn" onclick="copyRepeatTable()">Copy All</button>
       <button class="btn btn-purple" onclick="downloadRepeatTable()">&#8595; TSV</button>
     </div>
@@ -711,10 +752,10 @@
     <thead>
       <tr>
         <th>Tracking #</th>
-        <th>Times Seen</th>
-        <th>Inbound Dates</th>
+        <th class="sortable" data-table="repeat" data-sort="count">Times Seen</th>
+        <th class="sortable" data-table="repeat" data-sort="date">Inbound Dates</th>
         <th>Category</th>
-        <th>Recipient / Address</th>
+        <th class="sortable" data-table="repeat" data-sort="address">Recipient / Address</th>
       </tr>
     </thead>
     <tbody id="repeat-tbody"></tbody>
@@ -1214,6 +1255,203 @@ let autoFilter = { codes: [], categories: [] }; // ephemeral view filter for the
 let manualItems = [];         // data model for the unresolved Manual Review rows
 let currentDayType = 'weekday'; // day banner context, persisted with the session
 
+const defaultSorts = {
+  auto:     { key: 'report', dir: 'asc' },
+  manual:   { key: 'report', dir: 'asc' },
+  resolved: { key: 'resolve', dir: 'asc' },
+  repeat:   { key: 'count', dir: 'desc' },
+};
+let sortState = JSON.parse(JSON.stringify(defaultSorts));
+
+function resetViewControls() {
+  sortState = JSON.parse(JSON.stringify(defaultSorts));
+  ['auto', 'manual', 'resolved', 'repeat'].forEach(syncSortSelect);
+  updateSortHeaders();
+  const manualSearch = document.getElementById('manual-search');
+  if (manualSearch) manualSearch.value = '';
+  const manualNote = document.getElementById('manual-search-note');
+  if (manualNote) manualNote.textContent = '';
+}
+
+function parseDateKey(raw) {
+  const s = String(raw || '').trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y < 100) y += 2000;
+    return y * 10000 + Number(m[1]) * 100 + Number(m[2]);
+  }
+  return 0;
+}
+
+function parseClockKey(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/);
+  if (!m) return 0;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const sec = Number(m[3] || 0);
+  if (m[4] === 'PM' && h < 12) h += 12;
+  if (m[4] === 'AM' && h === 12) h = 0;
+  return h * 3600 + min * 60 + sec;
+}
+
+function itemTimeKey(item) {
+  return parseDateKey(item && item.inboundDate) * 100000 + parseClockKey(item && item.ibScanTime);
+}
+
+function latestRepeatDateKey(entry) {
+  return Math.max.apply(null, (entry.inboundDates || []).map(parseDateKey).concat([0]));
+}
+
+function addressKey(item) {
+  return String((item && item.address) || '').trim().toLowerCase();
+}
+
+function firmKey(item) {
+  return String((item && item.firm) || '').trim().toLowerCase();
+}
+
+function cmpText(a, b) {
+  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function compareBySort(a, b, table) {
+  const st = sortState[table] || defaultSorts[table];
+  let n = 0;
+  if (st.key === 'report') n = ((a && a._ord) || 0) - ((b && b._ord) || 0);
+  else if (st.key === 'resolve') n = ((a && a._resolvedOrd) || 0) - ((b && b._resolvedOrd) || 0);
+  else if (st.key === 'time') n = itemTimeKey(a) - itemTimeKey(b);
+  else if (st.key === 'address') n = cmpText(addressKey(a), addressKey(b)) || cmpText(firmKey(a), firmKey(b)) || cmpText(a && a.label, b && b.label);
+  else if (st.key === 'category') n = cmpText(a && a.category, b && b.category) || cmpText(a && a.label, b && b.label);
+  else if (st.key === 'count') n = ((a && a.timesSeen) || 0) - ((b && b.timesSeen) || 0);
+  else if (st.key === 'date') n = latestRepeatDateKey(a || {}) - latestRepeatDateKey(b || {});
+  if (n === 0) n = cmpText(a && a.label, b && b.label);
+  return st.dir === 'desc' ? -n : n;
+}
+
+function sortSelectValue(table) {
+  const st = sortState[table];
+  if ((table === 'auto' || table === 'manual') && st.key === 'time' && st.dir === 'asc') return 'time-asc';
+  return st.key;
+}
+
+function syncSortSelect(table) {
+  const sel = document.getElementById(table + '-sort');
+  if (sel) sel.value = sortSelectValue(table);
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const st = sortState[th.dataset.table];
+    const active = st && th.dataset.sort === st.key && st.key !== 'report' && st.key !== 'resolve';
+    th.classList.toggle('sort-active', !!active);
+    th.classList.toggle('sort-desc', !!active && st.dir === 'desc');
+  });
+}
+
+function setSort(table, key, dir) {
+  sortState[table] = { key, dir };
+  syncSortSelect(table);
+  updateSortHeaders();
+  if (table === 'auto') renderAutoSectionRows();
+  else if (table === 'manual') { renderManualSectionRows(); applyManualSearch(); }
+  else if (table === 'resolved') renderResolvedSection();
+  else if (table === 'repeat') renderRecurringSection(currentRecurringMap);
+}
+
+function onSortSelect(table, value) {
+  if (value === 'time-asc') setSort(table, 'time', 'asc');
+  else if (value === 'time') setSort(table, 'time', 'desc');
+  else if (value === 'count') setSort(table, 'count', 'desc');
+  else if (value === 'date') setSort(table, 'date', 'desc');
+  else setSort(table, value, 'asc');
+}
+
+function initSortControls() {
+  ['auto', 'manual', 'resolved', 'repeat'].forEach(table => {
+    const sel = document.getElementById(table + '-sort');
+    if (sel) sel.addEventListener('change', () => onSortSelect(table, sel.value));
+  });
+  document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const table = th.dataset.table;
+    const key = th.dataset.sort;
+    const cur = sortState[table];
+    const firstDir = (key === 'time' || key === 'count' || key === 'date') ? 'desc' : 'asc';
+    const dir = cur && cur.key === key ? (cur.dir === 'asc' ? 'desc' : 'asc') : firstDir;
+    setSort(table, key, dir);
+  }));
+  const manualSearch = document.getElementById('manual-search');
+  if (manualSearch) manualSearch.addEventListener('input', applyManualSearch);
+}
+
+function openedLabels(tbody, itemByRow) {
+  const labels = new Set();
+  if (!tbody) return labels;
+  tbody.querySelectorAll('tr.row-open').forEach(tr => {
+    const item = itemByRow(tr);
+    if (item && item.label) labels.add(item.label);
+  });
+  return labels;
+}
+
+function renderAutoSectionRows() {
+  const tbody = document.getElementById('auto-tbody');
+  const open = openedLabels(tbody, tr => autoItems[tr.dataset.idx]);
+  tbody.innerHTML = '';
+  autoItems.sort((a, b) => compareBySort(a, b, 'auto'));
+  if (autoItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages to auto-code</td></tr>';
+  } else {
+    autoItems.forEach((item, idx) => {
+      const tr = buildAutoRow(item, idx);
+      tbody.appendChild(tr);
+      if (open.has(item.label)) {
+        tr.classList.add('row-open');
+        tbody.appendChild(buildDetailRow(item, 7));
+      }
+    });
+  }
+  applyAutoFilter();
+}
+
+function updateManualBadge() {
+  const remaining = manualItems.length;
+  const manualBadge = document.getElementById('manual-badge');
+  manualBadge.textContent = remaining;
+  document.getElementById('stat-manual').textContent = remaining;
+  if (remaining > 0) {
+    manualBadge.style.background = '#FF6200';
+    manualBadge.style.color = 'white';
+  } else {
+    manualBadge.style.background = '';
+    manualBadge.style.color = '';
+  }
+}
+
+function renderManualSectionRows() {
+  const tbody = document.getElementById('manual-tbody');
+  const open = openedLabels(tbody, tr => ({ label: tr.dataset.label }));
+  tbody.innerHTML = '';
+  const rows = manualItems.slice().sort((a, b) => compareBySort(a, b, 'manual'));
+  if (rows.length === 0) {
+    const msg = resolvedItems.length ? 'All packages resolved ✓' : 'No packages need manual review';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + msg + '</td></tr>';
+  } else {
+    rows.forEach(item => {
+      const tr = buildManualRow(item);
+      tbody.appendChild(tr);
+      if (open.has(item.label)) {
+        tr.classList.add('row-open');
+        tbody.appendChild(buildDetailRow(item, 9));
+      }
+    });
+  }
+  updateManualBadge();
+}
+
 const SESSION_KEY = 'ibno_session';
 
 function renderResults({ auto, manual, dayType }, recurringMap = {}) {
@@ -1221,6 +1459,10 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
   autoItems = auto;           // hold the model; exports + overrides read/write here
   manualItems = manual;       // hold the unresolved manual rows for persistence
   currentDayType = dayType;
+  autoItems.forEach((item, idx) => { item._ord = idx; });
+  manualItems.forEach((item, idx) => { item._ord = idx; });
+  resolvedItems.forEach((item, idx) => { if (item._resolvedOrd === undefined) item._resolvedOrd = idx; });
+  resetViewControls();
 
   // Stats
   document.getElementById('stat-auto').textContent  = auto.length;
@@ -1242,13 +1484,7 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
 
   // Auto table
   document.getElementById('auto-badge').textContent = auto.length;
-  const autoTbody = document.getElementById('auto-tbody');
-  autoTbody.innerHTML = '';
-  if (auto.length === 0) {
-    autoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages to auto-code</td></tr>';
-  } else {
-    auto.forEach((item, idx) => autoTbody.appendChild(buildAutoRow(item, idx)));
-  }
+  renderAutoSectionRows();
   // Fresh render starts unfiltered; rebuild chips from this report's facets.
   autoFilter = { codes: [], categories: [] };
   renderAutoChips();
@@ -1256,22 +1492,8 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
   document.getElementById('auto-section').style.display = 'block';
 
   // Manual table
-  const manualBadge = document.getElementById('manual-badge');
-  manualBadge.textContent = manual.length;
-  if (manual.length > 0) {
-    manualBadge.style.background = '#FF6200';
-    manualBadge.style.color = 'white';
-  } else {
-    manualBadge.style.background = '';
-    manualBadge.style.color = '';
-  }
-  const manualTbody = document.getElementById('manual-tbody');
-  manualTbody.innerHTML = '';
-  if (manual.length === 0) {
-    manualTbody.innerHTML = '<tr><td colspan="9" class="empty-state">No packages need manual review</td></tr>';
-  } else {
-    manual.forEach(item => manualTbody.appendChild(buildManualRow(item)));
-  }
+  renderManualSectionRows();
+  applyManualSearch();
   document.getElementById('manual-section').style.display = 'block';
 
   renderRecurringSection(currentRecurringMap);
@@ -1329,7 +1551,9 @@ function recurringPill(label) {
 }
 
 function renderRecurringSection(recurringMap) {
-  const labels = Object.keys(recurringMap);
+  const labels = Object.keys(recurringMap).map(label => Object.assign({}, recurringMap[label], { label }))
+    .sort((a, b) => compareBySort(a, b, 'repeat'))
+    .map(item => item.label);
   document.getElementById('repeat-badge').textContent = labels.length;
   const tbody = document.getElementById('repeat-tbody');
   tbody.innerHTML = '';
@@ -1633,7 +1857,7 @@ function applyAutoFilter() {
   if (active && shown === 0 && autoItems.length > 0) {
     const empty = document.createElement('tr');
     empty.id = 'auto-filter-empty';
-    empty.innerHTML = '<td colspan="5" class="empty-state">No packages match this filter</td>';
+    empty.innerHTML = '<td colspan="7" class="empty-state">No packages match this filter</td>';
     tbody.appendChild(empty);
   }
   document.getElementById('auto-filter-note').textContent =
@@ -1647,6 +1871,36 @@ function applyAutoFilter() {
   // rows, so relabel the button to make the narrowed scope obvious.
   const copyBtn = document.getElementById('copy-btn');
   if (copyBtn) copyBtn.textContent = active ? 'Copy shown' : 'Copy All';
+}
+
+// Manual review search is view-only. Detail rows inherit their parent row's
+// visibility; the unresolved model remains intact for resolve/undo/session state.
+function applyManualSearch() {
+  const tbody = document.getElementById('manual-tbody');
+  const input = document.getElementById('manual-search');
+  const note = document.getElementById('manual-search-note');
+  if (!tbody) return;
+  const q = String((input && input.value) || '').trim().toLowerCase();
+  const active = q.length > 0;
+  const priorEmpty = document.getElementById('manual-search-empty');
+  if (priorEmpty) priorEmpty.remove();
+  let shown = 0;
+  let lastVisible = true;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
+    if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
+    const match = !active || tr.textContent.toLowerCase().indexOf(q) !== -1;
+    tr.style.display = match ? '' : 'none';
+    lastVisible = match;
+    if (match) shown++;
+  });
+  if (active && shown === 0 && manualItems.length > 0) {
+    const empty = document.createElement('tr');
+    empty.id = 'manual-search-empty';
+    empty.innerHTML = '<td colspan="9" class="empty-state">No manual-review rows match this search</td>';
+    tbody.appendChild(empty);
+  }
+  if (note) note.textContent = active ? 'showing ' + shown + ' of ' + manualItems.length : '';
 }
 
 function buildManualRow(item) {
@@ -1734,21 +1988,13 @@ function resolveItem(item, tr) {
 
   // Move the item from the unresolved manual model into resolved (the
   // transition lives in lib/ibno-session.js); this page only re-renders.
+  if (item._resolvedOrd === undefined) item._resolvedOrd = resolvedItems.length;
   const next = IbnoSession.resolve(manualItems, resolvedItems, item);
   manualItems = next.manual;
   resolvedItems = next.resolved;
 
-  const remaining = document.querySelectorAll('#manual-tbody tr[data-label]').length;
-  const manualBadge = document.getElementById('manual-badge');
-  manualBadge.textContent = remaining;
-  document.getElementById('stat-manual').textContent = remaining;
-  if (remaining === 0) {
-    manualBadge.style.background = '';
-    manualBadge.style.color = '';
-    document.getElementById('manual-tbody').innerHTML =
-      '<tr><td colspan="7" class="empty-state">All packages resolved ✓</td></tr>';
-  }
-
+  renderManualSectionRows();
+  applyManualSearch();
   renderResolvedSection();
   persistSession();
 }
@@ -1761,18 +2007,8 @@ function undoResolve(label) {
   manualItems = next.manual;
   resolvedItems = next.resolved;
 
-  const manualTbody = document.getElementById('manual-tbody');
-  const emptyTr = manualTbody.querySelector('tr:not([data-label])');
-  if (emptyTr) emptyTr.remove();
-
-  manualTbody.appendChild(buildManualRow(item));
-
-  const remaining = document.querySelectorAll('#manual-tbody tr[data-label]').length;
-  const manualBadge = document.getElementById('manual-badge');
-  manualBadge.textContent = remaining;
-  document.getElementById('stat-manual').textContent = remaining;
-  manualBadge.style.background = '#FF6200';
-  manualBadge.style.color = 'white';
+  renderManualSectionRows();
+  applyManualSearch();
 
   if (resolvedItems.length === 0) {
     document.getElementById('resolved-section').style.display = 'none';
@@ -1785,11 +2021,13 @@ function undoResolve(label) {
 function renderResolvedSection() {
   document.getElementById('resolved-badge').textContent = resolvedItems.length;
   const tbody = document.getElementById('resolved-tbody');
+  const open = openedLabels(tbody, tr => ({ label: tr.dataset.label }));
   tbody.innerHTML = '';
-  resolvedItems.forEach(item => {
+  resolvedItems.slice().sort((a, b) => compareBySort(a, b, 'resolved')).forEach(item => {
     const { label, code, category, ibWork, reason, firm, address, express } = item;
     const tr = document.createElement('tr');
     tr.className = 'expandable';
+    tr.dataset.label = label;
     const codeHtml    = code
       ? '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>'
       : '<span class="cat-text">—</span>';
@@ -1818,6 +2056,10 @@ function renderResolvedSection() {
       toggleDetailRow(tr, item, 8);
     });
     tbody.appendChild(tr);
+    if (open.has(item.label)) {
+      tr.classList.add('row-open');
+      tbody.appendChild(buildDetailRow(item, 8));
+    }
   });
   document.getElementById('resolved-section').style.display = 'block';
 }
@@ -1954,6 +2196,7 @@ function resetApp() {
   autoItems = [];
   manualItems = [];
   autoFilter = { codes: [], categories: [] };
+  resetViewControls();
   document.getElementById('auto-chips').style.display = 'none';
   document.getElementById('auto-chips').innerHTML = '';
   document.getElementById('auto-filter-note').textContent = '';
@@ -2045,6 +2288,7 @@ function onDrop(e) {
 
 // Wire collapsible result sections (#166).
 initCollapsibleSections();
+initSortControls();
 
 // Restore an in-progress session if one was persisted (#157), so a mid-shift
 // reload lands back on the work instead of the empty drop zone.
