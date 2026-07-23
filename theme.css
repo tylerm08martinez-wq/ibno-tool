@@ -11,7 +11,53 @@
  * the purple header alone — those colors stay meaningful on a dark surface.
  */
 
-html[data-theme="dark"] { color-scheme: dark; }
+/* ── Semantic color palette (STRUCTURAL fix, #307) ─────────────────────────────
+ * A small token set that flips ONCE here instead of being re-enumerated per
+ * class selector. Tools reference var(--…) for their neutral/structural colors
+ * (surfaces, text, borders, muted text, subtle fills); theme.css supplies light
+ * defaults on :root and dark values under html[data-theme="dark"].
+ *
+ * Deliberately NOT tokenized: brand purple (#4D148C) / orange (#FF6200) and the
+ * status pills (green/red/blue/amber) — those stay meaningful on both surfaces,
+ * matching the existing "leave pills alone" philosophy. Migrate only the neutral
+ * greys that break in dark mode.
+ */
+:root {
+  --surface:        #ffffff;   /* white cards / panels / drop zones */
+  --surface-2:      #f8f7fd;   /* subtle raised fill: zebra rows, detail panels */
+  --surface-3:      #fafafa;   /* table header / faint header fills */
+  --app-bg:         #f0f2f5;   /* page background */
+  --text:           #1a1a2e;   /* primary body text */
+  --text-muted:     #666666;   /* secondary text (labels, th) */
+  --text-faint:     #999999;   /* hints, notes, placeholders */
+  --text-fainter:   #bbbbbb;   /* very faint: empty states, carets */
+  --border:         #e0e0e0;   /* default borders */
+  --border-soft:    #f0f0f0;   /* faint dividers */
+  --border-strong:  #d1d5db;   /* input / control borders */
+  --field-bg:       #ffffff;   /* form field background */
+  --field-bg-alt:   #faf8ff;   /* tinted field background */
+  --hover-soft:     #f3eeff;   /* soft purple hover wash */
+  --hover-row:      #ece8ff;   /* table row hover wash */
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --surface:        #1e1f29;
+  --surface-2:      #23242f;
+  --surface-3:      #23242f;
+  --app-bg:         #14151b;
+  --text:           #e7e7ec;
+  --text-muted:     #b9b9c6;
+  --text-faint:     #9b9ba8;
+  --text-fainter:   #8a8a97;
+  --border:         #2e2f3c;
+  --border-soft:    #2a2b37;
+  --border-strong:  #3a3b4a;
+  --field-bg:       #23242f;
+  --field-bg-alt:   #23242f;
+  --hover-soft:     #23242f;
+  --hover-row:      #2b2c3a;
+}
 
 html[data-theme="dark"] body {
   background: #14151b;
@@ -57,9 +103,17 @@ html[data-theme="dark"] th {
   color: #b9b9c6;
   border-color: #2e2f3c;
 }
+/* Brand-ink (issue 393): the generic dark th rule above outranks the tools'
+   inline `th.today { color: var(--brand-ink) }` (theme.css loads after the
+   inline styles), so the today-header purple needs its own dark rule here. */
+html[data-theme="dark"] th.today { color: #c4b5fd; }
 html[data-theme="dark"] thead th { background: #23242f; }
 html[data-theme="dark"] td { border-color: #2a2b37; }
 html[data-theme="dark"] tbody tr:hover { background: #23242f; }
+/* IBNO Coder batch-selected manual-review row (#374): the light peach fill
+   (#fff6ee) leaves light text unreadable on dark. Use a warm dark tint that
+   still reads as "selected" against the neutral rows. */
+html[data-theme="dark"] #manual-tbody tr.row-checked td { background: #33270f; }
 
 /* ── Form fields ──────────────────────────────────────────────────────────── */
 html[data-theme="dark"] input[type="text"],
@@ -97,7 +151,7 @@ html[data-theme="dark"] .cov-fragile    .cov-msg { color: #eab308; }
 html[data-theme="dark"] .cov-headcount  .cov-msg { color: #94a3b8; }
 html[data-theme="dark"] .cov-clear      .cov-msg { color: #4ade80; }
 html[data-theme="dark"] table.cov-map th.cov-map-area { color: #e7e7ec; }
-html[data-theme="dark"] table.cov-map th.today { color: #c4a7ec; }
+html[data-theme="dark"] table.cov-map th.today { color: #c4b5fd; } /* brand-ink, issue 393 */
 html[data-theme="dark"] .cov-cell.today { outline-color: #c4a7ec; }
 /* Mute "covered" in dark so the problem cells (yellow/orange/red) draw the eye,
    not the good ones. */
@@ -145,4 +199,10 @@ html[data-theme="dark"] .theme-toggle {
   background: #23242f;
   color: #ffd479;
   border-color: #3a3b4a;
+}
+
+/* Screen-only chrome: the fixed toggle otherwise prints as a gray box in the
+   corner of every tool's printout. */
+@media print {
+  .theme-toggle { display: none !important; }
 }

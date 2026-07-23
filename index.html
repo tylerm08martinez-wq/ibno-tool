@@ -8,12 +8,18 @@
   <meta name="theme-color" content="#4D148C">
   <link rel="apple-touch-icon" href="icons/ibno-icon-192.png">
   <style>
+    /* Brand-ink text token (issue 393): theme.css deliberately leaves
+       FedEx purple untokenized for backgrounds/borders/pills (stays
+       meaningful in both themes), but purple TEXT on a dark surface is
+       illegible — this token is scoped to text-color uses only. */
+    :root { --brand-ink: #4D148C; }
+    html[data-theme="dark"] { --brand-ink: #c4b5fd; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
-      background: #f0f2f5;
-      color: #1a1a2e;
+      background: var(--app-bg);
+      color: var(--text);
       min-height: 100vh;
       padding: 20px;
     }
@@ -39,17 +45,18 @@
       border-radius: 10px;
       padding: 56px 24px;
       text-align: center;
-      background: white;
+      background: var(--surface);
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
       margin-bottom: 20px;
       user-select: none;
     }
-    #drop-zone.dragover { background: #f3eeff; border-color: #FF6200; }
-    #drop-zone h2 { color: #4D148C; font-size: 17px; margin-bottom: 6px; }
-    #drop-zone p { color: #888; font-size: 13px; }
-    #drop-zone .hint { margin-top: 10px; font-size: 11px; color: #bbb; }
+    #drop-zone.dragover { background: var(--hover-soft); border-color: #FF6200; }
+    #drop-zone h2 { color: var(--brand-ink); font-size: 17px; margin-bottom: 6px; }
+    #drop-zone p { color: var(--text-faint); font-size: 13px; }
+    #drop-zone .hint { margin-top: 10px; font-size: 11px; color: var(--text-fainter); }
     #file-input { display: none; }
+    #merge-input { display: none; }
 
     .btn {
       display: inline-flex;
@@ -79,21 +86,21 @@
       margin-bottom: 20px;
     }
     .stat-card {
-      background: white;
+      background: var(--surface);
       border-radius: 8px;
       padding: 14px 18px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      border-left: 4px solid #e0e0e0;
+      border-left: 4px solid var(--border);
     }
     .stat-card.green { border-color: #16a34a; }
     .stat-card.orange { border-color: #FF6200; }
     .stat-card.purple { border-color: #4D148C; }
     .stat-card.blue { border-color: #1d4ed8; }
-    .stat-card .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-    .stat-card .value { font-size: 30px; font-weight: 700; color: #1a1a2e; line-height: 1; }
+    .stat-card .label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .stat-card .value { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
     .stat-card.green .value { color: #16a34a; }
     .stat-card.orange .value { color: #FF6200; }
-    .stat-card.purple .value { color: #4D148C; }
+    .stat-card.purple .value { color: var(--brand-ink); }
     .stat-card.blue .value { color: #1d4ed8; }
     .stat-card[data-target] {
       cursor: pointer;
@@ -120,7 +127,7 @@
     .day-banner.weekday { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
 
     .section {
-      background: white;
+      background: var(--surface);
       border-radius: 8px;
       margin-bottom: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
@@ -134,20 +141,20 @@
       align-items: center;
       justify-content: space-between;
       padding: 14px 18px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--border-soft);
       cursor: pointer;
       user-select: none;
       position: sticky;
       top: var(--header-h, 56px);
       z-index: 5;
-      background: #fff;
+      background: var(--surface);
       border-radius: 8px 8px 0 0;
     }
-    .section-header:hover { background: #faf8ff; }
+    .section-header:hover { background: var(--hover-soft); }
     .chev {
       display: inline-block;
       font-size: 11px;
-      color: #bbb;
+      color: var(--text-fainter);
       margin-right: 9px;
       transition: transform 0.15s;
       vertical-align: middle;
@@ -158,8 +165,8 @@
     .section-header h2 { font-size: 15px; font-weight: 700; }
     .section-header .right { display: flex; align-items: center; gap: 10px; }
     .badge {
-      background: #f0f0f0;
-      color: #555;
+      background: var(--surface-2);
+      color: var(--text-muted);
       padding: 2px 10px;
       border-radius: 999px;
       font-size: 12px;
@@ -168,27 +175,33 @@
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th {
-      background: #fafafa;
+      background: var(--surface-3);
       padding: 9px 16px;
       text-align: left;
       font-weight: 600;
-      color: #666;
+      color: var(--text-muted);
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      border-bottom: 1px solid #ececec;
+      border-bottom: 1px solid var(--border);
     }
     td {
       padding: 9px 16px;
-      border-bottom: 1px solid #f5f5f5;
+      border-bottom: 1px solid var(--border-soft);
       vertical-align: middle;
     }
     tr:last-child td { border-bottom: none; }
 
     .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; }
     .label-copy { cursor: pointer; border-radius: 3px; padding: 1px 2px; transition: background 0.1s, color 0.1s; }
-    .label-copy:hover { background: #ece8ff; color: #4D148C; }
+    .label-copy:hover { background: var(--hover-row); color: var(--brand-ink); }
     .label-copy.copied { background: #dcfce7; color: #15803d; }
+    /* issue 517: one-click FTrack lookup beside every rendered tracking number.
+       Theme tokens only, so light and dark both follow lib/theme.js. */
+    .ftrack-link { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--text-faint); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 0 5px; white-space: nowrap; }
+    .ftrack-link:hover { background: var(--hover-row); color: var(--text); }
+    .dt-td .dt-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-style: dotted; }
+    .dt-td .dt-link:hover { color: var(--text); text-decoration-style: solid; }
     .code-pill {
       display: inline-block;
       background: #4D148C;
@@ -224,16 +237,16 @@
       white-space: nowrap;
       cursor: help;
     }
-    .cat-text { color: #888; font-size: 11px; }
+    .cat-text { color: var(--text-faint); font-size: 11px; }
 
-    tbody tr:nth-child(even) td { background: #f8f7fd; }
-    tr:hover td { background: #ece8ff !important; }
+    tbody tr:nth-child(even) td { background: var(--surface-2); }
+    tr:hover td { background: var(--hover-row) !important; }
 
     .copy-row-btn {
       background: none;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-strong);
       border-radius: 4px;
-      color: #6b7280;
+      color: var(--text-muted);
       cursor: pointer;
       font-size: 13px;
       line-height: 1;
@@ -263,39 +276,39 @@
     #manual-section { border-top: 3px solid #FF6200; }
     #manual-section .section-header h2 { color: #c2410c; }
 
-    .empty-state { padding: 36px; text-align: center; color: #bbb; font-size: 13px; }
+    .empty-state { padding: 36px; text-align: center; color: var(--text-fainter); font-size: 13px; }
 
     /* ── Ready-to-Enter filter chips (view-only) ─────────────────────────────── */
-    .filter-note { font-size: 12px; color: #888; }
+    .filter-note { font-size: 12px; color: var(--text-faint); }
     .sort-select, .manual-search {
-      border: 1px solid #d1c4e9;
+      border: 1px solid var(--border-strong);
       border-radius: 5px;
-      background: white;
-      color: #333;
+      background: var(--field-bg);
+      color: var(--text);
       font-size: 12px;
       padding: 6px 9px;
     }
     .sort-select:focus, .manual-search:focus { outline: none; border-color: #4D148C; }
     .manual-search { min-width: 220px; }
     th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { color: #4D148C; background: #f3eeff; }
-    th.sort-active::after { content: ' ▲'; font-size: 9px; color: #4D148C; }
+    th.sortable:hover { color: var(--brand-ink); background: var(--hover-soft); }
+    th.sort-active::after { content: ' ▲'; font-size: 9px; color: var(--brand-ink); }
     th.sort-active.sort-desc::after { content: ' ▼'; }
-    .chips { padding: 11px 18px; border-bottom: 1px solid #f0f0f3; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .chips .grp-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; }
-    .chip { border: 1px solid #d8d3e6; background: white; color: #4a4a5a; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; display: inline-flex; align-items: center; gap: 6px; }
+    .chips { padding: 11px 18px; border-bottom: 1px solid var(--border-soft); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .chips .grp-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+    .chip { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; display: inline-flex; align-items: center; gap: 6px; }
     .chip:hover { border-color: #4D148C; }
     .chip.active { background: #4D148C; border-color: #4D148C; color: white; }
     .chip .n { font-size: 11px; opacity: 0.7; }
-    .chip-divider { width: 1px; height: 22px; background: #e5e5ea; margin: 0 2px; }
-    .chip-clear { border: none; background: none; color: #4D148C; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px; }
+    .chip-divider { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+    .chip-clear { border: none; background: none; color: var(--brand-ink); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px; }
 
     /* ── Settings panel ──────────────────────────────────────────────────────── */
     #settings-panel {
-      background: white;
+      background: var(--surface);
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.10);
-      border: 1px solid #e0d4f5;
+      border: 1px solid var(--border);
       margin-bottom: 20px;
       overflow: hidden;
       display: none;
@@ -305,26 +318,26 @@
       display: block;
       font-size: 12px;
       font-weight: 700;
-      color: #4D148C;
+      color: var(--brand-ink);
       text-transform: uppercase;
       letter-spacing: 0.06em;
       margin-bottom: 6px;
     }
-    #settings-panel .hint-text { font-size: 11px; color: #999; margin-bottom: 10px; }
+    #settings-panel .hint-text { font-size: 11px; color: var(--text-faint); margin-bottom: 10px; }
     #flagged-areas-input {
       width: 100%;
       font-family: 'Consolas', 'Courier New', monospace;
       font-size: 13px;
-      border: 1px solid #d1c4e9;
+      border: 1px solid var(--border-strong);
       border-radius: 5px;
       padding: 8px 10px;
       resize: vertical;
       min-height: 72px;
-      color: #1a1a2e;
-      background: #faf8ff;
+      color: var(--text);
+      background: var(--field-bg-alt);
       transition: border-color 0.15s;
     }
-    #flagged-areas-input:focus { outline: none; border-color: #4D148C; background: #fff; }
+    #flagged-areas-input:focus { outline: none; border-color: #4D148C; background: var(--field-bg); }
     .settings-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
     #settings-status {
       font-size: 12px;
@@ -341,20 +354,28 @@
     .code-input-mini {
       width: 60px;
       padding: 3px 6px;
-      border: 1px solid #d1c4e9;
+      border: 1px solid var(--border-strong);
       border-radius: 4px;
       font-family: 'Consolas', 'Courier New', monospace;
       font-size: 13px;
       text-align: center;
-      color: #1a1a2e;
+      color: var(--text);
+      background: var(--field-bg);
       transition: border-color 0.15s;
       margin-right: 4px;
     }
     .code-input-mini:focus { outline: none; border-color: #4D148C; }
-    /* Pre-filled suggested code (#fast-entry): a soft amber tint flags it as a
-       suggestion to review, not a value the user typed. Clears on focus/typing. */
-    .code-input-mini.code-suggested { border-color: #FF6200; background: #FFF6EE; color: #8a3b00; font-weight: 600; }
-    .code-input-mini.code-suggested:focus { background: #fff; color: #1a1a2e; }
+    /* Bucket grouping + batch coding in Needs Manual Review (#batch-code). */
+    .manual-group-row td { background:var(--surface-2); border-top:2px solid var(--border); padding:8px 12px; }
+    .manual-group-row .g-title { font-weight:700; font-size:13px; color:var(--text); user-select:none; }
+    .manual-group-row .g-title:hover { color: var(--brand-ink); }
+    .manual-group-row .g-chevron { display:inline-block; width:12px; color:var(--text-faint); font-size:11px; }
+    .manual-group-row .g-count { background:var(--border); color:var(--text-muted); font-size:11px; font-weight:700; border-radius:10px; padding:1px 8px; margin-left:6px; }
+    .btn-bulk { background:#FF6200; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-left:10px; }
+    .btn-bulk.b65 { background:#0369a1; }
+    .btn-bulk:disabled { opacity:.4; cursor:default; }
+    .manual-check { width:16px; height:16px; cursor:pointer; }
+    #manual-tbody tr.row-checked td { background:#fff6ee; }
     .btn-apply-mini {
       padding: 3px 9px;
       background: #16a34a;
@@ -380,9 +401,19 @@
       transition: background 0.12s;
     }
     .btn-done-mini:hover { background: #d1d1d6; }
+    /* One-click quick-code pill (issue 373): applies the row's context code (33 for a
+       flagged work area, 65 for an Unassigned Zip) and marks it done, without
+       opening the code picker. Reuses the per-bucket .btn-bulk / .btn-bulk.b65
+       colors (orange 33 / blue 65) — size-only overrides here, no new hex. */
+    .btn-bulk.quick-code {
+      padding: 3px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 6px 0 0;
+    }
     .status-pill  { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; }
     .status-coded { background: #dcfce7; color: #15803d; }
-    .status-done  { background: #f0f0f0; color: #666; }
+    .status-done  { background: var(--surface-2); color: var(--text-muted); }
     .express-pill { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; }
     .express-yes  { background: #dbeafe; color: #1e40af; }
     .express-no   { background: #f3f4f6; color: #6b7280; }
@@ -405,20 +436,20 @@
 
     /* ── Expandable row detail ───────────────────────────────────────────────── */
     tr.expandable { cursor: pointer; }
-    tr.expandable:hover td { background: #ece8ff !important; }
+    tr.expandable:hover td { background: var(--hover-row) !important; }
     .expand-indicator {
       display: inline-block;
       font-size: 9px;
-      color: #bbb;
+      color: var(--text-fainter);
       margin-right: 6px;
       transition: transform 0.15s;
       vertical-align: middle;
     }
-    tr.row-open .expand-indicator { transform: rotate(90deg); color: #4D148C; }
-    .detail-row td { padding: 0 !important; border-bottom: 1px solid #ececec; }
+    tr.row-open .expand-indicator { transform: rotate(90deg); color: var(--brand-ink); }
+    .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
     .detail-panel {
-      background: #f8f7fd;
-      border-top: 1px solid #e0d4f5;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
       padding: 14px 20px;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -427,14 +458,14 @@
     .detail-field .detail-label {
       font-size: 10px;
       font-weight: 700;
-      color: #888;
+      color: var(--text-faint);
       text-transform: uppercase;
       letter-spacing: 0.06em;
       margin-bottom: 3px;
     }
     .detail-field .detail-value {
       font-size: 13px;
-      color: #1a1a2e;
+      color: var(--text);
       font-family: 'Consolas', 'Courier New', monospace;
     }
 
@@ -442,7 +473,7 @@
     #history-toggle { margin-bottom: 16px; margin-left: 8px; }
     #history-panel {
       display: none;
-      background: white;
+      background: var(--surface);
       border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.10);
       border-top: 3px solid #1d4ed8;
@@ -452,53 +483,137 @@
     /* ── Search Data panel (#286): global search over all loaded CSVs ────────── */
     #search-toggle { margin-bottom: 16px; margin-left: 8px; }
     #search-panel {
-      display: none; background: white; border-radius: 8px;
+      display: none; background: var(--surface); border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.10); border-top: 3px solid #047857;
       margin-bottom: 20px; overflow: hidden;
     }
     #search-panel .hist-head h2 { color: #047857; }
     #search-results { padding: 4px 18px 16px; }
-    .search-rec { border: 1px solid #eee; border-radius: 6px; margin-top: 10px; overflow: hidden; }
-    .search-rec-head { display: flex; gap: 14px; align-items: center; padding: 9px 12px; background: #f8f8fb; cursor: pointer; font-size: 13px; }
+    /* ── Code Lookup panel (issue 201): read-only QA scan-code reference ─────── */
+    /* Reuses the existing --border-strong / --text-muted / --surface-3 theme
+       variables for its accents (no new hardcoded hex — see the hardcoded-color
+       budget guard in tests/theme-contrast-dom.test.js, whose frozen baseline
+       forbids growing the count for this tool). */
+    #code-lookup-toggle { margin-bottom: 16px; margin-left: 8px; }
+    #code-lookup-panel {
+      display: none; background: var(--surface); border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10); border-top: 3px solid var(--border-strong);
+      margin-bottom: 20px; overflow: hidden;
+    }
+    #code-lookup-panel .hist-head h2 { color: var(--text); }
+    #code-lookup-results { padding: 4px 18px 18px; }
+    /* ── Browse Report panel (issue 388): browse-first Raw-Data Viewer (data-table.js).
+       Theme-variable accents only (no new hardcoded hex — respects the
+       hardcoded-color budget guard in tests/theme-contrast-dom.test.js). ── */
+    #raw-viewer-toggle { margin-bottom: 16px; margin-left: 8px; }
+    #raw-viewer-panel {
+      display: none; background: var(--surface); border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10); border-top: 3px solid var(--border-strong);
+      margin-bottom: 20px; overflow: hidden;
+    }
+    #raw-viewer-panel .hist-head h2 { color: var(--text); }
+    #raw-viewer-mount { padding: 12px 18px 18px; }
+    .dt-root { display: flex; flex-direction: column; }
+    .dt-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .dt-search { padding: 7px 11px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 13px; min-width: 240px; background: var(--field-bg); color: var(--text); }
+    .dt-search:focus { outline: none; border-color: var(--border-strong); }
+    .dt-spacer { flex: 1; }
+    .dt-count { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+    .dt-showall { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+    .dt-showall.on { background: var(--surface-3); color: var(--text); }
+    .dt-facets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+    .dt-facet { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); padding: 4px 11px; border-radius: 14px; cursor: pointer; font-size: 12px; }
+    .dt-facet.on { border-color: var(--border-strong); background: var(--hover-row); font-weight: 600; }
+    .dt-preset.on { border-color: var(--border-strong); background: var(--surface-3); font-weight: 600; }
+    .dt-picker { border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); padding: 4px 9px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .dt-picker:focus { outline: none; border-color: var(--border-strong); }
+    .dt-header { display: grid; gap: 0; border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; overflow: hidden; background: var(--surface-2); }
+    .dt-th { text-align: left; border: none; border-right: 1px solid var(--border-soft); background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dt-th:hover { background: var(--hover-row); }
+    .dt-th.sort-asc::after { content: ' ▲'; color: var(--text-faint); }
+    .dt-th.sort-desc::after { content: ' ▼'; color: var(--text-faint); }
+    .dt-scroll { height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 0 0 6px 6px; }
+    .dt-sizer { position: relative; width: 100%; }
+    .dt-rows { position: absolute; top: 0; left: 0; right: 0; }
+    .dt-row { display: grid; align-items: center; border-bottom: 1px solid var(--border-soft); }
+    .dt-row:hover { background: var(--hover-row); }
+    .dt-td { font-size: 12px; color: var(--text); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--border-soft); }
+    .dt-td.dt-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .dt-empty { font-size: 13px; color: var(--text-muted); padding: 22px 4px; font-style: italic; }
+    .dt-action { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); padding: 2px 8px; border-radius: 5px; cursor: pointer; font-size: 11px; }
+    /* Quick-code row action (#392): mirrors the coding list's #373 pill colors —
+       orange for 33, blue for 65 (.b65 reused, not a new hex) — plus a muted
+       disabled state for a row the coding session already carries a value for
+       (rendered FROM the session, never a table-local second value). */
+    .dt-action.quick-code { background: #FF6200; color: #fff; border: none; font-weight: 700; }
+    .dt-action.quick-code.b65 { background: #0369a1; }
+    .dt-action.dt-action-disabled,
+    .dt-action.dt-action-disabled.quick-code,
+    .dt-action.dt-action-disabled.quick-code.b65 { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft); cursor: default; }
+    .lookup-empty { font-size: 12px; color: var(--text-faint); font-style: italic; padding: 6px 0; }
+    .lookup-hit { border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-top: 10px; }
+    .lookup-hit .lookup-fam {
+      display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 2px 8px; border-radius: 10px; margin-bottom: 6px;
+      background: var(--surface-3); color: var(--text-muted); border: 1px solid var(--border-strong);
+    }
+    .lookup-hit .lookup-meaning { font-size: 14px; font-weight: 700; color: var(--text); }
+    .lookup-hit .lookup-common { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .lookup-hit .lookup-auto { font-size: 12px; color: var(--text); margin-top: 6px; font-weight: 600; }
+    .lookup-not-found { font-size: 13px; color: var(--text-muted); padding: 6px 0; }
+    .search-rec { border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; overflow: hidden; }
+    .search-rec-head { display: flex; gap: 14px; align-items: center; padding: 9px 12px; background: var(--surface-2); cursor: pointer; font-size: 13px; }
     .search-rec-head .mono { font-weight: 700; }
-    .search-rec-head .srec-addr { color: #666; flex: 1; }
+    .search-rec-head .srec-addr { color: var(--text-muted); flex: 1; }
     .search-rec-head .srec-toggle { color: #047857; font-size: 12px; }
+    .search-rec-head .srec-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .srec-meta .srec-pill { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-3); font-size: 11px; color: var(--text); }
+    .srec-meta .srec-pill .k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; font-size: 9px; }
     .search-rec-fields { display: none; padding: 10px 12px; }
     .search-rec.open .search-rec-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 18px; }
     .search-rec.open .srec-toggle::after { content: ' ▲'; }
     .srec-field { font-size: 12px; line-height: 1.4; }
-    .srec-field .k { color: #999; text-transform: uppercase; letter-spacing: 0.03em; font-size: 10px; display: block; }
-    .srec-field .v { color: #222; word-break: break-word; }
+    .srec-field .k { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; font-size: 10px; display: block; }
+    .srec-field .v { color: var(--text); word-break: break-word; }
     .hist-row { cursor: pointer; }
     .hist-caret { color: #1d4ed8; font-size: 11px; }
-    .hist-detail td { background: #f8fafc; padding: 10px 14px; }
+    .hist-detail td { background: var(--surface-2); padding: 10px 14px; }
     .hist-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 18px; }
-    .hist-detail-empty { font-size: 12px; color: #999; font-style: italic; }
-    .hist-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
+    .hist-detail-empty { font-size: 12px; color: var(--text-faint); font-style: italic; }
+    .hist-head { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); }
     .hist-head h2 { font-size: 15px; font-weight: 700; color: #1d4ed8; }
-    .hist-sub { font-size: 11px; color: #aaa; }
-    .hist-toolbar { display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px solid #f4f4f6; flex-wrap: wrap; }
-    .hist-toolbar .hint-text { font-size: 12px; color: #999; }
+    .hist-sub { font-size: 11px; color: var(--text-fainter); }
+    .hist-toolbar { display: flex; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; }
+    .hist-toolbar .hint-text { font-size: 12px; color: var(--text-faint); }
     .hist-spacer { flex: 1; }
-    .hist-search { padding: 7px 11px; border: 1px solid #d1c4e9; border-radius: 6px; font-size: 13px; min-width: 220px; }
+    .hist-search { padding: 7px 11px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 13px; min-width: 220px; background: var(--field-bg); color: var(--text); }
     .hist-search:focus { outline: none; border-color: #4D148C; }
-    .hist-seg { display: inline-flex; border: 1px solid #d1c4e9; border-radius: 6px; overflow: hidden; }
-    .hist-seg button { border: none; background: #fff; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: #666; }
+    .hist-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; }
+    .hist-seg button { border: none; background: var(--surface); padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); }
     .hist-seg button.on { background: #1d4ed8; color: #fff; }
+    .hist-hotspots { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 14px; }
+    .hist-hotspots .hs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); margin-right: 2px; }
+    .hs-chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 6px 3px 11px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-2); font-size: 12px; color: var(--text); cursor: pointer; }
+    .hs-chip:hover, .hs-chip.on { border-color: var(--border-strong); background: var(--hover-row); }
+    .hs-chip .hs-area { font-weight: 600; }
+    .hs-chip .hs-count { font-weight: 700; color: var(--text-muted); }
+    .hs-chip .hs-copy { border: none; background: transparent; cursor: pointer; color: var(--text-faint); font-size: 13px; padding: 0 2px; border-radius: 8px; }
+    .hs-chip .hs-copy:hover { color: var(--text); }
+    .hs-clear { border: none; background: transparent; color: var(--text-faint); font-size: 12px; cursor: pointer; text-decoration: underline; }
     .times-pill { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #dbeafe; color: #1d4ed8; }
     .times-pill.warn2 { background: #fff3e0; color: #c2410c; }
     .times-pill.hot { background: #fee2e2; color: #dc2626; }
     .today-tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; text-transform: uppercase; letter-spacing: 0.04em; }
-    .hist-dates { color: #555; font-size: 12px; }
-    .hist-prune { background: none; border: 1px solid #e3e3e8; border-radius: 6px; color: #aaa; cursor: pointer; padding: 3px 9px; font-size: 13px; }
+    .hist-dates { color: var(--text-muted); font-size: 12px; }
+    .hist-prune { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-fainter); cursor: pointer; padding: 3px 9px; font-size: 13px; }
     .hist-prune:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
-    .hist-foot { padding: 10px 18px; font-size: 11px; color: #aaa; border-top: 1px solid #f4f4f6; }
-    .ibno-sync-status { font-size: 12px; font-weight: 600; color: #999; white-space: nowrap; }
-    .ibno-sync-status.ok { color: #16a34a; } .ibno-sync-status.syncing { color: #4D148C; }
+    .hist-foot { padding: 10px 18px; font-size: 11px; color: var(--text-fainter); border-top: 1px solid var(--border-soft); }
+    .ibno-sync-status { font-size: 12px; font-weight: 600; color: var(--text-faint); white-space: nowrap; }
+    .ibno-sync-status.ok { color: #16a34a; } .ibno-sync-status.syncing { color: var(--brand-ink); }
     .ibno-sync-status.error { color: #dc2626; } .ibno-sync-status.off { color: #aaa; }
-    .settings-divider { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+    .settings-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
     .sync-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-    .sync-field { width: 100%; max-width: 420px; font-size: 13px; border: 1px solid #d1c4e9; border-radius: 5px; padding: 7px 10px; }
+    .sync-field { width: 100%; max-width: 420px; font-size: 13px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 7px 10px; background: var(--field-bg); color: var(--text); }
     .sync-field:focus { outline: none; border-color: #4D148C; }
     #sync-settings-status { font-size: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
     #sync-settings-status.show { opacity: 1; }
@@ -527,6 +642,8 @@
 <button class="btn btn-gray" id="settings-toggle" onclick="toggleSettings()">&#9881; Settings</button>
 <button class="btn btn-gray" id="history-toggle" onclick="toggleHistory()">&#128257; Repeat History</button>
 <button class="btn btn-gray" id="search-toggle" onclick="toggleSearch()">&#128269; Search Data</button>
+<button class="btn btn-gray" id="raw-viewer-toggle" onclick="toggleRawViewer()">&#128203; Browse Report</button>
+<button class="btn btn-gray" id="code-lookup-toggle" onclick="toggleCodeLookup()">&#128214; Code Lookup</button>
 
 <div id="search-panel">
   <div class="hist-head">
@@ -540,6 +657,38 @@
     <button class="btn btn-gray" onclick="clearSearchData()">Clear search data</button>
   </div>
   <div id="search-results"></div>
+</div>
+
+<!-- Browse Report panel (#388, ADR-0015): the browse-first Raw-Data Viewer over
+     the CURRENTLY-LOADED Inbound and Van Scans only. Actionable since #392: a row
+     with a bucket code exposes the #373 quick-code pill, writing into the SAME
+     coding session the coding list uses — no divergent second value. DISTINCT
+     from Search Data (#286), which is a 30-day point-lookup across every loaded
+     CSV — this one browses today's report. All table logic lives in
+     lib/data-table.js; this page only wires the loaded rows (cleaned via
+     lib/report-clean.js) into the viewer plus the quick-code row action. -->
+<div id="raw-viewer-panel">
+  <div class="hist-head">
+    <h2>&#128203; Browse Report</h2>
+    <span class="hist-sub">currently-loaded report &middot; quick-code enabled &middot; not the 30-day archive</span>
+  </div>
+  <div id="raw-viewer-mount"></div>
+</div>
+
+<!-- Read-only QA scan-code reference (#201). Looking up a code NEVER touches the
+     coding session, the auto/manual/resolved buckets, or any export — it only
+     reads from lib/scan-codes.js and renders into #code-lookup-results. -->
+<div id="code-lookup-panel">
+  <div class="hist-head">
+    <h2>&#128214; Code Lookup</h2>
+    <span class="hist-sub">read-only &middot; OP-324 + Vision routing + label codes</span>
+  </div>
+  <div class="hist-toolbar">
+    <input type="text" id="code-lookup-input" class="hist-search" placeholder="Enter or scan a code&hellip;" oninput="renderCodeLookup()" autocomplete="off">
+    <span class="hist-spacer"></span>
+    <span class="hint-text">Never changes the coding session.</span>
+  </div>
+  <div id="code-lookup-results"></div>
 </div>
 
 <div id="history-panel">
@@ -561,6 +710,7 @@
     <button class="btn btn-purple" onclick="exportHistory()">&#8595; Export TSV</button>
     <button class="btn btn-gray" onclick="clearRepeatHistory()">Clear all</button>
   </div>
+  <div id="hist-hotspots" class="hist-hotspots"></div>
   <table>
     <thead>
       <tr><th>Tracking #</th><th>Times Seen</th><th>Last Seen</th><th>Inbound Dates</th><th>Category</th><th></th></tr>
@@ -600,7 +750,12 @@
 
 <button class="btn btn-gray" id="reset-btn" onclick="resetApp()">&larr; Load New File</button>
 <button class="btn btn-gray" id="rerun-btn" style="display:none;margin-bottom:16px;" onclick="rerunRules()">&#8635; Re-run Rules</button>
+<button class="btn btn-gray" id="merge-btn" style="display:none;margin-bottom:16px;" onclick="document.getElementById('merge-input').click()" title="Merge in early-sort rows dated today from a fresh copy of YESTERDAY's Inbound and Van Scans report.">&#8645; Merge yesterday's report</button>
+<input type="file" id="merge-input" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="handleMergeFile(this.files[0])">
+<div id="merge-status" style="display:none;margin-bottom:16px;font-size:13px;color:var(--text-faint);"></div>
 <button class="btn btn-gray" id="collapse-all-btn" style="display:none;margin-bottom:16px;" onclick="toggleAllSections()">&#10996; Collapse all</button>
+<button class="btn btn-purple" id="clean-export-btn" style="display:none;margin-bottom:16px;" onclick="exportCleanCSV()" title="Download the loaded Inbound and Van Scans report as a clean, Excel-ready CSV: SSRS preamble removed and tracking numbers/barcodes kept as text.">&#8595; Clean export</button>
+<div id="sort-date-note" style="display:none;margin-bottom:16px;font-size:13px;color:var(--text-faint);"></div>
 
 <div id="drop-zone"
      onclick="document.getElementById('file-input').click()"
@@ -611,7 +766,7 @@
   <p>or click to browse</p>
   <div class="hint">Inbound and Van Scans &mdash; Full Detail by Date</div>
 </div>
-<input type="file" id="file-input" accept=".csv" onchange="handleFile(this.files[0])">
+<input type="file" id="file-input" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="handleFile(this.files[0])">
 
 <div id="summary">
   <div class="stat-card green" data-target="auto-section">
@@ -643,6 +798,13 @@
       <span class="filter-note" id="auto-filter-note"></span>
     </div>
     <div class="right">
+      <!-- Copy-mode toggle (#copy-mode): what the copy actions put on the clipboard.
+           Global (also governs Manually Resolved copies); persisted in localStorage
+           'ibno_copy_mode'. Default 'tracking' preserves today's behavior. -->
+      <select class="sort-select" id="copy-mode" aria-label="Copy as" title="What the copy buttons put on the clipboard" onchange="setCopyMode(this.value)">
+        <option value="tracking">Copy as: Tracking #</option>
+        <option value="barcode">Copy as: Full barcode</option>
+      </select>
       <select class="sort-select" id="auto-sort" aria-label="Sort Ready to Enter">
         <option value="report">Report order</option>
         <option value="time">Newest scan first</option>
@@ -681,18 +843,25 @@
       <span class="filter-note" id="manual-search-note"></span>
     </div>
     <div class="right">
+      <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
+           tracking #s / full barcodes (honoring the Copy-as toggle), one per line, WITHOUT
+           coding them — for pasting into FTrack to research before deciding a code. -->
+      <button class="btn btn-gray" id="copy-selected-manual" onclick="copySelectedManual()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
       <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
       <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
         <option value="report">Report order</option>
         <option value="time">Newest scan first</option>
         <option value="time-asc">Oldest scan first</option>
         <option value="address">Address (group destination)</option>
+        <option value="reason">Reason</option>
+        <option value="wa">Work area</option>
       </select>
     </div>
   </div>
   <table>
     <thead>
       <tr>
+        <th style="width:28px"></th>
         <th>Tracking #</th>
         <th>Category</th>
         <th class="sortable" data-table="manual" data-sort="time">Inbound Date</th>
@@ -778,12 +947,22 @@
 
 <script src="lib/tool-helpers.js"></script>
 <script src="lib/csv.js"></script>
+<script src="lib/xlsx.js"></script>
+<script src="lib/spreadsheet.js"></script>
 <script src="lib/github-json-sync.js"></script>
+<script src="lib/inbound-scans.js"></script>
 <script src="lib/ibno-rules.js"></script>
+<script src="lib/report-clean.js"></script>
+<!-- lib/ftrack.js: the one shared FTrack deep-link builder (issue 517),
+     built from the tracking number alone. Loaded before data-table.js so the
+     Raw-Data Viewer can link its tracking column. -->
+<script src="lib/ftrack.js"></script>
+<script src="lib/data-table.js"></script>
 <script src="lib/ibno-archive.js"></script>
 <script src="lib/ibno-session.js"></script>
 <script src="lib/scan-codes.js"></script>
 <script src="lib/ibno-sync.js"></script>
+<script src="lib/sync-controller.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
@@ -796,6 +975,7 @@ const HISTORY_KEY  = IbnoRules.HISTORY_KEY;
 let FLAGGED_WORK_AREAS = IbnoRules.getFlaggedWorkAreas();
 let lastRows = null; // stores the last parsed CSV rows for re-run
 let lastRecurring = {}; // recurring-IBNO map from the last upload, reused on re-run
+let mergeSeq = 0; // guards a stale merge-file read from landing after a newer merge drop, primary load, or reset (DSW pattern)
 
 // ─── SETTINGS PANEL ───────────────────────────────────────────────────────────
 function toggleSettings() {
@@ -1008,6 +1188,221 @@ async function clearSearchData() {
   renderSearch();
 }
 
+// ─── BROWSE REPORT: Raw-Data Viewer (#388, #392, ADR-0015) ─────────────────────
+// A browse-first, virtual-scrolled table over the CURRENTLY-LOADED Inbound and
+// Van Scans (lastRows), cleaned through lib/report-clean.js and rendered by
+// lib/data-table.js. ACTIONABLE (#392): a row with a bucket code exposes the
+// #373 quick-code pill via rowActions/render (see rawViewerQuickCodeRender /
+// onRawViewerRowAction below), writing through the same resolveItem/IbnoSession
+// path the coding list uses — no parallel write routine. It is
+// a DISTINCT panel from Search Data (#286): #286 is a 30-day point-lookup across
+// every loaded CSV; this browses only today's loaded report. No cleaning logic is
+// forked into this page — it wires the shared libs.
+
+// Curated default columns for the Inbound and Van Scans report: the fields a QA
+// supervisor scans first. "Show all columns" reveals every raw column.
+const RAW_VIEWER_DEFAULT_COLUMNS = [
+  'PKG_LABEL_XREF', 'INBOUND_DATE', 'IB_SCAN_NAME', 'LABEL_ADDRESS1', 'LABEL_CITY',
+  'LABEL_STATE', 'POSTAL_CODE', 'IB_WORK_AREA', 'STATUS_CODES1', 'VAN_SCAN_NAME1',
+];
+
+let rawViewerCtl = null;
+
+// The scan name that identifies Tyler in the Inbound and Van Scans report. There
+// is no login, so the "everything I scanned" preset asks once and remembers the
+// answer in localStorage (matches how the report labels a scanner — CONTEXT.md).
+const MY_SCANNER_KEY = 'ibno_my_scanner_name';
+
+function getMyScannerName() {
+  try { return (localStorage.getItem(MY_SCANNER_KEY) || '').trim(); } catch (e) { return ''; }
+}
+function setMyScannerName(name) {
+  try { localStorage.setItem(MY_SCANNER_KEY, (name || '').trim()); } catch (e) { /* storage best-effort */ }
+}
+// Resolve the scanner identity, prompting once if unset. Returns true when a name
+// is available (so the preset can activate), false if the user dismissed it.
+function ensureMyScannerName() {
+  let name = getMyScannerName();
+  if (name) return true;
+  const entered = window.prompt(
+    'Which scan name is yours? (as it appears in IB_SCAN_NAME / VAN_SCAN_NAME1, e.g. TMartinez)\n' +
+    'Saved on this device so “Everything I scanned” works next time.'
+  );
+  name = (entered || '').trim();
+  if (!name) return false;
+  setMyScannerName(name);
+  return true;
+}
+
+// Host-supplied status facets. Predicates read the loaded report's real columns
+// (delivered/van-scanned) or the LIVE coding session (coded/uncoded)
+// — the generic lib knows none of this. `codedLabels`/`uncodedLabels` are the
+// tracking numbers (PKG_LABEL_XREF, === item.label) in the session's coded buckets
+// (auto Ready-to-Enter + Manually Resolved) vs. still-unresolved Manual Review.
+function rawViewerFacets() {
+  return [
+    // Coded/Uncoded read the report's own STATUS_CODES1 (the QA scan code already on
+    // the package), NOT this session's coding — "Coded" = the package already carries
+    // a status code, "Uncoded" = it does not. Report-based, so it never goes stale
+    // while the viewer is open.
+    { id: 'coded',        label: 'Coded',            predicate: function (r) { return String(r.STATUS_CODES1 || '').trim() !== ''; } },
+    { id: 'uncoded',      label: 'Uncoded',          predicate: function (r) { return String(r.STATUS_CODES1 || '').trim() === ''; } },
+    { id: 'delivered',    label: 'Delivered',        predicate: function (r) { return r.DELIVERY_OUTCOME1 === 'Delivered'; } },
+    { id: 'van-scanned',  label: 'Van-scanned',      predicate: function (r) { return String(r.VAN_SCAN_NAME1 || '').trim() !== ''; } },
+  ];
+}
+
+function toggleRawViewer() {
+  const panel = document.getElementById('raw-viewer-panel');
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) renderRawViewer();
+}
+
+// (Re)mount the viewer over the current lastRows. Empty state when no report is
+// loaded. Called on open and after a fresh file load while the panel is visible.
+function renderRawViewer() {
+  const mountEl = document.getElementById('raw-viewer-mount');
+  if (!mountEl) return;
+  if (!lastRows || !lastRows.length) {
+    rawViewerCtl = DataTable.mount(mountEl, {
+      records: [], columns: [],
+      emptyText: 'No report loaded. Drop an Inbound and Van Scans CSV to browse it here.',
+    });
+    return;
+  }
+  // Reuse the ALREADY-PARSED rows — never re-ingest. lib/report-clean.js strips
+  // the SSRS preamble and yields keyed records; barcode columns are declared there
+  // and rendered as full text by the viewer (never scientific notation).
+  const clean = ReportClean.cleanReport(lastRows, 'inbound-van-scans');
+  rawViewerCtl = DataTable.mount(mountEl, {
+    records: clean.records,
+    columns: clean.columns,
+    defaultColumns: RAW_VIEWER_DEFAULT_COLUMNS,
+    barcodeColumns: clean.barcodeColumns,
+    // issue 517: PKG_LABEL_XREF is this report's package tracking number, so it
+    // links straight to FTrack. The other barcode columns (EXPRESS_TRACK and the
+    // *_BARCODE_SCANNED scan values) are deliberately NOT linked: they are scan
+    // barcodes, not the tracking number FTrack looks up.
+    linkColumns: { 'PKG_LABEL_XREF': function (raw) { return FTrack.ftrackUrl(raw); } },
+    searchColumns: clean.columns, // search across all fields (trk# + address)
+    // Status facets (#389): host supplies the predicates; the generic lib filters.
+    facets: rawViewerFacets(),
+    // Scanner presets (#389): "everything I scanned" matches my IB or Van scan
+    // name. prepare() resolves my identity once (prompt + localStorage) before
+    // activating, so the lib stays generic and login-free.
+    presets: [{
+      id: 'my-scans', label: 'Everything I scanned',
+      prepare: ensureMyScannerName,
+      predicate: function (r) {
+        const me = getMyScannerName().toLowerCase();
+        if (!me) return false;
+        return String(r.IB_SCAN_NAME || '').trim().toLowerCase() === me ||
+               String(r.VAN_SCAN_NAME1 || '').trim().toLowerCase() === me;
+      },
+    }],
+    // Pickers (#389 mechanism): filter by any specific value. Options are
+    // data-derived from the loaded rows by DataTable (distinctValues).
+    //   - scanner: inbound or van scan name.
+    //   - work-area: IB_WORK_AREA — the inbound work area ("where it sorted").
+    pickers: [
+      { id: 'scanner', label: 'scanners', columns: ['IB_SCAN_NAME', 'VAN_SCAN_NAME1'] },
+      { id: 'work-area', label: 'work areas', columns: ['IB_WORK_AREA'] },
+    ],
+    // Quick-code row action (#392): the ONLY row action in this mount (IBNO
+    // only — the Address Catcher mount stays rowActions: [], ADR-0012). Reuses
+    // the #373 pill exactly: same bucket mapping (suggestedManualCode), same
+    // write path (resolveItem -> IbnoSession.resolve), so the table is a second
+    // SURFACE onto the coding session, never a second write routine. render()
+    // derives the pill from the LIVE session on every repaint (see
+    // rawViewerQuickCodeRender) so an already-coded row shows the session's
+    // value — the single authoritative state — instead of drifting.
+    rowActions: [{ id: 'quick-code', render: rawViewerQuickCodeRender }],
+    onRowAction: onRawViewerRowAction,
+    emptyText: 'No rows in the loaded report.',
+  });
+}
+
+// Derive the quick-code pill for a raw-viewer row from the LIVE coding session
+// (manualItems / resolvedItems), never from table-local state — that is what
+// keeps the table and the coding list a single authoritative value (#392 AC).
+//   - Already resolved in the session -> a disabled pill showing that code.
+//   - Still in Manual Review with a bucket code (33/65) -> the live #373 pill.
+//   - Not a manual-review item, or no bucket code (needs an individual look,
+//     matching the coding list's own pill rule) -> no pill (return null).
+function rawViewerQuickCodeRender(record) {
+  const label = record && record.PKG_LABEL_XREF;
+  if (!label) return null;
+  const resolved = resolvedItems.find(i => i.label === label);
+  if (resolved) {
+    const code = resolved.code || '';
+    if (!code) return null; // skipped/no-code resolution: nothing to show as "coded"
+    return {
+      label: code,
+      className: code === '65' ? 'quick-code b65' : 'quick-code',
+      title: 'Already coded ' + code + ' in the coding session',
+      disabled: true,
+    };
+  }
+  const item = manualItems.find(i => i.label === label);
+  if (!item) return null; // auto-resolved or not part of this session
+  const quick = suggestedManualCode(item);
+  if (!quick) return null; // needs an individual look — same rule as the #373 pill
+  return {
+    label: quick,
+    className: quick === '65' ? 'quick-code b65' : 'quick-code',
+    title: 'Code ' + quick + ' + done',
+  };
+}
+
+// Find the coding-list <tr> for a label, if the Manual Review row happens to be
+// rendered right now, so applying from the table also removes it from the list
+// in the SAME click (no stale duplicate row until the next full re-render).
+// Uses Array#find over the dataset rather than a selector built from the label
+// so a label containing selector-special characters never breaks the lookup.
+function findManualRow(label) {
+  return Array.from(document.querySelectorAll('#manual-tbody tr[data-label]'))
+    .find(tr => tr.dataset.label === label) || null;
+}
+
+// Row action handler for the raw viewer (#392). Applies the SAME quick-code
+// write path as the #373 pill (resolveItem -> IbnoSession.resolve) — no
+// parallel write routine — then refreshes the viewer so the pill immediately
+// reflects the session's new (disabled, already-coded) state.
+function onRawViewerRowAction(actionId, record) {
+  if (actionId !== 'quick-code') return;
+  const label = record && record.PKG_LABEL_XREF;
+  if (!label) return;
+  const item = manualItems.find(i => i.label === label);
+  if (!item) return; // already coded (or no longer manual) — render() should have disabled the pill
+  const quick = suggestedManualCode(item);
+  if (!quick) return;
+  resolveItem(Object.assign({}, item, { code: quick, skipped: false }), findManualRow(label));
+}
+
+// Keep the viewer in sync when a new report loads while the panel is open.
+function refreshRawViewerIfOpen() {
+  const panel = document.getElementById('raw-viewer-panel');
+  if (panel && panel.style.display === 'block') renderRawViewer();
+}
+
+// Cheap repaint after a resolve/undo (#392): the coding SESSION changed, not
+// the loaded report, so a full renderRawViewer() (re-cleans lastRows and
+// remounts the whole DataTable) would needlessly re-do that work. Since the
+// quick-code pill is derived from LIVE session state at paint time
+// (rawViewerQuickCodeRender), the mounted controller's own refresh() —
+// recompute + repaint just the bounded virtual-scroll window — is enough to
+// show the new pill state. Safe to call once per row inside a bulk-apply loop
+// (bulkApply): a full remount there would re-clean a tens-of-thousands-row
+// report on every checked row and risk exactly the freeze the viewer's
+// virtual scroll exists to prevent.
+function refreshRawViewerPillsIfOpen() {
+  const panel = document.getElementById('raw-viewer-panel');
+  if (panel && panel.style.display === 'block' && rawViewerCtl && typeof rawViewerCtl.refresh === 'function') {
+    rawViewerCtl.refresh();
+  }
+}
+
 // Update just the "N row(s) saved" hint (after an ingest, even if no query yet).
 async function renderSearchCount() {
   const host = document.getElementById('search-results');
@@ -1034,6 +1429,54 @@ async function renderSearch() {
     : '<div class="empty-state">No row matches “' + ToolHelpers.escapeHtml(q) + '”.</div>';
 }
 
+// ─── CODE LOOKUP (#201) ───────────────────────────────────────────────────────
+// Read-only QA scan-code reference, sourced from lib/scan-codes.js — the same
+// authoritative taxonomy that drives manual-entry validation. This panel only
+// READS from ScanCodes.lookup(); it never writes to the coding session, the
+// auto/manual/resolved buckets, or any export. A multi-family hit (e.g. 302)
+// renders one card per family; an IBNO-auto code shows its trigger; an unknown
+// code shows a clear not-found message instead of an error.
+function toggleCodeLookup() {
+  const panel = document.getElementById('code-lookup-panel');
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) {
+    document.getElementById('code-lookup-input').focus();
+    renderCodeLookup();
+  }
+}
+
+const FAMILY_LABEL = { status: 'OP-324 Status', vision: 'Vision Routing', label: 'Label Creation' };
+
+function renderCodeLookup() {
+  const host = document.getElementById('code-lookup-results');
+  if (!host) return;
+  const esc = ToolHelpers.escapeHtml;
+  const raw = (document.getElementById('code-lookup-input').value || '').trim();
+  if (!raw) {
+    host.innerHTML = '<div class="lookup-empty">Enter a code to see its meaning and family.</div>';
+    return;
+  }
+  const hits = ScanCodes.lookup(raw);
+  if (hits.length === 0) {
+    host.innerHTML = '<div class="lookup-not-found">“' + esc(raw) + '” isn’t a known QA code.</div>';
+    return;
+  }
+  host.innerHTML = hits.map(function (hit) {
+    const famClass = 'fam-' + esc(hit.family);
+    const famLabel = FAMILY_LABEL[hit.family] || hit.family;
+    const auto = hit.isIbnoAuto
+      ? '<div class="lookup-auto">&#9889; IBNO auto-applies this code &mdash; trigger: ' + esc(hit.trigger || '') + '</div>'
+      : '';
+    const common = hit.commonUse ? '<div class="lookup-common">' + esc(hit.commonUse) + '</div>' : '';
+    return '<div class="lookup-hit">' +
+      '<span class="lookup-fam ' + famClass + '">' + esc(famLabel) + '</span>' +
+      '<div class="lookup-meaning">' + esc(hit.code) + ' &mdash; ' + esc(hit.meaning) + '</div>' +
+      common + auto +
+      '</div>';
+  }).join('');
+}
+
 function buildSearchRecord(rec) {
   const esc = ToolHelpers.escapeHtml;
   const addr = [rec.LABEL_ADDRESS1, rec.LABEL_CITY, rec.LABEL_STATE, rec.POSTAL_CODE].filter(Boolean).join(' ');
@@ -1042,10 +1485,24 @@ function buildSearchRecord(rec) {
       return '<div class="srec-field"><span class="k">' + esc(k) + '</span>' +
              '<span class="v">' + esc(rec[k]) + '</span></div>';
     }).join('');
+  // High-value fields surfaced inline on the collapsed header so the most-used
+  // columns (date, work area, status) are readable without expanding "all
+  // fields" (#310). The full column list still lives in the expand.
+  const meta = [
+    ['DATE', rec.INBOUND_DATE],
+    ['AREA', rec.IB_WORK_AREA],
+    ['STATUS', rec.STATUS_CODES1],
+  ].filter(function (p) { return String(p[1] == null ? '' : p[1]).trim() !== ''; })
+    .map(function (p) {
+      return '<span class="srec-pill"><span class="k">' + esc(p[0]) + '</span>' +
+             '<span class="v">' + esc(p[1]) + '</span></span>';
+    }).join('');
   return '<div class="search-rec">' +
     '<div class="search-rec-head" onclick="this.parentNode.classList.toggle(\'open\')">' +
       '<span class="mono">' + esc(rec.PKG_LABEL_XREF || '—') + '</span>' +
+      '<span onclick="event.stopPropagation()">' + FTrack.ftrackLink(rec.PKG_LABEL_XREF) + '</span>' +
       '<span class="srec-addr">' + esc(rec.LABEL_FIRM_NAME ? rec.LABEL_FIRM_NAME + ' · ' : '') + esc(addr) + '</span>' +
+      (meta ? '<span class="srec-meta">' + meta + '</span>' : '') +
       '<span class="srec-toggle">all fields</span>' +
     '</div>' +
     '<div class="search-rec-fields">' + fields + '</div>' +
@@ -1063,22 +1520,28 @@ function todaysLabelSet() {
   return s;
 }
 
-function daysAgoLabel(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d)) return dateStr;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const days = Math.round((today - d) / 86400000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return days + 'd ago';
-}
+// #306: which Repeat Hotspot area the history list is filtered to (null = all).
+let histAreaFilter = null;
+// The work area a repeat row belongs to; mirrors IbnoRules.repeatHotspots.
+function histAreaOf(r) { return (r.detail && r.detail.ibWork) ? String(r.detail.ibWork) : 'Unknown area'; }
 
 function renderHistory() {
   const tbody = document.getElementById('hist-tbody');
   if (!tbody) return;
   const all = IbnoRules.historyRows(loadHistory(), histWindow, new Date());
   const q = (document.getElementById('hist-search').value || '').trim();
-  const rows = q ? all.filter(r => r.tracking.includes(q)) : all.filter(r => r.timesSeen >= 2);
+  const recurring = all.filter(r => r.timesSeen >= 2);
+
+  // Repeat Hotspot rollup (#306): recurring packages grouped by work area,
+  // worst-first, so prevention targets the area that keeps generating repeats.
+  renderHotspots(IbnoRules.repeatHotspots(recurring));
+
+  // A search query takes over; otherwise the active hotspot filter (if any) narrows the list.
+  let rows;
+  if (q) { rows = all.filter(r => r.tracking.includes(q)); histAreaFilter = null; }
+  else if (histAreaFilter) { rows = recurring.filter(r => histAreaOf(r) === histAreaFilter); }
+  else { rows = recurring; }
+
   const today = todaysLabelSet();
   tbody.innerHTML = '';
   if (rows.length === 0) {
@@ -1089,11 +1552,53 @@ function renderHistory() {
   } else {
     rows.forEach(r => tbody.appendChild(buildHistoryRow(r, today.has(r.tracking))));
   }
-  const repeatCount = all.filter(r => r.timesSeen >= 2).length;
   document.getElementById('hist-foot').textContent =
     (q ? 'Searching all ' + all.length + ' tracked package(s) in the last ' + histWindow + ' days.'
-       : repeatCount + ' recurring package(s) in the last ' + histWindow + ' days.') +
+       : (histAreaFilter ? rows.length + ' recurring package(s) in area ' + histAreaFilter + ' — '
+                         : recurring.length + ' recurring package(s) — ') +
+         'last ' + histWindow + ' days.') +
     ' Device-local; 30-day detection window.';
+}
+
+// #306: render the Repeat Hotspot chips (area ×count, worst-first). Clicking a
+// chip filters the list to that area; the copy icon hands off that area's
+// recurring tracking #s (the belt worklist).
+function renderHotspots(hotspots) {
+  const host = document.getElementById('hist-hotspots');
+  if (!host) return;
+  // A Repeat Hotspot is an AREA with 2+ recurring packages — a genuine cluster,
+  // not a lone repeat that happened to land somewhere. Single-package areas stay
+  // in the list below but don't earn a chip (they'd just be noise). If nothing
+  // clusters, the strip is empty — itself the honest signal (ADR-0013).
+  const shown = hotspots.filter(h => h.count >= 2);
+  if (!shown.length) { host.innerHTML = ''; return; }
+  const esc = ToolHelpers.escapeHtml;
+  let html = '<span class="hs-label">Hotspots</span>';
+  shown.forEach(h => {
+    const on = histAreaFilter === h.area ? ' on' : '';
+    html += '<span class="hs-chip' + on + '" onclick="filterHotspot(' + JSON.stringify(h.area).replace(/"/g, '&quot;') + ')">' +
+      '<span class="hs-area">' + esc(h.area) + '</span>' +
+      '<span class="hs-count">&times;' + h.count + '</span>' +
+      '<button class="hs-copy" title="Copy this area\'s tracking #s" ' +
+        'onclick="event.stopPropagation();copyHotspotArea(' + JSON.stringify(h.area).replace(/"/g, '&quot;') + ')">&#128203;</button>' +
+    '</span>';
+  });
+  if (histAreaFilter) html += '<button class="hs-clear" onclick="filterHotspot(null)">clear filter</button>';
+  host.innerHTML = html;
+}
+
+function filterHotspot(area) {
+  histAreaFilter = (area === histAreaFilter) ? null : area;
+  renderHistory();
+}
+
+// Copy an area's recurring tracking #s (+ times seen) as a belt hand-off worklist.
+function copyHotspotArea(area) {
+  const recurring = IbnoRules.historyRows(loadHistory(), histWindow, new Date()).filter(r => r.timesSeen >= 2);
+  const lines = recurring.filter(r => histAreaOf(r) === area)
+    .map(r => r.tracking + '\t×' + r.timesSeen + '\t' + (r.category || ''));
+  if (!lines.length) return;
+  ToolHelpers.copyText('Repeat hotspot — ' + area + ' (' + lines.length + ')\n' + lines.join('\n')).catch(() => {});
 }
 
 function buildHistoryRow(r, inToday) {
@@ -1103,10 +1608,10 @@ function buildHistoryRow(r, inToday) {
   tr.className = 'hist-row';
   const cls = r.timesSeen >= 3 ? 'hot' : (r.timesSeen === 2 ? 'warn2' : '');
   tr.innerHTML =
-    '<td class="mono"><span class="hist-caret">▸</span> <span class="label-copy" title="Click to copy">' + esc(r.tracking) + '</span>' +
+    '<td class="mono"><span class="hist-caret">▸</span> <span class="label-copy" title="Click to copy">' + esc(r.tracking) + '</span>' + FTrack.ftrackLink(r.tracking) +
       (inToday ? '<span class="today-tag" title="Also in the report loaded now">in today</span>' : '') + '</td>' +
     '<td><span class="times-pill ' + cls + '">&times;' + r.timesSeen + '</span></td>' +
-    '<td class="hist-dates">' + esc(daysAgoLabel(r.lastSeen)) + '</td>' +
+    '<td class="hist-dates">' + esc(ToolHelpers.daysAgoLabel(r.lastSeen)) + '</td>' +
     '<td class="hist-dates">' + r.dates.map(esc).join(' · ') + '</td>' +
     '<td class="cat-text">' + esc(r.category || '—') + '</td>' +
     '<td><button class="hist-prune" title="Remove from history" data-prune="' + esc(r.tracking) + '">&times;</button></td>';
@@ -1129,7 +1634,7 @@ function buildHistoryRow(r, inToday) {
 
   // Click the row to expand; the copy span and prune button keep their own jobs.
   tr.addEventListener('click', function (e) {
-    if (e.target.closest('.label-copy') || e.target.closest('.hist-prune')) return;
+    if (e.target.closest('.label-copy') || e.target.closest('.hist-prune') || e.target.closest('.ftrack-link')) return;
     const open = detailTr.style.display !== 'none';
     detailTr.style.display = open ? 'none' : 'table-row';
     tr.querySelector('.hist-caret').textContent = open ? '▸' : '▾';
@@ -1163,97 +1668,77 @@ function exportHistory() {
 const SYNC_TOKEN_KEY  = 'ibno_gh_token';
 const SYNC_COORDS_KEY = 'ibno_repo_coords';
 const SYNC_SHA_KEY    = 'ibno_gh_sha';
-let ibnoKnownSha = toolStorage.get(SYNC_SHA_KEY, null);
-let ibnoSyncing = false;
-
-function getSyncToken()  { return toolStorage.get(SYNC_TOKEN_KEY, ''); }
-function getSyncCoords() { return toolStorage.get(SYNC_COORDS_KEY, { owner: '', repo: '', branch: '' }); }
-function hasSyncCoords() { const c = getSyncCoords(); return !!(c && c.owner && c.repo && c.branch); }
-function syncReady()     { return !!getSyncToken() && hasSyncCoords(); }
 
 function setSyncStatus(kind, text) {
+  // `document` can be gone when a sync continuation outlives the page (jsdom
+  // window.close() in DOM tests); a dead page needs no status update.
+  if (typeof document === 'undefined' || !document) return;
   const el = document.getElementById('ibno-sync-status');
   if (el) { el.className = 'ibno-sync-status ' + kind; el.textContent = text; }
 }
-function refreshSyncStatus() {
-  if (ibnoSyncing) return;
-  setSyncStatus(syncReady() ? 'ok' : 'off', syncReady() ? 'sync on' : 'sync off');
-}
+
+// The lifecycle (write-through debounce #174, pull-on-load #176, sha
+// bookkeeping, status states) lives in lib/sync-controller.js. This block
+// wires only the IBNO-specific pieces: the history merge/prune adapter and
+// the #287 privacy projection — historyForSync strips device-local detail
+// before anything goes over the wire; reattachDetail restores it after a merge
+// (setLocal runs while loadHistory() still returns the pre-merge map).
+const historyPrune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
+let ibnoSyncSnapshot = null; // pre-merge history for the cycle in flight (see getLocal/setLocal)
+
+const syncCtl = SyncController.create({
+  storage: toolStorage,
+  keys: { token: SYNC_TOKEN_KEY, coords: SYNC_COORDS_KEY, sha: SYNC_SHA_KEY },
+  setStatus: setSyncStatus,
+  messages: {
+    off:       ['off', 'sync off'],
+    idle:      ['ok', 'sync on'],
+    dirty:     ['ok', 'sync on'],   // pending write-through reads as plain "sync on"; the push follows in <1s
+    notReady:  ['off', 'sync off — add token + repo in Settings'],
+    pushError: ['error', 'offline — history saved locally'],
+  },
+  adapter: {
+    fetch: async (token, coords) => {
+      const r = await IbnoSync.fetchRemote(token, coords);
+      return { data: r.history, sha: r.sha };
+    },
+    push: async (token, local, sha, coords) => {
+      const r = await IbnoSync.pushMergeHistory(token, local, sha, 3, coords, historyPrune);
+      return { data: r.history, sha: r.sha };
+    },
+    mergeLocal: (remote, local) => historyPrune(IbnoSync.mergeHistory(remote, local)),
+  },
+  // One loadHistory() snapshot per sync cycle: getLocal captures it, setLocal
+  // reattaches from it — the same pre-merge base the old inline `localBefore`
+  // used, without re-parsing the whole history blob a second time.
+  getLocal: () => {
+    ibnoSyncSnapshot = loadHistory();
+    return IbnoRules.historyForSync(ibnoSyncSnapshot);
+  },
+  setLocal: (merged, phase) => {
+    saveHistory(IbnoRules.reattachDetail(merged, ibnoSyncSnapshot || loadHistory()));
+    ibnoSyncSnapshot = null;
+    if (phase === 'push' || document.getElementById('history-panel').style.display === 'block') renderHistory();
+  },
+});
+
+function refreshSyncStatus()   { syncCtl.refreshStatus(); }
+function scheduleHistorySync() { syncCtl.scheduleSync(); }
+function ibnoSyncNow()         { return syncCtl.syncNow(); }
+function ibnoPullOnLoad()      { return syncCtl.pullOnLoad(); }
 
 function fillSyncSettings() {
-  const c = getSyncCoords();
+  const c = syncCtl.getCoords();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-  set('sync-token', getSyncToken());
+  set('sync-token', syncCtl.getToken());
   set('sync-owner', c.owner); set('sync-repo', c.repo); set('sync-branch', c.branch);
 }
 
 function saveSyncSettings() {
   const val = id => (document.getElementById(id).value || '').trim();
-  const token = val('sync-token');
-  if (token) toolStorage.set(SYNC_TOKEN_KEY, token); else toolStorage.remove(SYNC_TOKEN_KEY);
-  toolStorage.set(SYNC_COORDS_KEY, { owner: val('sync-owner'), repo: val('sync-repo'), branch: val('sync-branch') });
+  syncCtl.saveSettings({ token: val('sync-token'), owner: val('sync-owner'), repo: val('sync-repo'), branch: val('sync-branch') });
   const st = document.getElementById('sync-settings-status');
   if (st) { st.textContent = '✓ Saved'; st.classList.add('show'); setTimeout(() => st.classList.remove('show'), 2000); }
-  refreshSyncStatus();
-}
-
-// Write-through (#174): after the local history changes (a coded report or a
-// prune), push it to the shared file in the background — debounced, offline-safe
-// (local already saved; a sync failure only updates the status). No-op when sync
-// isn't configured, so the tool stays purely local until set up.
-let ibnoSyncTimer = null;
-function scheduleHistorySync() {
-  if (!syncReady()) return;
-  if (ibnoSyncTimer) clearTimeout(ibnoSyncTimer);
-  ibnoSyncTimer = setTimeout(function () { ibnoSyncTimer = null; ibnoSyncNow(); }, 800);
-}
-
-async function ibnoSyncNow() {
-  if (!syncReady()) { setSyncStatus('off', 'sync off — add token + repo in Settings'); return; }
-  if (ibnoSyncing) return;
-  ibnoSyncing = true;
-  setSyncStatus('syncing', 'syncing…');
-  try {
-    const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
-    const localBefore = loadHistory();
-    // Send only dates/category over the wire (#287 privacy: detail never leaves the device).
-    const result = await IbnoSync.pushMergeHistory(getSyncToken(), IbnoRules.historyForSync(localBefore), ibnoKnownSha, 3, getSyncCoords(), prune);
-    saveHistory(IbnoRules.reattachDetail(result.history, localBefore)); // restore device-local detail after the merge
-    ibnoKnownSha = result.sha;
-    toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
-    ibnoSyncing = false;
-    renderHistory();
-    setSyncStatus('ok', 'synced ✓');
-  } catch (e) {
-    ibnoSyncing = false;
-    if (e && e.code === 'auth')          setSyncStatus('error', 'token invalid — update in Settings');
-    else if (e && e.code === 'coords')   setSyncStatus('error', 'add repo in Settings');
-    else if (e && e.code === 'conflict') setSyncStatus('error', 'sync conflict — tap Sync now');
-    else                                 setSyncStatus('error', 'offline — history saved locally');
-  }
-}
-
-// Pull-merge on load (#176): if sync is configured, fetch the shared history and
-// merge it into the local cache so the session starts with the cross-device
-// picture. Pull-only (no PUT) — subsequent changes write through (#174). Offline
-// falls back to the local cache with a status note; never throws into load.
-async function ibnoPullOnLoad() {
-  if (!syncReady()) { refreshSyncStatus(); return; }
-  setSyncStatus('syncing', 'syncing…');
-  try {
-    const remote = await IbnoSync.fetchRemote(getSyncToken(), getSyncCoords());
-    const prune = m => IbnoRules.pruneHistory(m, IbnoRules.HISTORY_DAYS, new Date());
-    const localBefore = loadHistory();
-    const merged = prune(IbnoSync.mergeHistory(remote.history, IbnoRules.historyForSync(localBefore)));
-    saveHistory(IbnoRules.reattachDetail(merged, localBefore)); // keep device-local detail across the pull
-    ibnoKnownSha = remote.sha;
-    toolStorage.set(SYNC_SHA_KEY, ibnoKnownSha);
-    if (document.getElementById('history-panel').style.display === 'block') renderHistory();
-    setSyncStatus('ok', 'synced ✓');
-  } catch (e) {
-    if (e && e.code === 'auth') setSyncStatus('error', 'token invalid — update in Settings');
-    else setSyncStatus('error', 'offline — working locally');
-  }
 }
 
 // ─── CSV PARSER ───────────────────────────────────────────────────────────────
@@ -1282,6 +1767,7 @@ function resetViewControls() {
   if (manualSearch) manualSearch.value = '';
   const manualNote = document.getElementById('manual-search-note');
   if (manualNote) manualNote.textContent = '';
+  manualCollapsed.area = manualCollapsed.zip = manualCollapsed.other = true;  // fresh report → all collapsed
 }
 
 function parseDateKey(raw) {
@@ -1329,6 +1815,12 @@ function cmpText(a, b) {
   return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+// waSortKey(item) -> numeric work-area for sorting; blank/non-numeric sort last.
+function waSortKey(item) {
+  const n = parseInt(String((item && item.ibWork) || '').trim(), 10);
+  return isNaN(n) ? Number.POSITIVE_INFINITY : n;
+}
+
 function compareBySort(a, b, table) {
   const st = sortState[table] || defaultSorts[table];
   let n = 0;
@@ -1337,6 +1829,8 @@ function compareBySort(a, b, table) {
   else if (st.key === 'time') n = itemTimeKey(a) - itemTimeKey(b);
   else if (st.key === 'address') n = cmpText(addressKey(a), addressKey(b)) || cmpText(firmKey(a), firmKey(b)) || cmpText(a && a.label, b && b.label);
   else if (st.key === 'category') n = cmpText(a && a.category, b && b.category) || cmpText(a && a.label, b && b.label);
+  else if (st.key === 'reason') n = cmpText(a && a.reason, b && b.reason) || cmpText(a && a.label, b && b.label);
+  else if (st.key === 'wa') n = (waSortKey(a) - waSortKey(b)) || cmpText(String((a && a.ibWork) || ''), String((b && b.ibWork) || '')) || cmpText(a && a.label, b && b.label);
   else if (st.key === 'count') n = ((a && a.timesSeen) || 0) - ((b && b.timesSeen) || 0);
   else if (st.key === 'date') n = latestRepeatDateKey(a || {}) - latestRepeatDateKey(b || {});
   if (n === 0) n = cmpText(a && a.label, b && b.label);
@@ -1442,30 +1936,152 @@ function updateManualBadge() {
   }
 }
 
+// ─── BATCH CODING (#batch-code) ─────────────────────────────────────────────
+// The two flagged buckets almost always code the same way — a flagged work area
+// as 33, an Unassigned Zip as 65 — so Needs Manual Review is grouped by bucket
+// with a per-group "Apply <code> to N checked" button. Rows start UNCHECKED
+// (deliberate opt-in), the full detail stays visible (expand for more), and the
+// per-row code box still overrides any single row. Nothing is auto-coded.
+const MANUAL_GROUPS = [
+  { key: 'area',  title: '\u{1F6A9} Flagged work area', code: '33' },
+  { key: 'zip',   title: '\u{1F4CD} Unassigned Zip',    code: '65' },
+  { key: 'other', title: '❓ Other — needs review', code: '' },
+];
+function manualBucket(item) {
+  const c = suggestedManualCode(item);       // '33' | '65' | ''
+  return c === '33' ? 'area' : c === '65' ? 'zip' : 'other';
+}
+
+// Each bucket can be collapsed to tame long lists (#batch-code). Buckets START
+// collapsed so the section opens compact; click a header to expand. State
+// persists across the surgical re-renders (resolve/bulk) and resets on upload.
+const manualCollapsed = { area: true, zip: true, other: true };
+function toggleManualGroup(bucket) {
+  manualCollapsed[bucket] = !manualCollapsed[bucket];
+  const gh = document.querySelector('#manual-tbody tr.manual-group-row[data-group="' + bucket + '"]');
+  if (gh) { const ch = gh.querySelector('.g-chevron'); if (ch) ch.textContent = manualCollapsed[bucket] ? '▸' : '▾'; }
+  applyManualSearch();   // recompute row visibility (collapse + search combined)
+}
+
+function buildGroupHeaderRow(g, count) {
+  const tr = document.createElement('tr');
+  tr.className = 'manual-group-row';
+  tr.dataset.group = g.key;
+  const td = document.createElement('td'); td.colSpan = 10;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:8px';
+  const all = document.createElement('input');
+  all.type = 'checkbox'; all.className = 'manual-check'; all.title = 'select all in this group';
+  all.addEventListener('change', () => {
+    // Select every row in the bucket that matches the current search (even if the
+    // group is collapsed), so you can collapse-and-bulk without expanding first.
+    const q = String((document.getElementById('manual-search') || {}).value || '').trim().toLowerCase();
+    document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + g.key + '"]').forEach(row => {
+      if (q && row.textContent.toLowerCase().indexOf(q) === -1) return;
+      const cb = row.querySelector('.manual-check');
+      if (cb) { cb.checked = all.checked; row.classList.toggle('row-checked', all.checked); }
+    });
+    updateBulkButtons();
+  });
+  wrap.appendChild(all);
+  const title = document.createElement('span');
+  title.className = 'g-title'; title.style.cursor = 'pointer'; title.title = 'Click to collapse / expand';
+  title.innerHTML = '<span class="g-chevron">' + (manualCollapsed[g.key] ? '▸' : '▾') + '</span> ' +
+    g.title + '<span class="g-count">' + count + '</span>';
+  title.addEventListener('click', () => toggleManualGroup(g.key));
+  wrap.appendChild(title);
+  if (g.code) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-bulk' + (g.code === '65' ? ' b65' : '');
+    btn.dataset.group = g.key; btn.dataset.code = g.code;
+    btn.textContent = 'Apply ' + g.code + ' to 0 checked';
+    btn.addEventListener('click', () => bulkApply(g.key, g.code));
+    wrap.appendChild(btn);
+  }
+  td.appendChild(wrap); tr.appendChild(td);
+  return tr;
+}
+
+// Relabel each group's bulk button with its current checked count, disable at 0.
+function updateBulkButtons() {
+  document.querySelectorAll('#manual-tbody .btn-bulk').forEach(btn => {
+    if (!btn.dataset.group) return;   // skip per-row quick-code pills (#373) — they reuse .btn-bulk only for its bucket color
+    const n = document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + btn.dataset.group + '"] .manual-check:checked').length;
+    btn.textContent = 'Apply ' + btn.dataset.code + ' to ' + n + ' checked';
+    btn.disabled = n === 0;
+  });
+  // "Copy selected" tracks the total checked across ALL buckets (research copy, no coding).
+  const copySel = document.getElementById('copy-selected-manual');
+  if (copySel) {
+    const total = document.querySelectorAll('#manual-tbody tr[data-label] .manual-check:checked').length;
+    copySel.textContent = 'Copy selected (' + total + ')';
+    copySel.disabled = total === 0;
+  }
+}
+
+// copySelectedManual() -> copy every checked Manual Review row's value (tracking # or
+// full barcode, per the Copy-as toggle), one per line, for pasting into FTrack. It is
+// READ-ONLY: it never applies a code or moves a row to Manually Resolved.
+function copySelectedManual() {
+  const checked = Array.from(document.querySelectorAll('#manual-tbody tr[data-label] .manual-check:checked'))
+    .map(cb => cb.closest('tr[data-label]'))
+    .filter(Boolean);
+  if (!checked.length) return;
+  const lines = checked.map(tr => copyValueFor(tr.dataset.label, tr.dataset.barcode));
+  ToolHelpers.copyText(lines.join('\n')).catch(() => {});
+  const btn = document.getElementById('copy-selected-manual');
+  if (btn) {
+    const prev = btn.textContent;
+    btn.textContent = '✓ Copied ' + lines.length;
+    setTimeout(() => { updateBulkButtons(); }, 1200);
+  }
+}
+
+// Code every checked row in a bucket with the bucket's code, immediately.
+function bulkApply(bucket, code) {
+  const targets = [];
+  document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + bucket + '"]').forEach(tr => {
+    const cb = tr.querySelector('.manual-check');
+    if (cb && cb.checked) {
+      const item = manualItems.find(it => it.label === tr.dataset.label);
+      if (item) targets.push({ item: item, tr: tr });
+    }
+  });
+  targets.forEach(t => resolveItem(Object.assign({}, t.item, { code: code, skipped: false }), t.tr));
+}
+
 function renderManualSectionRows() {
   const tbody = document.getElementById('manual-tbody');
   const open = openedLabels(tbody, tr => ({ label: tr.dataset.label }));
   tbody.innerHTML = '';
-  const rows = manualItems.slice().sort((a, b) => compareBySort(a, b, 'manual'));
-  if (rows.length === 0) {
+  if (manualItems.length === 0) {
     const msg = resolvedItems.length ? 'All packages resolved ✓' : 'No packages need manual review';
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + msg + '</td></tr>';
-  } else {
-    rows.forEach(item => {
-      const tr = buildManualRow(item);
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">' + msg + '</td></tr>';
+    updateManualBadge();
+    return;
+  }
+  MANUAL_GROUPS.forEach(g => {
+    const items = manualItems.filter(it => manualBucket(it) === g.key)
+      .sort((a, b) => compareBySort(a, b, 'manual'));
+    if (!items.length) return;
+    tbody.appendChild(buildGroupHeaderRow(g, items.length));
+    items.forEach(item => {
+      const tr = buildManualRow(item, g.key);
       tbody.appendChild(tr);
       if (open.has(item.label)) {
         tr.classList.add('row-open');
-        tbody.appendChild(buildDetailRow(item, 9));
+        tbody.appendChild(buildDetailRow(item, 10));
       }
     });
-  }
+  });
   updateManualBadge();
+  updateBulkButtons();
+  applyManualSearch();   // apply current collapse (and any search) to the fresh rows
 }
 
 const SESSION_KEY = 'ibno_session';
 
-function renderResults({ auto, manual, dayType }, recurringMap = {}) {
+function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnLoad = false) {
   currentRecurringMap = recurringMap || {};
   autoItems = auto;           // hold the model; exports + overrides read/write here
   manualItems = manual;       // hold the unresolved manual rows for persistence
@@ -1516,6 +2132,20 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}) {
   } else {
     document.getElementById('resolved-section').style.display = 'none';
     document.getElementById('resolved-badge').textContent = '0';
+  }
+
+  // #375: a FRESH report load opens with every section collapsed so it lands
+  // compact — Tyler expands only what he wants to code. Gated to the fresh-drop
+  // path (collapseOnLoad): a session restore on refresh or a rules re-run keeps
+  // whatever the user had expanded, so a mid-shift F5 does not throw away their
+  // place. Collapse state stays ephemeral (a header click still toggles it).
+  // EXCEPTION: Needs Manual Review lands EXPANDED (its 3 buckets stay collapsed by
+  // default via manualCollapsed) — it's the section Tyler works, so a compact-but-
+  // open manual review is the useful default.
+  if (collapseOnLoad) {
+    collapseAllSections();
+    const manualSec = document.getElementById('manual-section');
+    if (manualSec) manualSec.classList.remove('collapsed');
   }
 
   persistSession();
@@ -1612,9 +2242,9 @@ function renderRecurringSection(recurringMap) {
       const item = recurringMap[label];
       const tr = document.createElement('tr');
       const recipHtml = item.firm
-        ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(item.firm) + '</div>' +
-          '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(item.address || '') + '</div>'
-        : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(item.address || '—') + '</div>';
+        ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(item.firm) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '') + '</div>'
+        : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '—') + '</div>';
       tr.innerHTML =
         '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span></td>' +
         '<td><span class="code-pill">&times;' + item.timesSeen + '</span></td>' +
@@ -1634,7 +2264,7 @@ function copyRepeatTable() {
     return label + '\t' + e.timesSeen + '\t' + e.inboundDates.join(' ');
   });
   if (!lines.length) return;
-  copyText(lines.join('\n'));
+  ToolHelpers.copyText(lines.join('\n')).catch(() => {});
   const btn = document.getElementById('copy-repeat-btn');
   btn.textContent = '✓ Copied!';
   btn.className = 'btn btn-success';
@@ -1702,29 +2332,42 @@ function reasonPills(reason) {
   }).join('');
 }
 
-function copyText(text) {
-  const doCopy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  };
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).catch(doCopy);
-  } else {
-    doCopy();
-  }
+// ─── COPY-MODE TOGGLE (#copy-mode) ──────────────────────────────────────────────
+// Tyler picks what the copy actions put on the clipboard: the 12-digit tracking #
+// (PKG_LABEL_XREF, the default and today's behavior) or the full scan barcode
+// (SCAN_BARCODE via item.scanBarcode). The choice is persisted in localStorage and
+// governs BOTH the per-package click-to-copy and the bulk Copy All / Copy Coded.
+// It changes ONLY the copied string per Tyler's explicit toggle — never a package's
+// code, disposition, or the coded/Resolved sets or counts.
+const COPY_MODE_KEY = 'ibno_copy_mode';
+function getCopyMode() {
+  let m = 'tracking';
+  try { m = localStorage.getItem(COPY_MODE_KEY) || 'tracking'; } catch (e) {}
+  return m === 'barcode' ? 'barcode' : 'tracking';
+}
+function setCopyMode(mode) {
+  const m = mode === 'barcode' ? 'barcode' : 'tracking';
+  try { localStorage.setItem(COPY_MODE_KEY, m); } catch (e) {}
+  syncCopyModeControl();
+}
+function syncCopyModeControl() {
+  const sel = document.getElementById('copy-mode');
+  if (sel) sel.value = getCopyMode();
+}
+// copyValueFor(label, barcode) -> the string to place on the clipboard for one
+// package given the current mode. barcode falls back to the label so a
+// barcode-mode copy is never empty (mirrors the item-model fallback).
+function copyValueFor(label, barcode) {
+  if (getCopyMode() === 'barcode') return String(barcode || label || '');
+  return String(label || '');
 }
 
-function attachLabelCopy(tr, label) {
+function attachLabelCopy(tr, label, barcode) {
   const span = tr.querySelector('.label-copy');
   if (!span) return;
   span.addEventListener('click', e => {
     e.stopPropagation();
-    copyText(label);
+    ToolHelpers.copyText(copyValueFor(label, barcode)).catch(() => {});
     span.classList.add('copied');
     span.title = 'Copied!';
     setTimeout(() => { span.classList.remove('copied'); span.title = 'Click to copy'; }, 1200);
@@ -1763,9 +2406,9 @@ function buildAutoRow(item, idx) {
   tr.className = 'expandable';
   tr.dataset.idx = idx; // index into autoItems — the override + export read the model by this
   const recipHtml = firm
-    ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div>' +
-      '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-    : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+    ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+    : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
   // Closure rows expose a code override. Always offer the day-appropriate base
   // code (59 weekday / 11 weekend) AND 34, regardless of the row's current code —
   // so a 34 override stays revertable after a session restore, where item.code
@@ -1785,7 +2428,7 @@ function buildAutoRow(item, idx) {
     codeCellHtml = '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>';
   }
   tr.innerHTML =
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + '</td>' +
     '<td>' + codeCellHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
@@ -1800,9 +2443,9 @@ function buildAutoRow(item, idx) {
   btn.dataset.code  = code;
   btn.addEventListener('click', copyRowBtn);
   tr.lastElementChild.appendChild(btn);
-  attachLabelCopy(tr, label);
+  attachLabelCopy(tr, label, item.scanBarcode);
   tr.addEventListener('click', e => {
-    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy')) return;
+    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link')) return;
     toggleDetailRow(tr, item, 7);
   });
   return tr;
@@ -1829,13 +2472,20 @@ function updateRowCode(sel) {
 // autoExportPairs() -> [[label, code], …] for the Ready-to-Enter rows, read from
 // the data model (not scraped from rendered cells) so records can't drift from a
 // markup change and the 34 override (in the model) is reflected. WYSIWYG: while a
-// filter is active the export carries only the shown rows; with no filter it
-// carries every auto row. applyAutoFilter relabels the Copy button to match.
+// code/category filter is active the export carries only the shown rows; with no
+// filter it carries every auto row. applyAutoFilter relabels the Copy button to match.
+//
+// WYSIWYG: every active filter — codes and categories — narrows the export, because
+// Tyler enters by Copy/paste into ITQA. The count/badge still reads the FULL model
+// (autoItems.length) and the note shows "showing N of M", so nothing is silently lost
+// — clearing the filter restores every row. applyAutoFilter relabels the Copy button
+// to "Copy shown" whenever any filter is active.
 function autoExportPairs() {
-  const active = autoFilter.codes.length + autoFilter.categories.length > 0;
+  const exportFilter = { codes: autoFilter.codes, categories: autoFilter.categories };
+  const active = exportFilter.codes.length + exportFilter.categories.length > 0;
   return autoItems
     .filter(item => item && item.label && item.code)
-    .filter(item => !active || IbnoRules.autoItemMatchesFilter(item, autoFilter))
+    .filter(item => !active || IbnoRules.autoItemMatchesFilter(item, exportFilter))
     .map(item => [item.label, item.code]);
 }
 
@@ -1887,7 +2537,11 @@ function renderAutoChips() {
 // (the empty-state row) always show.
 function applyAutoFilter() {
   const tbody = document.getElementById('auto-tbody');
-  const active = autoFilter.codes.length + autoFilter.categories.length > 0;
+  // Every filter — codes and categories — narrows both the view AND the export/Copy
+  // (Tyler pastes the copied set into ITQA, so a hidden row must not be pasted). So
+  // view and export activity are the same set.
+  const exportActive = autoFilter.codes.length + autoFilter.categories.length > 0;
+  const viewActive = exportActive;
   // Drop any prior empty-state row before measuring (it has no dataset.idx).
   const priorEmpty = document.getElementById('auto-filter-empty');
   if (priorEmpty) priorEmpty.remove();
@@ -1902,23 +2556,23 @@ function applyAutoFilter() {
     if (match) shown++;
   });
   // Filter active but nothing matches — show a placeholder so the table isn't blank.
-  if (active && shown === 0 && autoItems.length > 0) {
+  if (viewActive && shown === 0 && autoItems.length > 0) {
     const empty = document.createElement('tr');
     empty.id = 'auto-filter-empty';
     empty.innerHTML = '<td colspan="7" class="empty-state">No packages match this filter</td>';
     tbody.appendChild(empty);
   }
   document.getElementById('auto-filter-note').textContent =
-    active ? 'showing ' + shown + ' of ' + autoItems.length : '';
+    viewActive ? 'showing ' + shown + ' of ' + autoItems.length : '';
   document.querySelectorAll('#auto-chips .chip').forEach(chip => {
     chip.classList.toggle('active', autoFilter[chip.dataset.kind].indexOf(chip.dataset.val) !== -1);
   });
   const clear = document.getElementById('auto-chip-clear');
-  if (clear) clear.style.display = active ? '' : 'none';
-  // Copy All exports the full set; while filtering it exports only the shown
-  // rows, so relabel the button to make the narrowed scope obvious.
+  if (clear) clear.style.display = viewActive ? '' : 'none';
+  // Copy All exports the full set; while ANY filter (code/category) is active
+  // it exports only the shown rows, so relabel the button to "Copy shown".
   const copyBtn = document.getElementById('copy-btn');
-  if (copyBtn) copyBtn.textContent = active ? 'Copy shown' : 'Copy All';
+  if (copyBtn) copyBtn.textContent = exportActive ? 'Copy shown' : 'Copy All';
 }
 
 // Manual review search is view-only. Detail rows inherit their parent row's
@@ -1934,38 +2588,52 @@ function applyManualSearch() {
   if (priorEmpty) priorEmpty.remove();
   let shown = 0;
   let lastVisible = true;
+  const groupHasMatch = {};          // bucket key -> at least one search-matching row (#batch-code)
   tbody.querySelectorAll('tr').forEach(tr => {
     if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
+    if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
     if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
     const match = !active || tr.textContent.toLowerCase().indexOf(q) !== -1;
-    tr.style.display = match ? '' : 'none';
-    lastVisible = match;
-    if (match) shown++;
+    // A row shows if it matches the search and its bucket isn't collapsed. An
+    // ACTIVE search overrides collapse, so searching always reveals its hits even
+    // when every group starts collapsed; clearing the search re-collapses them.
+    const visible = match && (active || !manualCollapsed[tr.dataset.bucket]);
+    tr.style.display = visible ? '' : 'none';
+    lastVisible = visible;
+    if (match) { shown++; groupHasMatch[tr.dataset.bucket] = true; }
+  });
+  // The header (the collapse control) shows whenever its bucket has a matching
+  // row, even when collapsed — so you can always expand it back.
+  tbody.querySelectorAll('tr.manual-group-row').forEach(gh => {
+    gh.style.display = groupHasMatch[gh.dataset.group] ? '' : 'none';
   });
   if (active && shown === 0 && manualItems.length > 0) {
     const empty = document.createElement('tr');
     empty.id = 'manual-search-empty';
-    empty.innerHTML = '<td colspan="9" class="empty-state">No manual-review rows match this search</td>';
+    empty.innerHTML = '<td colspan="10" class="empty-state">No manual-review rows match this search</td>';
     tbody.appendChild(empty);
   }
   if (note) note.textContent = active ? 'showing ' + shown + ' of ' + manualItems.length : '';
 }
 
-function buildManualRow(item) {
+function buildManualRow(item, bucket) {
   const { label, category, ibWork, firm, reason, address, express, inboundDate, ibScanTime } = item;
   const tr = document.createElement('tr');
   tr.className = 'expandable';
   tr.dataset.label    = label;
   tr.dataset.category = category;
+  tr.dataset.bucket   = bucket || manualBucket(item);   // area | zip | other (#batch-code)
+  tr.dataset.barcode  = item.scanBarcode || '';         // so "Copy selected" honors the copy-mode toggle per row
   const expressHtml = express
     ? '<span class="express-pill express-yes">Express</span>'
     : '<span class="express-pill express-no">Ground</span>';
   const recipHtml = firm
-    ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div>' +
-      '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-    : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+    ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+    : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
   tr.innerHTML =
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+    '<td class="chk-cell"><input type="checkbox" class="manual-check" aria-label="select for batch coding"></td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
@@ -1974,19 +2642,23 @@ function buildManualRow(item) {
     '<td>' + recipHtml + '</td>' +
     '<td>' + expressHtml + '</td>';
   tr.appendChild(buildActionCell(item, tr));
-  attachLabelCopy(tr, label);
+  attachLabelCopy(tr, label, item.scanBarcode);
+  // Checkbox: pick the row for the bucket's bulk apply. Never expands the row.
+  const cb = tr.querySelector('.manual-check');
+  cb.addEventListener('click', e => e.stopPropagation());
+  cb.addEventListener('change', () => { tr.classList.toggle('row-checked', cb.checked); updateBulkButtons(); });
   tr.addEventListener('click', e => {
-    if (e.target.closest('.action-cell') || e.target.closest('.label-copy')) return;
-    toggleDetailRow(tr, item, 9);
+    if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link')) return;
+    toggleDetailRow(tr, item, 10);
   });
   return tr;
 }
 
-// Suggested manual code (#fast-entry): most flagged rows come out the same way —
-// Unassigned Zip → 65, a flagged work area → 33 — so pre-fill that into the input.
-// It is only a SUGGESTION in an editable box: the user still reviews each row and
-// presses Apply (or overtypes), so nothing is auto-coded. Unassigned Zip wins over
-// the work-area flag (a zip row flagged on work area is still coded 65).
+// Bucket code for a manual row (#batch-code): most flagged rows come out the same
+// way — Unassigned Zip → 65, a flagged work area → 33 — which is how the section
+// groups them and what each group's bulk button applies. Unassigned Zip wins over
+// the work-area flag (a zip row flagged on work area still buckets to 65). Returns
+// '' for rows that need an individual look (no bulk bucket).
 function suggestedManualCode(item) {
   const category = (item && item.category) || '';
   const reason   = (item && item.reason) || '';
@@ -1999,21 +2671,34 @@ function buildActionCell(item, tr) {
   const td = document.createElement('td');
   td.className = 'action-cell';
 
+  // Quick-code pill (#373): when the row has a context code (33 for a flagged
+  // work area, 65 for an Unassigned Zip — same mapping the bulk buttons use),
+  // offer a one-click apply+done to the left of the code input. Rows with no
+  // bucket code (suggestedManualCode -> '') still need an individual look, so no
+  // pill is shown for them. Resolution goes through the same resolveItem path as
+  // Apply, so it lands in Manually Resolved with the code — never a separate lane.
+  const quick = suggestedManualCode(item);
+  if (quick) {
+    const quickBtn = document.createElement('button');
+    // .btn-bulk gives the orange 33 color; .b65 overrides it to blue for 65.
+    quickBtn.className = 'btn-bulk quick-code' + (quick === '65' ? ' b65' : '');
+    quickBtn.textContent = quick;
+    const q = ScanCodes.meaning(quick, 'status');
+    quickBtn.title = 'Code ' + quick + (q ? ' (' + q + ')' : '') + ' + done';
+    quickBtn.addEventListener('click', () => {
+      resolveItem(Object.assign({}, item, { code: quick, skipped: false }), tr);
+    });
+    td.appendChild(quickBtn);
+  }
+
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'code-input-mini';
   input.setAttribute('list', 'common-codes');
   input.maxLength = 5;
   input.placeholder = 'Code…';
-  // Pre-fill the usual code so rapid entry is just review-and-Apply (#fast-entry).
-  const suggested = suggestedManualCode(item);
-  if (suggested) {
-    input.value = suggested;
-    input.title = 'Suggested ' + suggested + ' — review, then Apply (or overtype)';
-    input.classList.add('code-suggested');
-    // Once the user edits it, it's no longer the suggestion — drop the tint.
-    input.addEventListener('input', () => input.classList.remove('code-suggested'));
-  }
+  // No pre-fill: the input is empty, for exceptions/overrides. The usual codes are
+  // applied by the per-bucket bulk "Apply 33/65 to checked" buttons (#batch-code).
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       applyBtn.click();
@@ -2059,7 +2744,9 @@ function resolveItem(item, tr) {
   // codes typed-but-not-yet-applied into them, which is exactly the rapid-entry
   // workflow (type several, then apply each). Removing one row leaves the others'
   // sort order and search visibility unchanged, so a rebuild is never needed here.
+  let bucket = null;
   if (tr) {
+    bucket = tr.dataset.bucket;
     const detail = tr.nextElementSibling;
     if (detail && detail.classList.contains('detail-row')) detail.remove();
     tr.remove();
@@ -2073,13 +2760,26 @@ function resolveItem(item, tr) {
   resolvedItems = next.resolved;
 
   updateManualBadge();
+  // Drop the group header once its bucket has no rows left (#batch-code).
+  if (bucket && !document.querySelector('#manual-tbody tr[data-label][data-bucket="' + bucket + '"]')) {
+    const gh = document.querySelector('#manual-tbody tr.manual-group-row[data-group="' + bucket + '"]');
+    if (gh) gh.remove();
+  }
   if (manualItems.length === 0) {
     document.getElementById('manual-tbody').innerHTML =
-      '<tr><td colspan="9" class="empty-state">All packages resolved ✓</td></tr>';
+      '<tr><td colspan="10" class="empty-state">All packages resolved ✓</td></tr>';
   }
+  updateBulkButtons();
   applyManualSearch();          // refresh the "showing N of M" note (no rebuild)
   renderResolvedSection();
   persistSession();
+  // Keep the Browse Report viewer's quick-code pill in sync (#392): resolving
+  // from the coding list must show up as "already coded" in the table too —
+  // single authoritative state works BOTH directions, not just table -> list.
+  // Cheap repaint only (session changed, not the loaded report) — see
+  // refreshRawViewerPillsIfOpen; a full remount here would freeze a bulkApply
+  // loop over many checked rows.
+  refreshRawViewerPillsIfOpen();
 }
 
 function undoResolve(label) {
@@ -2090,15 +2790,10 @@ function undoResolve(label) {
   manualItems = next.manual;
   resolvedItems = next.resolved;
 
-  // Append the restored row instead of rebuilding, so the other rows' typed codes
-  // survive (an undo during rapid entry must not wipe in-progress inputs). It
-  // lands at the end rather than its sorted slot until the next full render —
-  // acceptable for an occasional undo.
-  const tbody = document.getElementById('manual-tbody');
-  const emptyRow = tbody.querySelector('tr:not([data-label])');
-  if (emptyRow) emptyRow.remove();
-  tbody.appendChild(buildManualRow(item));
-  updateManualBadge();
+  // Re-render the grouped manual table so the restored row lands back under its
+  // bucket header in sorted position (#batch-code). Undo is an occasional
+  // correction, not part of the rapid-entry flow, so a rebuild here is fine.
+  renderManualSectionRows();
   applyManualSearch();
 
   if (resolvedItems.length === 0) {
@@ -2107,6 +2802,7 @@ function undoResolve(label) {
     renderResolvedSection();
   }
   persistSession();
+  refreshRawViewerPillsIfOpen(); // undo also flips the viewer pill back to live (#392, cheap repaint)
 }
 
 function renderResolvedSection() {
@@ -2126,14 +2822,14 @@ function renderResolvedSection() {
       ? '<span class="express-pill express-yes">Express</span>'
       : '<span class="express-pill express-no">Ground</span>';
     tr.innerHTML =
-      '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + '</td>' +
+      '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + '</td>' +
       '<td>' + codeHtml + '</td>' +
       '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
       '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork || '—') + '</td>' +
       '<td>' + reasonPills(reason) + '</td>' +
       '<td>' + (firm
-        ? '<div style="font-size:12px;font-weight:600;color:#1a1a2e">' + ToolHelpers.escapeHtml(firm) + '</div><div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-        : '<div style="font-size:11px;color:#888">' + ToolHelpers.escapeHtml(address || '—') + '</div>') + '</td>' +
+        ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div><div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
+        : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>') + '</td>' +
       '<td>' + expressHtml + '</td>' +
       '<td></td>';
     const undoBtn = document.createElement('button');
@@ -2141,9 +2837,9 @@ function renderResolvedSection() {
     undoBtn.textContent = '↩ Undo';
     undoBtn.addEventListener('click', () => undoResolve(label));
     tr.lastElementChild.appendChild(undoBtn);
-    attachLabelCopy(tr, label);
+    attachLabelCopy(tr, label, item.scanBarcode);
     tr.addEventListener('click', e => {
-      if (e.target.closest('.btn-undo-mini') || e.target.closest('.label-copy')) return;
+      if (e.target.closest('.btn-undo-mini') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link')) return;
       toggleDetailRow(tr, item, 8);
     });
     tbody.appendChild(tr);
@@ -2156,9 +2852,10 @@ function renderResolvedSection() {
 }
 
 function copyResolvedTable() {
+  // Copy-mode toggle (#copy-mode): first column follows the mode; code unchanged.
   const lines = resolvedItems
     .filter(i => !i.skipped && i.code)
-    .map(i => i.label + '\t' + i.code);
+    .map(i => copyValueFor(i.label, i.scanBarcode) + '\t' + i.code);
   if (!lines.length) return;
   const text = lines.join('\n');
   const doCopy = () => {
@@ -2193,7 +2890,12 @@ function downloadResolvedTable() {
 
 // ─── COPY ─────────────────────────────────────────────────────────────────────
 function copyAutoTable() {
-  const lines = autoExportPairs().map(p => p[0] + '\t' + p[1]);
+  // Copy-mode toggle (#copy-mode): the first column follows the mode (tracking # or
+  // full barcode); the code column is unchanged. A label->barcode map keeps the
+  // barcode aligned to each exported pair without changing what gets exported.
+  const barcodeByLabel = {};
+  autoItems.forEach(it => { if (it && it.label) barcodeByLabel[it.label] = it.scanBarcode; });
+  const lines = autoExportPairs().map(p => copyValueFor(p[0], barcodeByLabel[p[0]]) + '\t' + p[1]);
   if (!lines.length) return;
   const text = lines.join('\n');
   const doCopy = () => {
@@ -2226,17 +2928,58 @@ function downloadAutoTable() {
   ToolHelpers.downloadTSV('ibno-ready-' + today + '.tsv', content);
 }
 
+// ─── CLEAN EXCEL-READY EXPORT (#385) ────────────────────────────────────────────
+// One-click "Clean export" of the currently-loaded Inbound and Van Scans report:
+// SSRS preamble stripped and tracking/barcode columns forced to text so Excel
+// never collapses them to 1.2E+11. All cleaning lives in lib/report-clean.js —
+// this page only wires the loaded rows to the lib and hands the CSV to the shared
+// download helper. Inert when no report is loaded.
+function exportCleanCSV() {
+  if (!lastRows || !lastRows.length) return; // export control is inert with no report
+  const clean = ReportClean.cleanReport(lastRows, 'inbound-van-scans');
+  const today = ToolHelpers.isoDate();
+  ToolHelpers.downloadTSV('ibno-inbound-clean-' + today + '.csv', clean.csv, 'text/csv');
+}
+
+// ─── SHARED PAGE PIPELINES (#459 review) ───────────────────────────────────────
+// handleFile and handleMergeFile both apply a freshly-coded snapshot to the
+// page (persist history, schedule sync, archive, render) — extracted here so
+// the two call sites can't drift. `archiveRows` lets a merge ingest only the
+// appended survivors into the archive instead of the whole re-coded report
+// (F6): the primary load already ingested everything else.
+function applySnapshot(rows, opts) {
+  opts = opts || {};
+  const snap = IbnoSession.applyRows(rows, { history: loadHistory() });
+  saveHistory(snap.updatedHistory);
+  scheduleHistorySync(); // write the new inbound dates through to other devices (#174)
+  ingestArchive(opts.archiveRows || snap.rows); // accumulate raw rows for global search (#286) — local only, not synced
+  lastRows = snap.rows;
+  lastRecurring = snap.recurring;
+  refreshRawViewerIfOpen(); // #388: keep the Browse Report viewer on the new load
+  renderResults(snap, snap.recurring, !!opts.collapse);
+  return snap;
+}
+
+// Shared by rerunRules and handleMergeFile: both re-code the loaded report,
+// which would silently discard any resolved-but-unsynced work. Returns false
+// (and leaves resolvedItems untouched) when the user cancels.
+function confirmAndClearResolved(actionLabel) {
+  if (resolvedItems.length === 0) return true;
+  if (!confirm(actionLabel + ' will clear ' + resolvedItems.length + ' resolved item(s). Continue?')) return false;
+  resolvedItems = [];
+  document.getElementById('resolved-section').style.display = 'none';
+  document.getElementById('resolved-badge').textContent = '0';
+  return true;
+}
+
 // ─── RERUN ────────────────────────────────────────────────────────────────────
 function rerunRules() {
   if (!lastRows) return;
-  if (resolvedItems.length > 0) {
-    if (!confirm('Re-running rules will clear ' + resolvedItems.length + ' resolved item(s). Continue?')) return;
-    resolvedItems = [];
-    document.getElementById('resolved-section').style.display = 'none';
-    document.getElementById('resolved-badge').textContent = '0';
-  }
+  if (!confirmAndClearResolved('Re-running rules')) return;
   // Re-apply the (possibly edited) rules to the same rows — the coding state
-  // machine lives in lib/ibno-session.js; this page only renders.
+  // machine lives in lib/ibno-session.js; this page only renders. Deliberately
+  // skips applySnapshot: history/archive are unchanged since lastRows itself
+  // didn't change.
   const results = IbnoSession.rerun(lastRows);
   renderResults(results, lastRecurring);
 }
@@ -2244,36 +2987,137 @@ function rerunRules() {
 // ─── FILE HANDLING ────────────────────────────────────────────────────────────
 function handleFile(file) {
   if (!file) return;
+  mergeSeq++; // a new primary load supersedes any in-flight merge read (#459 review F2)
   document.getElementById('file-label').textContent = file.name;
   const reader = new FileReader();
   reader.onload = e => {
-    try {
-      // Parse + code + detect recurring in one call (lib/ibno-session.js); the
+    // One reader for every format: read raw bytes, let SpreadsheetLib sniff CSV
+    // vs .xlsx/.xls and hand back rows in parseCSV shape (#321, same as DSW).
+    SpreadsheetLib.readSpreadsheet(e.target.result).then(rows => {
+      // Code + detect recurring on the parsed rows (lib/ibno-session.js); the
       // page keeps the side effects (persist history, schedule sync, render).
-      const snap = IbnoSession.applyFile(e.target.result, { history: loadHistory() });
-      saveHistory(snap.updatedHistory);
-      scheduleHistorySync(); // write the new inbound dates through to other devices (#174)
-      ingestArchive(snap.rows); // accumulate raw rows for global search (#286) — local only, not synced
-      lastRows = snap.rows;
-      lastRecurring = snap.recurring;
+      const snap = applySnapshot(rows, { collapse: true }); // fresh file load -> start collapsed (#375)
       document.getElementById('drop-zone').style.display  = 'none';
       document.getElementById('reset-btn').style.display  = 'inline-flex';
       document.getElementById('rerun-btn').style.display  = 'inline-flex';
+      document.getElementById('merge-btn').style.display  = 'inline-flex'; // #459 early-sort merge
       document.getElementById('collapse-all-btn').style.display = 'inline-flex';
-      renderResults(snap, snap.recurring);
-    } catch (err) {
-      alert('Error processing file: ' + err.message);
-    }
+      document.getElementById('clean-export-btn').style.display = 'inline-flex'; // #385 clean Excel-ready export
+      showSortDateNote(snap.rows); // #459: non-blocking heads-up when this report isn't dated today
+    }).catch(err => alert('Error processing file: ' + err.message));
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);
+}
+
+// Non-blocking heads-up (#459): a report loaded whose sort date isn't today is
+// very likely YESTERDAY'S report — a fresh pull of it after an early sort
+// start carries today's early-sort rows too, but loading it as the PRIMARY
+// report misses the rest of today's rows entirely. Purely informational: it
+// never blocks or alters the load that already happened.
+function showSortDateNote(rows) {
+  const el = document.getElementById('sort-date-note');
+  const sortDate = IbnoSession.reportSortDate(rows);
+  const today = ToolHelpers.isoDate();
+  if (!sortDate || sortDate === today) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.textContent = `This report's sort date is ${sortDate}, today is ${today}` +
+    ` — if this is yesterday's report, load today's report first, then use Merge yesterday's report.`;
+  el.style.display = 'block';
+}
+
+// ─── EARLY-SORT MERGE (#459) ────────────────────────────────────────────────
+// When the sort starts early, packages scanned before the report's own Sort
+// Date rolls over land on YESTERDAY'S report but carry TODAY'S date on the
+// row. This is an additive, opt-in merge: pull a fresh copy of yesterday's
+// report, take only the rows dated the ALREADY-LOADED (primary) report's sort
+// date, dedup against what's already loaded, and append the survivors. The
+// merge decision itself lives in lib/ibno-session.js (IbnoSession.mergeEarlySort);
+// this page only reads the file and applies the side effects, mirroring handleFile.
+function mergeStatusMessage(res) {
+  if (res.status === 'merged') {
+    return `Merged ${res.added} early-sort rows from yesterday's report (sort date ${res.sortDate}).`;
+  }
+  if (res.status === 'no-early-rows') {
+    return `No rows dated ${res.sortDate} in that file — nothing to merge. Is that the right day's report?`;
+  }
+  if (res.status === 'all-duplicates') {
+    return `0 new rows — all ${res.duplicates} early-sort rows are already in this session.`;
+  }
+  if (res.status === 'same-report') {
+    return `That file has the same sort date (${res.secondarySortDate}) as the loaded report — drop YESTERDAY'S report here.`;
+  }
+  if (res.status === 'no-dates') {
+    return `Couldn't read the dates in that file — export the report as CSV and drop that instead.`;
+  }
+  return `Couldn't read that file as an Inbound and Van Scans report.`;
+}
+
+function showMergeStatus(message) {
+  const el = document.getElementById('merge-status');
+  el.textContent = message;
+  el.style.display = message ? 'block' : 'none';
+}
+
+function handleMergeFile(file) {
+  // Re-arm immediately (F1): #merge-input.value is otherwise only cleared in
+  // resetApp, so re-selecting the SAME file (after a cancel, an error, or a
+  // non-merged status) fires no further 'change' event and the button goes
+  // dead. Every path below — including an early return — leaves this cleared.
+  document.getElementById('merge-input').value = '';
+  if (!file) return;
+  const seq = ++mergeSeq; // guards a stale read from landing after a newer merge drop, primary reload, or reset (DSW pattern)
+  const reader = new FileReader();
+  reader.onload = e => {
+    if (seq !== mergeSeq) return; // superseded by a newer merge drop, primary load, or reset
+    SpreadsheetLib.readSpreadsheet(e.target.result).then(rows => {
+      if (seq !== mergeSeq) return; // superseded by a newer merge drop, primary load, or reset
+      if (!lastRows) return; // primary session was reset/replaced while this was in flight
+
+      const res = IbnoSession.mergeEarlySort(lastRows, rows);
+      if (res.status !== 'merged') {
+        showMergeStatus(mergeStatusMessage(res)); // session untouched
+        return;
+      }
+
+      // Same wording pattern as rerunRules: merging re-codes everything, so any
+      // resolved-but-unsynced work would be silently rebuilt without asking.
+      if (!confirmAndClearResolved('Merging')) return;
+
+      // Scoped to the apply/render stage only (F5): an exception here means the
+      // session may already be half-mutated, which is a different failure than
+      // "couldn't read that file" — the outer .catch below must not claim it.
+      try {
+        // Ingest only the appended survivors into the archive (F6) — the
+        // primary load already ingested everything else in res.rows.
+        applySnapshot(res.rows, { archiveRows: [res.header].concat(res.rows.slice(-res.added)) });
+        showMergeStatus(mergeStatusMessage(res));
+      } catch (err) {
+        showMergeStatus('Merge failed: ' + err.message);
+      }
+    }).catch(() => {
+      if (seq !== mergeSeq) return;
+      showMergeStatus(mergeStatusMessage({ status: 'unreadable' }));
+    });
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function resetApp() {
   document.getElementById('drop-zone').style.display       = 'block';
   document.getElementById('reset-btn').style.display       = 'none';
   document.getElementById('rerun-btn').style.display       = 'none';
+  document.getElementById('merge-btn').style.display       = 'none'; // #459
+  document.getElementById('merge-status').style.display    = 'none';
+  document.getElementById('merge-status').textContent      = '';
+  document.getElementById('merge-input').value = '';
+  document.getElementById('sort-date-note').style.display   = 'none';
+  document.getElementById('sort-date-note').textContent     = '';
   document.getElementById('collapse-all-btn').style.display = 'none';
   document.getElementById('collapse-all-btn').textContent  = '✄ Collapse all';
+  document.getElementById('clean-export-btn').style.display = 'none'; // #385
   document.querySelectorAll('.section').forEach(s => s.classList.remove('collapsed'));
   document.getElementById('summary').style.display         = 'none';
   document.getElementById('day-banner').style.display      = 'none';
@@ -2294,9 +3138,11 @@ function resetApp() {
   document.getElementById('copy-btn').textContent = 'Copy All';
   currentDayType = 'weekday';
   toolStorage.remove(SESSION_KEY); // "Load New File" discards the persisted session
+  mergeSeq++; // invalidates any in-flight merge read — its primary is gone (#459 review F2)
   lastRows = null;
   lastRecurring = {};
   currentRecurringMap = {};
+  refreshRawViewerIfOpen(); // #388: drop the Browse Report viewer back to its empty state
   document.getElementById('resolved-tbody').innerHTML = '';
   document.getElementById('resolved-badge').textContent = '0';
   document.getElementById('repeat-tbody').innerHTML = '';
@@ -2323,6 +3169,16 @@ function initCollapsibleSections() {
       sec.classList.toggle('collapsed');
     });
   });
+}
+
+// Collapse every visible result section and sync the toolbar button to its
+// "expand" affordance. Used as the default state after a load/restore (#375).
+function collapseAllSections() {
+  Array.from(document.querySelectorAll('.section'))
+    .filter(s => s.style.display !== 'none')
+    .forEach(s => s.classList.add('collapsed'));
+  const btn = document.getElementById('collapse-all-btn');
+  if (btn) btn.textContent = '✢ Expand all';
 }
 
 function toggleAllSections() {
@@ -2357,10 +3213,10 @@ function onDrop(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.remove('dragover');
   const file = e.dataTransfer.files[0];
-  if (file && file.name.toLowerCase().endsWith('.csv')) {
+  if (file && /\.(csv|xlsx|xls)$/i.test(file.name)) {
     handleFile(file);
   } else {
-    alert('Please drop a .csv file.');
+    alert('Please drop a .csv, .xlsx, or .xls file.');
   }
 }
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -2380,6 +3236,9 @@ function onDrop(e) {
 // Wire collapsible result sections (#166).
 initCollapsibleSections();
 initSortControls();
+
+// Reflect the saved copy-mode choice (#copy-mode) in the toggle on load.
+syncCopyModeControl();
 
 // Restore an in-progress session if one was persisted (#157), so a mid-shift
 // reload lands back on the work instead of the empty drop zone.
