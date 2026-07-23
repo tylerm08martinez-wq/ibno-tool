@@ -2246,7 +2246,8 @@ function renderRecurringSection(recurringMap) {
           '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '') + '</div>'
         : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '—') + '</div>';
       tr.innerHTML =
-        '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span></td>' +
+        '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' +
+          FTrack.ftrackLink(label) + '</td>' +
         '<td><span class="code-pill">&times;' + item.timesSeen + '</span></td>' +
         '<td class="cat-text">' + item.inboundDates.map(ToolHelpers.escapeHtml).join(', ') + '</td>' +
         '<td class="cat-text">' + ToolHelpers.escapeHtml(item.category || '—') + '</td>' +
