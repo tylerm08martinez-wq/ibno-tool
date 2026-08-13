@@ -3820,6 +3820,15 @@ let postSortItems = [];
 // silently hand Tyler 2,868 rows again. The toggle is one click away and
 // always names its own count.
 let postSortShowAll = false;
+// The checked selection, held HERE rather than read back off the rendered
+// rows (code review, 2026-08-13). Once rows can be folded out of the DOM, the
+// DOM is no longer a record of what Tyler selected: harvesting it while
+// folded silently dropped every folded row's checkbox, so checking rows in
+// show-all, folding, and unfolding came back with a smaller selection than he
+// made — and Copy selected would then build a smaller paste batch than the
+// count he had confirmed. Keyed by label so it survives the innerHTML
+// rebuild, same as the old DOM harvest did (#635 finding 4).
+let postSortChecked = new Set();
 // Stale-read guard for the async parse (same pattern as handleMergeFile's
 // mergeSeq): a second drop started while an earlier one is still resolving
 // must not let the earlier read's rows/status land after the newer one's.
@@ -3876,6 +3885,11 @@ function handlePostSortFile(file) {
   // including the early return on no file — leaves this cleared.
   document.getElementById('post-sort-file-input').value = '';
   if (!file) return;
+  // A new pull is a new list, so it starts folded and unselected — the same
+  // reset clearPostSortLane does, for the same reason. Job 1 recurs many
+  // times a shift (#610), so this is the common path, not the edge case.
+  postSortShowAll = false;
+  postSortChecked = new Set();
   const seq = ++postSortSeq; // guards a stale read from landing after a newer drop or a clear
   // A fresh Post Sort report load changes postSortItems entirely, so any
   // barcode-lookup read still in flight from before this load must not be
@@ -3950,6 +3964,14 @@ function clearPostSortLane() {
   postSortSeq++; // invalidate any in-flight read from before this clear
   postSortBarcodeSeq++; // and any in-flight barcode-lookup read too
   postSortItems = [];
+  // Reset the fold and the selection with the data they describe (code
+  // review, 2026-08-13). postSortShowAll's own declaration says the folded
+  // view is the correct default for every load, but nothing enforced it:
+  // clicking "Show all", clearing, then dropping the next pull rendered all
+  // 2,868 rows unfolded — precisely the state this feature exists to prevent
+  // — and only a full page reload undid it.
+  postSortShowAll = false;
+  postSortChecked = new Set();
   const input = document.getElementById('post-sort-file-input');
   if (input) input.value = '';
   postSortStatus('', false);
@@ -4096,10 +4118,34 @@ function postSortItemByLabel(label) {
 // unresolved row here must copy NOTHING in barcode mode, not a bare tracking
 // number that looks like a barcode but does not scan.
 
+// onPostSortCheck(cb) -> keep postSortChecked in step with the box Tyler just
+// clicked. The set is the record of the selection; the checkbox is only its
+// rendering (see postSortChecked's declaration for why the DOM cannot be the
+// record once rows fold).
+function onPostSortCheck(cb) {
+  const tr = cb && cb.closest ? cb.closest('tr[data-label]') : null;
+  const label = tr && tr.getAttribute('data-label');
+  if (label) {
+    if (cb.checked) postSortChecked.add(label);
+    else postSortChecked.delete(label);
+  }
+  updatePostSortCopyButton();
+}
+
+// Acts on the VISIBLE rows only, which is what "select all" means with a fold
+// on screen: it must never reach behind the fold and check rows Tyler cannot
+// see, and it must not clear ones he checked before folding either.
 function togglePostSortSelectAll(checked) {
   const body = document.getElementById('post-sort-tbody');
   if (!body) return;
-  body.querySelectorAll('.postsort-check').forEach(cb => { cb.checked = checked; });
+  body.querySelectorAll('tr[data-label]').forEach(tr => {
+    const label = tr.getAttribute('data-label');
+    const cb = tr.querySelector('.postsort-check');
+    if (cb) cb.checked = checked;
+    if (!label) return;
+    if (checked) postSortChecked.add(label);
+    else postSortChecked.delete(label);
+  });
   updatePostSortCopyButton();
 }
 
@@ -4215,7 +4261,8 @@ function postSortRowHtml(item) {
   // from one the lookup resolved or hasn't resolved at all.
   return '<tr data-label="' + ToolHelpers.escapeHtml(item.label) + '" data-barcode="' + ToolHelpers.escapeHtml(item.barcode || '') +
     '" data-barcode-source="' + ToolHelpers.escapeHtml(item.barcodeSource || '') + '">' +
-    '<td class="chk-cell"><input type="checkbox" class="postsort-check" onchange="updatePostSortCopyButton()" aria-label="select for copy"></td>' +
+    '<td class="chk-cell"><input type="checkbox" class="postsort-check" onchange="onPostSortCheck(this)"' +
+      (postSortChecked.has(item.label) ? ' checked' : '') + ' aria-label="select for copy"></td>' +
     '<td class="mono">' + ToolHelpers.escapeHtml(item.label) + postSortBarcodeTagHtml(item) + '</td>' +
     streetCell(item) +
     // noPropagate: true — this lane's Goes To never fills a sibling row (see
@@ -4246,10 +4293,17 @@ function renderPostSortLane() {
   // data-label, not DOM node identity, so it survives the innerHTML rebuild
   // below; a label the new postSortItems no longer has is simply dropped,
   // which is correct (nothing to re-check it onto).
-  const previouslyChecked = new Set(
-    Array.from(tbody.querySelectorAll('tr[data-label] .postsort-check:checked'))
-      .map(cb => cb.closest('tr[data-label]').getAttribute('data-label'))
-  );
+  // Read from postSortChecked, NOT from the DOM: while folded, the DOM holds
+  // only the visible rows, so a DOM harvest here would quietly discard every
+  // folded row's selection on each re-render.
+  const previouslyChecked = postSortChecked;
+  // A label the new postSortItems no longer has is dropped, which is correct
+  // (nothing to re-check it onto) and keeps this set from growing across a
+  // shift of re-drops.
+  const liveLabels = new Set(postSortItems.map(it => it.label));
+  Array.from(previouslyChecked).forEach(label => {
+    if (!liveLabels.has(label)) previouslyChecked.delete(label);
+  });
   // Disposition fold (2026-08-13, issue #651 follow-up). The lane renders one
   // row per Post Sort record, and on a real mid-sort pull that is 2,868 rows
   // of which the already-loaded main report says 2,583 will never be worked.
@@ -4290,10 +4344,16 @@ function renderPostSortLane() {
     }
   });
   const selectAll = document.getElementById('post-sort-select-all');
-  // Compared against the VISIBLE rows, not every item: select-all only ever
-  // checks what is rendered, so measuring it against the full set would leave
-  // the box permanently unchecked whenever anything is folded away.
-  if (selectAll) selectAll.checked = visibleItems.length > 0 && previouslyChecked.size >= visibleItems.length;
+  // Compared over the VISIBLE LABELS THEMSELVES, not two counts (code review,
+  // 2026-08-13). A count comparison says nothing about WHICH rows are
+  // checked: with 400 folded rows checked in show-all and 285 needing work,
+  // `size >= visibleItems.length` reads true and the header box renders
+  // checked while not one visible row is — so Tyler's first click on it fires
+  // togglePostSortSelectAll(false) and appears to do nothing.
+  if (selectAll) {
+    selectAll.checked = visibleItems.length > 0 &&
+      visibleItems.every(it => previouslyChecked.has(it.label));
+  }
   updatePostSortCopyButton();
 }
 
@@ -4304,7 +4364,14 @@ function renderPostSortLane() {
 function renderPostSortFoldToggle(foldedCount, visibleCount) {
   const host = document.getElementById('post-sort-fold');
   if (!host) return;
-  if (!postSortItems.length || (!foldedCount && !postSortShowAll)) {
+  // Hidden whenever there is nothing folded, in BOTH states (code review,
+  // 2026-08-13). Gating only the folded state left the show-all branch
+  // offering "Showing all N rows. Show only the N that need work" when
+  // foldedCount is 0 — a control whose one action produces the state it is
+  // already in, and which then vanishes on click because this guard finally
+  // matches. That happens whenever no main report is loaded, which is the
+  // lane's own starting state.
+  if (!postSortItems.length || !foldedCount) {
     host.style.display = 'none';
     return;
   }
