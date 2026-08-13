@@ -864,6 +864,18 @@
     }
     .bc-flag.conflict { color: var(--danger-ink); }
 
+    /* The disposition fold's toggle (#651 follow-up). Reads as a link rather
+       than a button on purpose: it changes what is on screen, it does not act
+       on packages, and the section header already carries the real buttons.
+       Theme tokens only, per this file's hardcoded-hex budget
+       (tests/theme-contrast-dom.test.js), so both themes are correct with no
+       separate dark rule (theme.css cascade trap). */
+    .linkish {
+      background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+      color: var(--brand-ink); text-decoration: underline; text-underline-offset: 2px;
+    }
+    .linkish:hover { opacity: .8; }
+
     /* Chips only while hovering, or on the row being worked. */
     body.work-mode .manual-body .row-chips { visibility: hidden; }
     body.work-mode .manual-body tr:hover .row-chips,
@@ -1157,6 +1169,10 @@
   <input type="file" id="post-sort-barcode-file-input" accept=".csv,text/csv"
     onchange="handlePostSortBarcodeFile(this.files[0])">
   <div id="post-sort-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
+  <!-- The disposition fold's only control. Always states the count it is
+       holding back, so folded rows are never a silent absence (constraint 1,
+       map #608). -->
+  <div id="post-sort-fold" style="display:none;margin:8px 0;font-size:13px;color:var(--text-muted);"></div>
   <div id="post-sort-barcode-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
   <table id="post-sort-table" style="display:none">
     <thead>
@@ -2965,6 +2981,12 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   // the main report still has no answer for.
   if (postSortItems.length) {
     postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
+    // And the disposition fold (#651 follow-up), for the same reason and on
+    // the same trigger: a main report dropped AFTER the Post Sort report is
+    // the common order, and until it lands the lane has no way to tell a row
+    // that needs working from one that never will. This is where it finds
+    // out. Merges, so an earlier drop's answers survive.
+    postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
     renderPostSortLane();
   }
 }
@@ -3783,7 +3805,21 @@ function mainReportBarcodeMap() {
   return PostSortLane.buildMainReportBarcodeMap(lastRows);
 }
 
+// The disposition twin of mainReportBarcodeMap, reading the SAME `lastRows`
+// (the full raw parsed main report, not the dispositioned item arrays — see
+// lib/ibno-rules.js's mainReportDispositionMap for why that distinction is
+// the whole point).
+function mainReportDispositionMap() {
+  return PostSortLane.buildMainReportDispositionMap(lastRows);
+}
+
 let postSortItems = [];
+// Fold state for the disposition filter (#651 follow-up). Deliberately NOT
+// persisted: it resets to the folded view on every load, because the folded
+// view is the correct default and a stale "show all" from yesterday would
+// silently hand Tyler 2,868 rows again. The toggle is one click away and
+// always names its own count.
+let postSortShowAll = false;
 // Stale-read guard for the async parse (same pattern as handleMergeFile's
 // mergeSeq): a second drop started while an earlier one is still resolving
 // must not let the earlier read's rows/status land after the newer one's.
@@ -3863,7 +3899,12 @@ function handlePostSortFile(file) {
       // immediately, before any lookup file is ever dropped — no lookupResult
       // yet (null), just the already-loaded main report's answers.
       postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
+      // Disposition fold (#651 follow-up), applied on the same trigger as
+      // tier 1 and for the same reason: both answer "what does the already
+      // loaded main report already know about this row".
+      postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
       const mainResolvedCount = postSortItems.filter(it => it.barcodeSource === 'main').length;
+      const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
       // #649 code review finding 4: a note only ever appearing when the count
       // is above zero makes a TOTAL cross-report join failure (e.g. the map-
       // building regression this same PR shipped and fixed) indistinguishable
@@ -3874,8 +3915,20 @@ function handlePostSortFile(file) {
       let mainNote = '';
       if (hasMainReport) {
         mainNote = mainResolvedCount
-          ? ' ' + mainResolvedCount + ' already resolved from the loaded Inbound and Van Scans report.'
+          ? ' ' + mainResolvedCount + ' already resolved from the loaded Inbound and Van Scans report,' +
+            ' and ' + needWorkCount + ' of ' + postSortItems.length + ' still need work.'
           : ' 0 of ' + postSortItems.length + ' matched the loaded Inbound and Van Scans report — every row awaits the lookup.';
+      } else {
+        // The no-report-at-all case, which #649's finding-4 hardening left
+        // SILENT: it only ever spoke when a main report WAS loaded. Silence
+        // here reads exactly like "there was nothing for tier 1 to do", when
+        // in fact tier 1 never ran and the ENTIRE lane is now headed for the
+        // lookup. Measured on a real mid-sort pull (2026-08-13, issue #651):
+        // the main report resolves 2,700 of 2,868 rows, so the difference
+        // between loading it first and not is a 2,868-row paste versus a
+        // 168-row one. That is far too large a consequence to leave implied.
+        mainNote = ' No Inbound and Van Scans report is loaded, so every row awaits the lookup.' +
+          ' Load that report first and most rows resolve without a lookup round-trip.';
       }
       postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
         ' loaded from ' + file.name + '.' + mainNote, false);
@@ -4197,12 +4250,36 @@ function renderPostSortLane() {
     Array.from(tbody.querySelectorAll('tr[data-label] .postsort-check:checked'))
       .map(cb => cb.closest('tr[data-label]').getAttribute('data-label'))
   );
-  if (badge) badge.textContent = String(postSortItems.length);
+  // Disposition fold (2026-08-13, issue #651 follow-up). The lane renders one
+  // row per Post Sort record, and on a real mid-sort pull that is 2,868 rows
+  // of which the already-loaded main report says 2,583 will never be worked.
+  // Tyler's words: "i only need to do the ones that will actually get flagged
+  // and have me work them."
+  //
+  // FOLDED, NOT REMOVED. Constraint 1 on map #608 is that nothing this tool
+  // does disappears, so the skip rows stay one click away behind a toggle
+  // that always states its own count. PostSortLane.needsWork resolves an
+  // UNKNOWN row toward showing it, so the fresh tail this lane exists for is
+  // never what gets hidden.
+  // needWorkCount is computed from the ITEMS, never from visibleItems: in the
+  // show-all state those are the same array, and reading the count off the
+  // rendered rows there would make the toggle offer to "show only the 2,868
+  // that need work". The two numbers coincide in one state and diverge in the
+  // other, which is exactly the kind of thing that ships looking fine.
+  const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
+  const visibleItems = postSortShowAll ? postSortItems : postSortItems.filter(PostSortLane.needsWork);
+  const foldedCount = postSortItems.length - needWorkCount;
+  if (badge) {
+    badge.textContent = foldedCount && !postSortShowAll
+      ? needWorkCount + ' of ' + postSortItems.length
+      : String(postSortItems.length);
+  }
+  renderPostSortFoldToggle(foldedCount, needWorkCount);
   if (clearBtn) clearBtn.style.display = postSortItems.length ? '' : 'none';
   if (table) table.style.display = postSortItems.length ? '' : 'none';
   // Nothing to join a barcode lookup onto until a Post Sort report is loaded.
   if (barcodeLoadBtn) barcodeLoadBtn.style.display = postSortItems.length ? '' : 'none';
-  tbody.innerHTML = postSortItems.map(postSortRowHtml).join('');
+  tbody.innerHTML = visibleItems.map(postSortRowHtml).join('');
   tbody.querySelectorAll('tr[data-label]').forEach(tr => {
     const label = tr.getAttribute('data-label');
     const item = postSortItemByLabel(label);
@@ -4213,8 +4290,38 @@ function renderPostSortLane() {
     }
   });
   const selectAll = document.getElementById('post-sort-select-all');
-  if (selectAll) selectAll.checked = postSortItems.length > 0 && previouslyChecked.size === postSortItems.length;
+  // Compared against the VISIBLE rows, not every item: select-all only ever
+  // checks what is rendered, so measuring it against the full set would leave
+  // the box permanently unchecked whenever anything is folded away.
+  if (selectAll) selectAll.checked = visibleItems.length > 0 && previouslyChecked.size >= visibleItems.length;
   updatePostSortCopyButton();
+}
+
+// renderPostSortFoldToggle(foldedCount, visibleCount) -> the one control that
+// makes the fold reversible, and the reason folding satisfies constraint 1 on
+// map #608 rather than violating it. It ALWAYS states its own count, so the
+// rows it is holding back are never a silent absence.
+function renderPostSortFoldToggle(foldedCount, visibleCount) {
+  const host = document.getElementById('post-sort-fold');
+  if (!host) return;
+  if (!postSortItems.length || (!foldedCount && !postSortShowAll)) {
+    host.style.display = 'none';
+    return;
+  }
+  host.style.display = '';
+  host.innerHTML = postSortShowAll
+    ? 'Showing all ' + postSortItems.length + ' rows. ' +
+      '<button type="button" class="linkish" onclick="togglePostSortFold()">Show only the ' +
+      visibleCount + ' that need work</button>'
+    : 'Showing the ' + visibleCount + ' that need work. ' + foldedCount +
+      ' already answered by the loaded Inbound and Van Scans report. ' +
+      '<button type="button" class="linkish" onclick="togglePostSortFold()">Show all ' +
+      postSortItems.length + '</button>';
+}
+
+function togglePostSortFold() {
+  postSortShowAll = !postSortShowAll;
+  renderPostSortLane();
 }
 
 // Commit on blur and on Enter, same discipline as attachGoesToInput, but this
