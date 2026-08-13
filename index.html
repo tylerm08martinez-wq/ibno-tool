@@ -14,6 +14,18 @@
        illegible — this token is scoped to text-color uses only. */
     :root { --brand-ink: #4D148C; }
     html[data-theme="dark"] { --brand-ink: #c4b5fd; }
+    /* Danger-ink text token (issue #634 / /code-review finding 10): same
+       reasoning as --brand-ink above, same pattern — theme.css's own header
+       comment deliberately leaves status colors (green/red/blue/amber)
+       untokenized because they "stay meaningful on both surfaces" as
+       BACKGROUND fills (pills), but plain red TEXT is a different case: a
+       hardcoded #c0392b against the dark --surface (#1e1f29) reads at
+       roughly 3:1, under the 4.5:1 bar for body text, and a hardcoded value
+       set via el.style.color can never be reached by a later theme.css rule
+       for that same property anyway. Scoped to text-color uses only, same as
+       --brand-ink. */
+    :root { --danger-ink: #c0392b; }
+    html[data-theme="dark"] { --danger-ink: #f87171; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -38,6 +50,29 @@
       justify-content: space-between;
     }
     header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.01em; }
+    /* Copy-as lives in the STICKY APP HEADER, not in a section header. Section
+       headers are sticky too, but only while you are inside their own section —
+       scroll past Ready to Enter and its toolbar leaves with it, which is why
+       switching used to mean scrolling back to the top. Here it is reachable
+       from anywhere on the page, and it stays global (it also governs Manually
+       Resolved and both Copy-selected buttons). */
+    .copyas-wrap { display: flex; align-items: center; gap: 9px; }
+    .copyas-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: rgba(255,255,255,0.72); white-space: nowrap;
+    }
+    .copyas { display: inline-flex; background: rgba(255,255,255,0.15); border-radius: 7px; padding: 2px; }
+    .copyas button {
+      border: none; background: transparent; color: rgba(255,255,255,0.82);
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      padding: 4px 11px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+    }
+    .copyas button:hover { color: #fff; }
+    .copyas button.on { background: #fff; color: #4D148C; }
+    .copyas .kbd {
+      font-size: 9.5px; opacity: 0.55; margin-left: 5px;
+      border: 1px solid currentColor; border-radius: 3px; padding: 0 3px;
+    }
     #file-label { font-size: 12px; opacity: 0.75; max-width: 500px; text-align: right; }
 
     #drop-zone {
@@ -57,6 +92,15 @@
     #drop-zone .hint { margin-top: 10px; font-size: 11px; color: var(--text-fainter); }
     #file-input { display: none; }
     #merge-input { display: none; }
+    /* issue #635 code review, CONFIRMED 6: both Post Sort file inputs render
+       as bare unstyled "Choose File" widgets without this — #post-sort-file-input
+       shipped that way in #634 (a pre-existing defect on main, fixed here
+       alongside the new #post-sort-barcode-file-input this PR adds) and
+       #post-sort-barcode-file-input would have shipped the same way. Both are
+       always triggered via their "Load ..." button's .click(), never meant to
+       be seen directly, same as #file-input/#merge-input above. */
+    #post-sort-file-input { display: none; }
+    #post-sort-barcode-file-input { display: none; }
 
     .btn {
       display: inline-flex;
@@ -133,6 +177,27 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       display: none;
     }
+    /* #post-sort-section (issue #634) is deliberately ALWAYS visible, unlike
+       every other .section here. Fixed 2026-08-12 — a real-browser pass on
+       PR #642 found the section was NEVER shown: every other section is
+       revealed by an explicit `el.style.display = 'block'` somewhere in the
+       main report's render path (e.g. #manual-section at applySnapshot), but
+       nothing ever did that for this one — renderPostSortLane() only ever
+       set the display of the TABLE inside it, never the section itself, so
+       the base `.section { display: none; }` above silently won forever.
+       jsdom's getComputedStyle still answers inside a display:none subtree
+       (no layout engine), so every earlier probe that read computed style or
+       .style.display on a child element looked healthy while nothing was
+       actually on screen — this is why an ID-selector CSS rule, not another
+       JS call on a render path, is the fix: this lane's whole purpose is to
+       be worked BEFORE the main report loads, so it cannot wait for a
+       render path gated on the main report (or on having any Post Sort rows
+       yet either — the "Load Post Sort report" button lives INSIDE this
+       section, so hiding the section at zero rows would hide the only way
+       to ever load a first row). An ID selector beats the class selector
+       above regardless of source order or any future JS bug, so this cannot
+       regress silently again the way the class-only version did. */
+    #post-sort-section { display: block; }
     /* Clickable, sticky section header (collapse + whole-page sticky, #166).
        NOTE: .section must NOT set overflow:hidden, or position:sticky here would
        be clipped to the section box instead of pinning to the viewport. */
@@ -159,7 +224,8 @@
       transition: transform 0.15s;
       vertical-align: middle;
     }
-    .section.collapsed > table { display: none; }
+    .section.collapsed > table,
+    .section.collapsed > .chips { display: none; }
     .section.collapsed .section-header { border-bottom: none; border-radius: 8px; }
     .section.collapsed .chev { transform: rotate(-90deg); }
     .section-header h2 { font-size: 15px; font-weight: 700; }
@@ -195,11 +261,86 @@
     .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; }
     .label-copy { cursor: pointer; border-radius: 3px; padding: 1px 2px; transition: background 0.1s, color 0.1s; }
     .label-copy:hover { background: var(--hover-row); color: var(--brand-ink); }
-    .label-copy.copied { background: #dcfce7; color: #15803d; }
+    /* One copied-state look, shared by the click-to-copy tracking number, the
+       street chip and the address line, so "it worked" reads identically
+       wherever you copy from. */
+    .label-copy.copied, .street-chip.copied, .addr-copy.copied { background: #dcfce7; color: #15803d; }
+    /* Recipient / Address cell. These two rules replace the identical inline
+       styles that used to be repeated in four row builders — same look, one
+       definition. The address line is click-to-copy (full address); the firm
+       line is not, so a near-miss click copies nothing rather than a name. */
+    .recip-firm { font-size: 12px; font-weight: 600; color: var(--text); }
+    .recip-addr { font-size: 11px; color: var(--text-faint); }
+    .addr-copy { cursor: pointer; border-radius: 3px; padding: 1px 2px; transition: background 0.1s, color 0.1s; }
+    .addr-copy:hover { background: var(--hover-row); color: var(--text); }
     /* issue 517: one-click FTrack lookup beside every rendered tracking number.
        Theme tokens only, so light and dark both follow lib/theme.js. */
     .ftrack-link { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--text-faint); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 0 5px; white-space: nowrap; }
     .ftrack-link:hover { background: var(--hover-row); color: var(--text); }
+    /* Barcode chip: same size/shape language as the FTrack chip so the row's
+       trailing chips read as one set. Theme tokens, like its neighbours. */
+    .barcode-chip, .street-chip { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--text-faint); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 0 5px; cursor: pointer; line-height: 1.5; }
+    .barcode-chip { letter-spacing: -1px; }
+    .barcode-chip:hover, .street-chip:hover { background: var(--hover-row); color: var(--text); }
+
+    /* "Goes To" — the typed actual work area. Bold + branded once it holds a
+       value, so a filled column is scannable down the page at a glance. */
+    .goesto-col { width: 92px; }
+    .goesto-cell { padding: 4px 8px; }
+    .goesto-input {
+      width: 78px; padding: 3px 6px; font-size: 12px; font-weight: 700;
+      font-family: inherit; color: var(--text); background: var(--surface);
+      border: 1px solid var(--border-strong); border-radius: 5px; text-transform: uppercase;
+    }
+    .goesto-input::placeholder { font-weight: 400; color: var(--text-faint); text-transform: none; }
+    .goesto-input:focus { outline: 2px solid var(--brand-ink); outline-offset: -1px; }
+    .goesto-input.has-area { border-color: var(--brand-ink); color: var(--brand-ink); background: var(--hover-soft); }
+    .goesto-input.big { width: 100%; font-size: 22px; padding: 7px 10px; text-align: center; }
+
+    /* Propagation notice. Fixed, transient, never blocks a click. */
+    #goesto-note {
+      display: none; position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+      z-index: 60; padding: 8px 16px; border-radius: 999px; pointer-events: none;
+      /* Inverted pill: --text on --surface reads correctly in BOTH themes
+         without pinning a hex, which the #307 hardcoded-color budget rightly
+         resists. */
+      background: var(--text); color: var(--surface); font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    }
+
+    /* Barcode dialog. The CARD follows the theme; the barcode STAGE never does —
+       it is pinned to white with black bars in both themes, because that is what
+       a scanner and a printer need. */
+    #barcode-dialog {
+      display: none; position: fixed; inset: 0; z-index: 70;
+      align-items: center; justify-content: center; padding: 20px;
+      background: rgba(0,0,0,0.45);
+    }
+    .barcode-card {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; width: min(560px, 100%);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    }
+    /* The barcode stage is the ONE surface here that must never be themed,
+       inverted or re-coloured by anything — the page, the OS, or the browser.
+       A barcode is only a barcode while it is dark bars on a light field.
+         color-scheme: only light  -> opts out of Chrome's auto-dark rewriting
+         forced-color-adjust: none -> opts out of Windows High Contrast themes
+       Both are needed: they are different mechanisms, and either one alone can
+       repaint the bars into invisibility on a dark-mode machine. */
+    .barcode-stage {
+      background: #fff; border-radius: 8px; padding: 12px; text-align: center; overflow-x: auto;
+      color-scheme: only light; forced-color-adjust: none;
+    }
+    /* The per-element fill attributes carry the colors (verified computing to
+       solid black on white under the live dark toggle); these two properties
+       are what stop an outside mechanism repainting them. */
+    .barcode-stage svg { max-width: 100%; height: auto; forced-color-adjust: none; }
+    .barcode-value { margin-top: 8px; text-align: center; font-size: 13px; word-break: break-all; color: var(--text); }
+    .barcode-warn, .barcode-error { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--text); background: var(--surface-2); border: 1px solid var(--brand-ink); border-radius: 6px; padding: 7px 10px; }
+    .barcode-area-label { display: block; margin-top: 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+    .barcode-addr { margin-top: 8px; text-align: center; font-size: 12px; color: var(--text-faint); }
+    .barcode-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
     .dt-td .dt-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-style: dotted; }
     .dt-td .dt-link:hover { color: var(--text); text-decoration-style: solid; }
     .code-pill {
@@ -280,6 +421,14 @@
 
     /* ── Ready-to-Enter filter chips (view-only) ─────────────────────────────── */
     .filter-note { font-size: 12px; color: var(--text-faint); }
+    /* Scope line on the two express review headers: the sections are otherwise
+       identical, so the header has to say WHICH express review list it is.
+       Scoped to .section.express so it can never paint a band into another
+       tool's header (an unscoped class rule here leaked once already). */
+    .section.express .lane-scope {
+      font-size: 11px; font-weight: 600; letter-spacing: .02em;
+      color: var(--text-faint); text-transform: uppercase;
+    }
     .sort-select, .manual-search {
       border: 1px solid var(--border-strong);
       border-radius: 5px;
@@ -374,8 +523,8 @@
     .btn-bulk { background:#FF6200; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer; margin-left:10px; }
     .btn-bulk.b65 { background:#0369a1; }
     .btn-bulk:disabled { opacity:.4; cursor:default; }
-    .manual-check { width:16px; height:16px; cursor:pointer; }
-    #manual-tbody tr.row-checked td { background:#fff6ee; }
+    .manual-check, .postsort-check { width:16px; height:16px; cursor:pointer; }
+    .manual-body tr.row-checked td { background:#fff6ee; }
     .btn-apply-mini {
       padding: 3px 9px;
       background: #16a34a;
@@ -417,6 +566,33 @@
     .express-pill { display: inline-block; padding: 2px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; }
     .express-yes  { background: #dbeafe; color: #1e40af; }
     .express-no   { background: #f3f4f6; color: #6b7280; }
+
+    /* ── EXPRESS LANE (#express-section) ────────────────────────────────────────
+       Station 849 is a 2.0 station, so Express runs a separate process from
+       Ground and carries more visibility. Express rows lift OUT of Ready to
+       Enter / Needs Manual Review into this one bordered section, which holds
+       the same two states and the same row controls. Each lane owns its own
+       Copy All, so the ground Copy All can never pick up an express package.
+       Dark values live in theme.css, never here (theme.css loads after this
+       block and its generic dark selectors would win — the PR #504 trap). */
+    /* Express mirrors ground: two real sections, each independently
+       collapsible and sortable, rather than one box holding two sub-tables.
+       Same shape as their ground counterparts, blue identity. */
+    .section.express { border: 1px solid #3b82f6; }
+    .section.express > .section-header { background: #eff6ff; border-bottom-color: #3b82f6; }
+    .section.express > .section-header h2 { color: #1e40af; }
+    .section.express.collapsed > .section-header { border-bottom: none; }
+    /* eOps package-inquiry chip, express rows only, sits beside the FTrack chip.
+       Layout only: it is rendered with .express-yes as well, so it borrows the
+       Express pill's palette, which already has a light rule here and a dark
+       rule in theme.css. That keeps the chip in step with the pill it sits
+       beside and adds no new hardcoded hex (theme-contrast budget, #307/#313).
+       It borrows .express-yes (colors) but NOT .express-pill (shape): .eops-link
+       already supplies the shape, and adding .express-pill would make the chip
+       match every `.express-pill` query that means the Service pill. */
+    .eops-link { margin-left: 5px; font-size: 10.5px; font-weight: 700; text-decoration: none;
+                 border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; white-space: nowrap; }
+    .eops-link:hover { filter: brightness(0.95); }
     .btn-undo-mini {
       padding: 3px 9px;
       background: none;
@@ -617,7 +793,111 @@
     .sync-field:focus { outline: none; border-color: #4D148C; }
     #sync-settings-status { font-size: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
     #sync-settings-status.show { opacity: 1; }
-  </style>
+  
+    /* ─── WORK MODE ───────────────────────────────────────────────
+       A layer over Needs Manual Review, off by default. It only ever ADDS: the
+       Street column appears, the chips go quiet, and a bar tracks where you are.
+       Switching it off restores the table exactly, which is the whole point —
+       nothing about the everyday view is traded away for the fast path.
+       Named Work mode, not Copy mode: "Copy mode" already means the Copy-as
+       tracking/barcode toggle in the header, and C/B are already its shortcuts. */
+
+    /* The Street column exists in the markup at all times so colspans and sort
+       wiring stay constant; only its visibility is conditional. */
+    .street-col, .street-cell { display: none; }
+    body.work-mode .street-col, body.work-mode .street-cell { display: table-cell; }
+    /* The Post Sort "early" lane (issue #634) reuses streetCell/.street-copy,
+       but Work mode never operates over it (workRows() is `.manual-body`
+       only — see the .street-copy click handler and workRows() below) — so
+       Tyler would never toggle Work mode on to see it in this lane's own
+       primary use case, working BEFORE the main report even loads and there
+       is nothing in `.manual-body` yet. Fixed (/code-review on #642, finding
+       4): without this override the Street column — the whole point of the
+       lane, copy street -> type belt — stayed invisible exactly when Tyler
+       needs it. Always visible here, independent of body.work-mode. */
+    #post-sort-section .street-col, #post-sort-section .street-cell { display: table-cell; }
+    .street-copy {
+      font: 700 13px/1.35 inherit; text-align: left; color: var(--text);
+      background: none; border: 0; padding: 2px 4px; margin: -2px -4px;
+      border-radius: 5px; cursor: pointer; max-width: 230px;
+    }
+    .street-copy:hover { color: var(--brand-ink); text-decoration: underline; }
+    .street-copy:focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 1px; }
+    .street-copy.copied { color: var(--brand-ink); text-decoration: none; }
+    .street-none { color: var(--text-muted); }
+
+    /* Propagated-value tag. Present outside Work mode too: an area you did not
+       type is worth seeing whenever you look at the row. */
+    .same-addr {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      background: var(--hover-soft); color: var(--brand-ink); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* Early-provenance tag (issue #634): a Post Sort pre-assignment value,
+       shown wherever the row is seen so it reads as "not yet confirmed"
+       rather than an ordinary typed area. Reuses the same tokens as
+       .same-addr rather than hardcoding a color, so it already tracks light
+       and dark theme without a separate dark rule (theme.css cascade trap). */
+    .early-tag {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      background: var(--hover-soft); color: var(--text-muted); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* Barcode-status tag for the Post Sort lane (issue #635): a row with no
+       resolved barcode yet is visibly "awaiting barcode", never silently
+       treated as if barcode-mode copy has something to give it (the trap
+       this ticket exists to close — lib/post-sort-lane.js's applyBarcodeLookup
+       never falls back to the tracking number). Same token pattern as
+       .early-tag/.same-addr above, so both themes are correct with no
+       separate dark rule (theme.css cascade trap). .conflict swaps in
+       --danger-ink (already theme-defined near the top of this file) for the
+       one case that needs to read as a problem, not just "not yet". */
+    .bc-flag {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      background: var(--hover-soft); color: var(--text-muted); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+    .bc-flag.conflict { color: var(--danger-ink); }
+
+    /* Chips only while hovering, or on the row being worked. */
+    body.work-mode .manual-body .row-chips { visibility: hidden; }
+    body.work-mode .manual-body tr:hover .row-chips,
+    body.work-mode .manual-body tr.work-active .row-chips { visibility: visible; }
+    body.work-mode .manual-body tr.work-active > td { background: var(--hover-row); }
+    body.work-mode .manual-body tr.work-active > td:first-child { box-shadow: inset 3px 0 0 var(--brand-ink); }
+
+    .work-bar {
+      display: none; position: sticky; top: var(--header-h, 56px); z-index: 40;
+      align-items: center; gap: 14px; flex-wrap: wrap;
+      margin: 0 0 14px; padding: 10px 14px;
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-left: 4px solid var(--brand-ink);
+      border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+    }
+    body.work-mode .work-bar { display: flex; }
+    .work-bar .work-context { font-size: 11px; color: var(--text-muted); }
+    .work-bar .work-street { font: 800 22px/1.15 inherit; letter-spacing: -.01em; }
+    .work-bar .work-copied {
+      font-size: 10.5px; font-weight: 800; padding: 3px 9px; border-radius: 20px;
+      background: var(--hover-soft); color: var(--brand-ink);
+      border: 1px solid var(--border-soft);
+    }
+    .work-bar input {
+      font-size: 17px; font-weight: 800; width: 140px; padding: 5px 9px;
+      border: 2px solid var(--border); border-radius: 8px;
+      background: var(--field-bg); color: var(--text);
+    }
+    .work-bar input:focus { outline: none; border-color: var(--brand-ink); }
+    .work-bar .work-prog { width: 140px; height: 4px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .work-bar .work-prog span { display: block; height: 100%; background: var(--brand-ink); transition: width .2s; }
+    .work-bar .work-hint { font-size: 11px; color: var(--text-muted); }
+    #work-toggle.on { background: var(--brand-ink); color: var(--surface); border-color: var(--brand-ink); }
+</style>
   <link rel="stylesheet" href="theme.css">
   <script>(function(){try{if(localStorage.getItem('dashboard_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
   <script src="lib/theme.js"></script>
@@ -629,8 +909,37 @@
     
     <h1>IBNO Coder &mdash; Station 849</h1>
   </div>
+  <div class="copyas-wrap">
+    <span class="copyas-label">Copy as</span>
+    <!-- Copy-mode toggle (#copy-mode): what every copy action puts on the
+         clipboard. Global (also governs Manually Resolved and both Copy
+         selected buttons); persisted in localStorage 'ibno_copy_mode'.
+         Default 'tracking' preserves the original behavior. -->
+    <div class="copyas" id="copy-mode" role="group" aria-label="Copy as">
+      <button type="button" data-mode="tracking" onclick="setCopyMode('tracking')" title="Copy buttons put the 12-digit tracking # on the clipboard (shortcut: C)">Tracking #<span class="kbd">C</span></button>
+      <button type="button" data-mode="barcode" onclick="setCopyMode('barcode')" title="Copy buttons put the full barcode on the clipboard (shortcut: B)">Full barcode<span class="kbd">B</span></button>
+    </div>
+  </div>
   <span id="file-label">No file loaded</span>
 </header>
+
+<!-- Work mode bar (#work-mode): shows the package being worked, keeps its
+     street on the clipboard, and takes the area without leaving the keyboard.
+     Hidden entirely unless Work mode is on. -->
+<div class="work-bar" id="work-bar">
+  <div>
+    <div class="work-context" id="work-context"></div>
+    <div class="work-street" id="work-street"></div>
+  </div>
+  <span class="work-copied" id="work-copied">&#10003; on your clipboard</span>
+  <label style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--text-muted)">GOES TO
+    <input type="text" id="work-area" maxlength="24" placeholder="area" autocomplete="off" aria-label="Work area for the package being worked">
+  </label>
+  <div class="work-prog"><span id="work-prog"></span></div>
+  <span class="work-hint"><kbd>Enter</kbd> next &middot; <kbd>Esc</kbd> exit</span>
+  <button class="btn btn-gray" onclick="setWorkMode(false)">Exit</button>
+</div>
+
 
 <!-- Shown only when the session can't be saved even after reclaiming storage
      (storageWarning, set by persistSession). Plain warning so a full-storage
@@ -642,6 +951,7 @@
 <button class="btn btn-gray" id="settings-toggle" onclick="toggleSettings()">&#9881; Settings</button>
 <button class="btn btn-gray" id="history-toggle" onclick="toggleHistory()">&#128257; Repeat History</button>
 <button class="btn btn-gray" id="search-toggle" onclick="toggleSearch()">&#128269; Search Data</button>
+<button class="btn btn-gray" id="work-toggle" onclick="setWorkMode(!workModeOn)" title="Work the manual review list top to bottom: Street column, quiet chips, keyboard entry (shortcut: W)">&#9654; Work mode</button>
 <button class="btn btn-gray" id="raw-viewer-toggle" onclick="toggleRawViewer()">&#128203; Browse Report</button>
 <button class="btn btn-gray" id="code-lookup-toggle" onclick="toggleCodeLookup()">&#128214; Code Lookup</button>
 
@@ -777,6 +1087,14 @@
     <div class="label">Needs Review</div>
     <div class="value" id="stat-manual">0</div>
   </div>
+  <div class="stat-card blue" data-target="express-auto-section">
+    <div class="label">Express ready</div>
+    <div class="value" id="stat-express">0</div>
+  </div>
+  <div class="stat-card blue" data-target="express-manual-section">
+    <div class="label">Express review</div>
+    <div class="value" id="stat-express-manual">0</div>
+  </div>
   <div class="stat-card purple">
     <div class="label">Total Flagged</div>
     <div class="value" id="stat-total">0</div>
@@ -789,22 +1107,179 @@
 
 <div class="day-banner" id="day-banner"></div>
 
+<!-- SECTION: POST SORT "EARLY" LANE (issue #634, third slice of #622) ───────
+     A supplement, not a replacement: independent of the Inbound and Van Scans
+     report above, fed by the fresher "Inbound Scan - No Van Scan - Post Sort"
+     export (2-5 minute scan-to-report lag vs 15-30 minutes on the report
+     above — notes/report-registry.md). Tyler works this list AHEAD of the
+     slower report so Goes To is already pre-filled by the time it lands.
+     PLA_LOOKUP is genuinely absent from this report (lib/post-sort-scans.js
+     TRAP 2), so this lane NEVER offers a QA Scan Code — it only shows rows
+     and pre-fills Goes To. Values written here carry 'early' provenance
+     (lib/actual-area.js) and never satisfy "scanned": not filtered from view,
+     not skipped by stepWork, not counted toward the Work-mode progress bar —
+     so a package that classifies as QA-Intercept / Invalid HazMat / Closure
+     Portal / Hold to Match on the real report still gets worked there.
+
+     ISSUE #635 (final slice of #622) closes the loop this lane opened: Tyler
+     checks the rows he is about to work, "Copy selected" (reused from #421/
+     #603, not a parallel mechanism) copies their tracking numbers to paste
+     into the separate "Track IDs to Full Barcode" lookup, then he loads that
+     lookup's result CSV back in ("Load barcode lookup CSV"), which joins by
+     tracking number (lib/post-sort-lane.js's applyBarcodeLookup) and stores
+     the real scan barcode per row. Flip Copy as to Barcode and the SAME
+     "Copy selected" button now copies full scannable barcodes instead.
+     GUARDRAIL: an unresolved or conflicting row copies NOTHING in barcode
+     mode — never the tracking number, never one of two disagreeing barcodes
+     (see copyValueFor's noFallback option and applyBarcodeLookup's doc
+     comment). -->
+<div class="section" id="post-sort-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#9201; Post Sort (early)</h2>
+      <span class="badge" id="post-sort-badge">0</span>
+      <span class="filter-note">pre-fills Goes To only &mdash; never offers a code</span>
+    </div>
+    <div class="right">
+      <button class="btn btn-gray" id="copy-selected-post-sort" onclick="copySelectedPostSort()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle). Tracking # to paste into the Track IDs to Full Barcode lookup; barcode once that lookup's result is loaded back in below.">Copy selected (0)</button>
+      <button class="btn btn-gray" id="post-sort-barcode-load-btn" onclick="document.getElementById('post-sort-barcode-file-input').click()" style="display:none" title="Load the Track IDs to Full Barcode lookup's result CSV — joins onto these rows by tracking number">&#8593; Load barcode lookup CSV</button>
+      <button class="btn btn-gray" onclick="document.getElementById('post-sort-file-input').click()">&#8593; Load Post Sort report</button>
+      <button class="btn btn-gray" id="post-sort-clear-btn" onclick="clearPostSortLane()" style="display:none">&larr; Clear</button>
+    </div>
+  </div>
+  <input type="file" id="post-sort-file-input"
+    accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+    onchange="handlePostSortFile(this.files[0])">
+  <!-- Track IDs to Full Barcode lookup result — CSV ONLY (notes/report-registry.md:
+       never open this file in Excel, it destroys the 34-char barcode's precision;
+       reading it as text here never round-trips through Excel so that risk does
+       not apply to this input, but only a .csv is accepted to keep it that way). -->
+  <input type="file" id="post-sort-barcode-file-input" accept=".csv,text/csv"
+    onchange="handlePostSortBarcodeFile(this.files[0])">
+  <div id="post-sort-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
+  <div id="post-sort-barcode-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
+  <table id="post-sort-table" style="display:none">
+    <thead>
+      <tr>
+        <th style="width:28px"><input type="checkbox" id="post-sort-select-all" onchange="togglePostSortSelectAll(this.checked)" aria-label="select all rows"></th>
+        <th>Tracking #</th>
+        <th class="street-col">Street</th>
+        <th class="goesto-col" title="Where this package actually goes — pre-filled here, never coded">Goes To</th>
+        <th>ZIP</th>
+        <th>Service Provider</th>
+        <th>Inbound Time</th>
+        <th>Recipient / Address</th>
+      </tr>
+    </thead>
+    <tbody id="post-sort-tbody"></tbody>
+  </table>
+</div>
+
+<!-- SECTIONS 0a/0b: EXPRESS ─────────────────────────────────────────────────
+     849 is a 2.0 station, so Express runs a separate process from Ground and
+     carries more visibility. Express packages lift out of the two ground
+     sections into these TWO, which MIRROR their ground counterparts one for
+     one: each is an independently collapsible, independently sortable section
+     with its own badge, toolbar and (for review) search. They reuse the SAME
+     row builders as ground, so every control behaves identically here.
+     Both start collapsed like Ready to Enter — the header still carries the
+     count, so express stays announced without occupying the page.
+     The tbodies keep .auto-body / .manual-body so cross-lane queries span both
+     lanes in document order; per-lane actions query by tbody id. -->
+<div class="section express" id="express-auto-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#9992; Express Ready to Enter</h2>
+      <span class="badge" id="express-auto-badge">0</span>
+      <span class="filter-note" id="express-auto-note"></span>
+    </div>
+    <div class="right">
+      <select class="sort-select" id="express-auto-sort" aria-label="Sort express Ready to Enter">
+        <option value="time-asc">Oldest scan first</option>
+        <option value="report">Report order</option>
+        <option value="time">Newest scan first</option>
+        <option value="address">Address (group destination)</option>
+      </select>
+      <button class="btn btn-purple" id="express-copy-btn" onclick="copyAutoTable('express')" title="Copy ONLY the express Ready-to-Enter rows">Copy All express</button>
+      <button class="btn btn-purple" onclick="downloadAutoTable('express')">&#8595; TSV</button>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="sortable" data-table="express-auto" data-sort="report">Tracking #</th>
+        <th class="sortable" data-table="express-auto" data-sort="code">Code</th>
+        <th class="sortable" data-table="express-auto" data-sort="category">Category</th>
+        <th class="sortable" data-table="express-auto" data-sort="time">Inbound Date</th>
+        <th class="sortable" data-table="express-auto" data-sort="time">Scan Time</th>
+        <th class="sortable" data-table="express-auto" data-sort="address">Recipient / Address</th>
+        <th>Service</th>
+        <th style="width:54px"></th>
+      </tr>
+    </thead>
+    <tbody id="express-auto-tbody" class="auto-body"></tbody>
+  </table>
+</div>
+
+<div class="section express" id="express-manual-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#9992; Express Needs Manual Review</h2>
+      <span class="badge" id="express-manual-badge">0</span>
+      <span class="lane-scope">my flagged areas + unassigned zips</span>
+      <span class="filter-note" id="express-manual-note"></span>
+    </div>
+    <div class="right">
+      <button class="btn btn-gray" id="copy-selected-express" onclick="copySelectedManual('express')" disabled title="Copy the checked express rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+      <button class="btn btn-gray" id="select-area-express" onclick="selectRowsWithArea('express')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
+      <button class="btn btn-gray" id="barcode-selected-express" onclick="barcodeSelected('express')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+      <input type="text" class="manual-search" id="express-manual-search" placeholder="Search firm or address..." aria-label="Search express manual review">
+      <select class="sort-select" id="express-manual-sort" aria-label="Sort express Needs Manual Review">
+        <option value="report">Report order</option>
+        <option value="time">Newest scan first</option>
+        <option value="time-asc">Oldest scan first</option>
+        <option value="address">Address (group destination)</option>
+        <option value="reason">Reason</option>
+        <option value="wa">Work area</option>
+        <option value="zip">ZIP code</option>
+        <option value="isp">Service provider (groups same address)</option>
+        <option value="goesto">Goes to (work area)</option>
+      </select>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px"></th>
+        <th class="sortable" data-table="express-manual" data-sort="report">Tracking #</th>
+        <th class="sortable" data-table="express-manual" data-sort="category">Category</th>
+        <th class="sortable" data-table="express-manual" data-sort="time">Inbound Date</th>
+        <th class="sortable" data-table="express-manual" data-sort="time">Scan Time</th>
+        <th class="sortable" data-table="express-manual" data-sort="wa">IB_WORK_AREA</th>
+        <th class="sortable street-col" data-table="express-manual" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+        <th class="sortable goesto-col" data-table="express-manual" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+        <th class="sortable" data-table="express-manual" data-sort="zip">ZIP</th>
+        <th class="sortable" data-table="express-manual" data-sort="isp">Service Provider</th>
+        <th class="sortable" data-table="express-manual" data-sort="reason">Reason</th>
+        <th class="sortable" data-table="express-manual" data-sort="address">Recipient / Address</th>
+        <th>Service</th>
+        <th style="width:180px">Resolve</th>
+      </tr>
+    </thead>
+    <tbody id="express-manual-tbody" class="manual-body"></tbody>
+  </table>
+</div>
+
 <!-- SECTION 1: AUTO-CODED -->
 <div class="section" id="auto-section">
   <div class="section-header">
     <div style="display:flex;align-items:center;gap:10px">
       <h2>&#10003; Ready to Enter</h2>
       <span class="badge" id="auto-badge">0</span>
+      <span class="filter-note" id="auto-ground-note"></span>
       <span class="filter-note" id="auto-filter-note"></span>
     </div>
     <div class="right">
-      <!-- Copy-mode toggle (#copy-mode): what the copy actions put on the clipboard.
-           Global (also governs Manually Resolved copies); persisted in localStorage
-           'ibno_copy_mode'. Default 'tracking' preserves today's behavior. -->
-      <select class="sort-select" id="copy-mode" aria-label="Copy as" title="What the copy buttons put on the clipboard" onchange="setCopyMode(this.value)">
-        <option value="tracking">Copy as: Tracking #</option>
-        <option value="barcode">Copy as: Full barcode</option>
-      </select>
       <select class="sort-select" id="auto-sort" aria-label="Sort Ready to Enter">
         <option value="report">Report order</option>
         <option value="time">Newest scan first</option>
@@ -827,10 +1302,11 @@
         <th class="sortable" data-table="auto" data-sort="time">Inbound Date</th>
         <th class="sortable" data-table="auto" data-sort="time">Scan Time</th>
         <th class="sortable" data-table="auto" data-sort="address">Recipient / Address</th>
+        <th>Service</th>
         <th style="width:54px"></th>
       </tr>
     </thead>
-    <tbody id="auto-tbody"></tbody>
+    <tbody id="auto-tbody" class="auto-body"></tbody>
   </table>
 </div>
 
@@ -847,6 +1323,10 @@
            tracking #s / full barcodes (honoring the Copy-as toggle), one per line, WITHOUT
            coding them — for pasting into FTrack to research before deciding a code. -->
       <button class="btn btn-gray" id="copy-selected-manual" onclick="copySelectedManual()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+      <!-- Print a barcode sheet for the checked rows: full scan barcode + the
+           typed Goes To area on each card. Read-only, never codes a row. -->
+      <button class="btn btn-gray" id="select-area-ground" onclick="selectRowsWithArea('ground')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
+      <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('ground')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
       <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
       <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
         <option value="report">Report order</option>
@@ -855,6 +1335,9 @@
         <option value="address">Address (group destination)</option>
         <option value="reason">Reason</option>
         <option value="wa">Work area</option>
+        <option value="zip">ZIP code</option>
+        <option value="isp">Service provider (groups same address)</option>
+        <option value="goesto">Goes to (work area)</option>
       </select>
     </div>
   </div>
@@ -867,13 +1350,17 @@
         <th class="sortable" data-table="manual" data-sort="time">Inbound Date</th>
         <th class="sortable" data-table="manual" data-sort="time">Scan Time</th>
         <th>IB_WORK_AREA</th>
+        <th class="sortable street-col" data-table="manual" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+        <th class="sortable goesto-col" data-table="manual" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+        <th class="sortable" data-table="manual" data-sort="zip">ZIP</th>
+        <th class="sortable" data-table="manual" data-sort="isp">Service Provider</th>
         <th>Reason</th>
         <th class="sortable" data-table="manual" data-sort="address">Recipient / Address</th>
-        <th>Express</th>
+        <th>Service</th>
         <th style="width:180px">Resolve</th>
       </tr>
     </thead>
-    <tbody id="manual-tbody"></tbody>
+    <tbody id="manual-tbody" class="manual-body"></tbody>
   </table>
 </div>
 
@@ -903,7 +1390,7 @@
         <th>IB_WORK_AREA</th>
         <th>Reason</th>
         <th class="sortable" data-table="resolved" data-sort="address">Recipient / Address</th>
-        <th>Express</th>
+        <th>Service</th>
         <th style="width:72px"></th>
       </tr>
     </thead>
@@ -942,8 +1429,84 @@
   </table>
 </div>
 
+<!-- SECTION 5: EXPRESS REVIEW, OUTSIDE THE FLAGGED WORK AREAS ────────────────
+     Express rows that need review but did NOT land in a flagged work area.
+     They used to sit in Express Needs Manual Review at the top, which made that
+     section read as a longer list of Tyler's own work than it really was. Same
+     rows, same columns, same coding controls — only the position changed, and
+     the position is the point: last on the page, below Repeat Packages, worked
+     after the flagged areas are clear. The lane rule is IbnoRules.manualLane.
+     (Tyler, 2026-08-06) -->
+<div class="section express" id="express-other-section">
+  <div class="section-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2>&#9992; Express Review &mdash; Other Work Areas</h2>
+      <span class="badge" id="express-other-badge">0</span>
+      <span class="lane-scope">not mine to work</span>
+      <span class="filter-note" id="express-other-note"></span>
+    </div>
+    <div class="right">
+      <button class="btn btn-gray" id="copy-selected-express-other" onclick="copySelectedManual('express-other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+      <button class="btn btn-gray" id="select-area-express-other" onclick="selectRowsWithArea('express-other')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
+      <button class="btn btn-gray" id="barcode-selected-express-other" onclick="barcodeSelected('express-other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+      <input type="text" class="manual-search" id="express-other-search" placeholder="Search firm or address..." aria-label="Search express review outside flagged work areas">
+      <select class="sort-select" id="express-other-sort" aria-label="Sort express review outside flagged work areas">
+        <option value="report">Report order</option>
+        <option value="time">Newest scan first</option>
+        <option value="time-asc">Oldest scan first</option>
+        <option value="address">Address (group destination)</option>
+        <option value="reason">Reason</option>
+        <option value="wa">Work area</option>
+        <option value="zip">ZIP code</option>
+        <option value="isp">Service provider (groups same address)</option>
+        <option value="goesto">Goes to (work area)</option>
+      </select>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px"></th>
+        <th class="sortable" data-table="express-other" data-sort="report">Tracking #</th>
+        <th class="sortable" data-table="express-other" data-sort="category">Category</th>
+        <th class="sortable" data-table="express-other" data-sort="time">Inbound Date</th>
+        <th class="sortable" data-table="express-other" data-sort="time">Scan Time</th>
+        <th class="sortable" data-table="express-other" data-sort="wa">IB_WORK_AREA</th>
+        <th class="sortable street-col" data-table="express-other" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+        <th class="sortable goesto-col" data-table="express-other" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+        <th class="sortable" data-table="express-other" data-sort="zip">ZIP</th>
+        <th class="sortable" data-table="express-other" data-sort="isp">Service Provider</th>
+        <th class="sortable" data-table="express-other" data-sort="reason">Reason</th>
+        <th class="sortable" data-table="express-other" data-sort="address">Recipient / Address</th>
+        <th>Service</th>
+        <th style="width:180px">Resolve</th>
+      </tr>
+    </thead>
+    <tbody id="express-other-tbody" class="manual-body"></tbody>
+  </table>
+</div>
+
 <!-- Options populated from lib/scan-codes.js at init (single source, #158/#200). -->
 <datalist id="common-codes"></datalist>
+
+<!-- Transient confirmation that typing one work area filled other rows at the
+     same address. Propagation must never be silent. -->
+<div id="goesto-note" role="status" aria-live="polite"></div>
+
+<!-- Barcode dialog: the scannable form of one package's FULL scan barcode, with
+     its "Goes to" area editable right here so the two are decided together.
+     Deliberately light-on-dark-proof: the barcode stage stays white in dark
+     mode, because a scanner needs dark bars on a light field. -->
+<div id="barcode-dialog" role="dialog" aria-modal="true" aria-label="Package barcode"
+     onclick="if (event.target === this) closeBarcodeDialog()">
+  <div class="barcode-card">
+    <div id="barcode-dialog-body"></div>
+    <div class="barcode-actions">
+      <button class="btn btn-purple" onclick="printBarcodeDialog()">&#128424; Print</button>
+      <button class="btn btn-gray" onclick="closeBarcodeDialog()">Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="lib/tool-helpers.js"></script>
 <script src="lib/csv.js"></script>
@@ -952,11 +1515,41 @@
 <script src="lib/github-json-sync.js"></script>
 <script src="lib/inbound-scans.js"></script>
 <script src="lib/ibno-rules.js"></script>
+<script src="lib/ibno-review-plan.js"></script>
 <script src="lib/report-clean.js"></script>
+<!-- Post Sort "early" lane (issue #634, third slice of #622): a separate,
+     fresher report surfaced as a supplement to the report above, never a
+     replacement. post-sort-scans.js parses it (xlsx only — TRAP 1 refuses a
+     mangled CSV loudly); post-sort-lane.js turns the parsed records into row
+     items. Neither calls lib/ibno-review-plan.js: PLA_LOOKUP is absent from
+     this report, so no QA Scan Code is ever offered here.
+     barcode-lookup.js (issue #632, consumed here for issue #635, final slice
+     of #622) parses the separate "Track IDs to Full Barcode" CSV lookup;
+     post-sort-lane.js's applyBarcodeLookup joins its result onto this lane's
+     rows by tracking number. Loaded before post-sort-lane.js so the browser
+     global (window.BarcodeLookup) is present when post-sort-lane.js resolves
+     it. -->
+<script src="lib/barcode-lookup.js"></script>
+<script src="lib/post-sort-scans.js"></script>
+<script src="lib/post-sort-lane.js"></script>
+<!-- ZIP -> ISP lookup, shared with Address Catcher and the printable CSP zip breakdown. -->
+<script src="lib/zip-isp-belt.js"></script>
 <!-- lib/ftrack.js: the one shared FTrack deep-link builder (issue 517),
      built from the tracking number alone. Loaded before data-table.js so the
      Raw-Data Viewer can link its tracking column. -->
 <script src="lib/ftrack.js"></script>
+<!-- Address canonicalization, shared with the Address Catcher: the ONE rule for
+     what counts as the same address. Feeds actual-area's two keys (unit-exact
+     for propagation, building-level for sorting) so the two tools can never
+     disagree about whether two packages go to the same place. -->
+<script src="lib/address-normalize.js"></script>
+<script src="lib/actual-area.js"></script>
+<!-- Street-only copy: house number + street name, no unit, city, state or ZIP. -->
+<script src="lib/street-address.js"></script>
+<!-- Code 128 encoder: the scannable rendering of a package's FULL scan barcode.
+     Offline-first, so it is a local lib and never a CDN. -->
+<script src="lib/barcode-128.js"></script>
+<script src="lib/eops.js"></script>
 <script src="lib/data-table.js"></script>
 <script src="lib/ibno-archive.js"></script>
 <script src="lib/ibno-session.js"></script>
@@ -1361,7 +1954,7 @@ function rawViewerQuickCodeRender(record) {
 // Uses Array#find over the dataset rather than a selector built from the label
 // so a label containing selector-special characters never breaks the lookup.
 function findManualRow(label) {
-  return Array.from(document.querySelectorAll('#manual-tbody tr[data-label]'))
+  return Array.from(document.querySelectorAll('.manual-body tr[data-label]'))
     .find(tr => tr.dataset.label === label) || null;
 }
 
@@ -1634,7 +2227,7 @@ function buildHistoryRow(r, inToday) {
 
   // Click the row to expand; the copy span and prune button keep their own jobs.
   tr.addEventListener('click', function (e) {
-    if (e.target.closest('.label-copy') || e.target.closest('.hist-prune') || e.target.closest('.ftrack-link')) return;
+    if (e.target.closest('.label-copy') || e.target.closest('.hist-prune') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.addr-copy')) return;
     const open = detailTr.style.display !== 'none';
     detailTr.style.display = open ? 'none' : 'table-row';
     tr.querySelector('.hist-caret').textContent = open ? '▸' : '▾';
@@ -1753,6 +2346,12 @@ let currentDayType = 'weekday'; // day banner context, persisted with the sessio
 
 const defaultSorts = {
   auto:     { key: 'report', dir: 'asc' },
+  // Express defaults to OLDEST scan first: express carries a commitment time,
+  // so the longest-sitting open express package is the one most at risk and
+  // belongs at the top. Ground keeps report order.
+  'express-auto':   { key: 'time', dir: 'asc' },
+  'express-manual': { key: 'report', dir: 'asc' },
+  'express-other':  { key: 'report', dir: 'asc' },
   manual:   { key: 'report', dir: 'asc' },
   resolved: { key: 'resolve', dir: 'asc' },
   repeat:   { key: 'count', dir: 'desc' },
@@ -1761,12 +2360,16 @@ let sortState = JSON.parse(JSON.stringify(defaultSorts));
 
 function resetViewControls() {
   sortState = JSON.parse(JSON.stringify(defaultSorts));
-  ['auto', 'manual', 'resolved', 'repeat'].forEach(syncSortSelect);
+  ['auto', 'express-auto', 'manual', 'express-manual', 'express-other', 'resolved', 'repeat'].forEach(syncSortSelect);
   updateSortHeaders();
-  const manualSearch = document.getElementById('manual-search');
-  if (manualSearch) manualSearch.value = '';
-  const manualNote = document.getElementById('manual-search-note');
-  if (manualNote) manualNote.textContent = '';
+  ['manual-search', 'express-manual-search', 'express-other-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['manual-search-note', 'express-manual-note', 'express-other-note'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
   manualCollapsed.area = manualCollapsed.zip = manualCollapsed.other = true;  // fresh report → all collapsed
 }
 
@@ -1811,8 +2414,27 @@ function firmKey(item) {
   return String((item && item.firm) || '').trim().toLowerCase();
 }
 
+// clusterKeyOf(item) -> the building-level address key two packages share when
+// they are the same stop. Canonicalized through lib/address-normalize.js, so
+// "1234 N Main St" and "1234 NORTH MAIN STREET APT 5" cluster together despite
+// having no string in common. Blank for a row with no usable address, which
+// cmpBlankLast then sorts to the end rather than to the front.
+function clusterKeyOf(item) {
+  return ActualArea.clusterKey((item && item.address) || '');
+}
+
 function cmpText(a, b) {
   return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// Text compare that always ranks a blank after a non-blank, so "no ZIP on this
+// row" and "no ISP for this ZIP" never sort as if they were an empty string.
+function cmpBlankLast(a, b) {
+  const x = String(a || ''), y = String(b || '');
+  if (!x && !y) return 0;
+  if (!x) return 1;
+  if (!y) return -1;
+  return cmpText(x, y);
 }
 
 // waSortKey(item) -> numeric work-area for sorting; blank/non-numeric sort last.
@@ -1831,6 +2453,30 @@ function compareBySort(a, b, table) {
   else if (st.key === 'category') n = cmpText(a && a.category, b && b.category) || cmpText(a && a.label, b && b.label);
   else if (st.key === 'reason') n = cmpText(a && a.reason, b && b.reason) || cmpText(a && a.label, b && b.label);
   else if (st.key === 'wa') n = (waSortKey(a) - waSortKey(b)) || cmpText(String((a && a.ibWork) || ''), String((b && b.ibWork) || '')) || cmpText(a && a.label, b && b.label);
+  // ZIP sorts as text, not as a number: it is an identifier, and a leading zero
+  // is part of it. Rows with no ZIP sort after every real ZIP ascending (and so
+  // lead descending) instead of sorting as if they were '00000'.
+  else if (st.key === 'zip') n = cmpBlankLast(zipOf(a), zipOf(b)) || cmpText(a && a.label, b && b.label);
+  // Service provider groups the list by who runs the zip; unknown zips sort last.
+  //
+  // Within one provider the tiebreak is the BUILDING-level address key, so every
+  // package for one address lands in a contiguous run instead of being scattered
+  // by tracking number. That is what makes the list dock-flexable: decide the
+  // destination once for the run rather than re-deciding it per package. The
+  // cluster key drops unit numbers (lib/actual-area.js), so APT 2 and APT 5 sit
+  // together here — sorting groups a building, while PROPAGATION of a typed area
+  // still refuses to cross a unit. ZIP remains the tiebreak below the address so
+  // ordering is stable for rows with no usable address.
+  else if (st.key === 'isp') n = cmpBlankLast(ispOf(a), ispOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpBlankLast(zipOf(a), zipOf(b)) || cmpText(a && a.label, b && b.label);
+  // Street: the copy-paste text itself. Rows with no street (an empty
+  // LABEL_ADDRESS1 composes down to a bare ZIP) sort last ascending, so the
+  // packages you can actually paste are the head of the list. The building-level
+  // key is the tiebreak so one address stays a contiguous run, same as ISP.
+  else if (st.key === 'street') n = cmpBlankLast(streetOf(a), streetOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpText(a && a.label, b && b.label);
+  // Goes To: the typed actual work area. Blank rows sort last ascending, so the
+  // not-yet-decided packages are the tail of the list, not the head.
+  else if (st.key === 'goesto') n = cmpBlankLast(actualAreaOf(a), actualAreaOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpText(a && a.label, b && b.label);
+  else if (st.key === 'code') n = cmpText(String((a && a.code) || ''), String((b && b.code) || '')) || cmpText(a && a.label, b && b.label);
   else if (st.key === 'count') n = ((a && a.timesSeen) || 0) - ((b && b.timesSeen) || 0);
   else if (st.key === 'date') n = latestRepeatDateKey(a || {}) - latestRepeatDateKey(b || {});
   if (n === 0) n = cmpText(a && a.label, b && b.label);
@@ -1839,7 +2485,7 @@ function compareBySort(a, b, table) {
 
 function sortSelectValue(table) {
   const st = sortState[table];
-  if ((table === 'auto' || table === 'manual') && st.key === 'time' && st.dir === 'asc') return 'time-asc';
+  if (st.key === 'time' && st.dir === 'asc') return 'time-asc';
   return st.key;
 }
 
@@ -1861,8 +2507,8 @@ function setSort(table, key, dir) {
   sortState[table] = { key, dir };
   syncSortSelect(table);
   updateSortHeaders();
-  if (table === 'auto') renderAutoSectionRows();
-  else if (table === 'manual') { renderManualSectionRows(); applyManualSearch(); }
+  if (table === 'auto' || table === 'express-auto') renderAutoSectionRows();
+  else if (table === 'manual' || table === 'express-manual' || table === 'express-other') { renderManualSectionRows(); applyManualSearch(); }
   else if (table === 'resolved') renderResolvedSection();
   else if (table === 'repeat') renderRecurringSection(currentRecurringMap);
 }
@@ -1876,7 +2522,7 @@ function onSortSelect(table, value) {
 }
 
 function initSortControls() {
-  ['auto', 'manual', 'resolved', 'repeat'].forEach(table => {
+  ['auto', 'express-auto', 'manual', 'express-manual', 'express-other', 'resolved', 'repeat'].forEach(table => {
     const sel = document.getElementById(table + '-sort');
     if (sel) sel.addEventListener('change', () => onSortSelect(table, sel.value));
   });
@@ -1888,8 +2534,10 @@ function initSortControls() {
     const dir = cur && cur.key === key ? (cur.dir === 'asc' ? 'desc' : 'asc') : firstDir;
     setSort(table, key, dir);
   }));
-  const manualSearch = document.getElementById('manual-search');
-  if (manualSearch) manualSearch.addEventListener('input', applyManualSearch);
+  ['manual-search', 'express-manual-search', 'express-other-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', applyManualSearch);
+  });
 }
 
 function openedLabels(tbody, itemByRow) {
@@ -1902,28 +2550,98 @@ function openedLabels(tbody, itemByRow) {
   return labels;
 }
 
-function renderAutoSectionRows() {
-  const tbody = document.getElementById('auto-tbody');
-  const open = openedLabels(tbody, tr => autoItems[tr.dataset.idx]);
-  tbody.innerHTML = '';
-  autoItems.sort((a, b) => compareBySort(a, b, 'auto'));
-  if (autoItems.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No packages to auto-code</td></tr>';
-  } else {
-    autoItems.forEach((item, idx) => {
-      const tr = buildAutoRow(item, idx);
-      tbody.appendChild(tr);
-      if (open.has(item.label)) {
-        tr.classList.add('row-open');
-        tbody.appendChild(buildDetailRow(item, 7));
-      }
-    });
+// Render Ready-to-Enter rows into TWO lanes: express into #express-auto-tbody,
+// ground into #auto-tbody. autoItems stays ONE array, so dataset.idx still
+// indexes into it and the 34 override, the export and session restore are all
+// untouched by the split. Each lane sorts independently; 'express-auto' defaults
+// to oldest scan first, because express carries a commitment time and the oldest
+// open express package is the one most at risk.
+// ─── TWO-LANE RENDER HELPERS ────────────────────────────────────────────────
+// Ready to Enter and Needs Manual Review both render into a ground tbody and an
+// express tbody. These two steps are identical across them; the row-building in
+// between is not (auto sorts per lane and carries dataset.idx, manual groups by
+// bucket), so only the genuinely shared shape is factored out here.
+
+// Clear every lane tbody and return them with the set of labels whose detail
+// row was expanded, so a re-render restores it wherever the row now lives.
+// `ids` is a tbody id per lane, in lane order (Ready to Enter has two lanes,
+// Manual Review has three). The open-label set spans ALL of them on purpose: a
+// row that changes lane between renders keeps its expanded detail.
+function openLanes(ids, itemByRow) {
+  const bodies = ids.map(id => document.getElementById(id));
+  const open = new Set();
+  bodies.forEach(b => openedLabels(b, itemByRow).forEach(l => open.add(l)));
+  bodies.forEach(b => { if (b) b.innerHTML = ''; });
+  return { bodies: bodies, open: open };
+}
+
+// Append a built row, restoring its expanded detail row if it was open before.
+function appendLaneRow(tbody, tr, item, open, span) {
+  tbody.appendChild(tr);
+  if (open.has(item.label)) {
+    tr.classList.add('row-open');
+    tbody.appendChild(buildDetailRow(item, span));
   }
+}
+
+function renderAutoSectionRows() {
+  const { bodies, open } = openLanes(['auto-tbody', 'express-auto-tbody'],
+    tr => autoItems[tr.dataset.idx]);
+  const [gnd, exp] = bodies;
+
+  // Sort a COPY per lane; autoItems keeps its own order so dataset.idx is stable.
+  const withIdx = autoItems.map((item, idx) => ({ item: item, idx: idx }));
+  const lanes = [
+    { rows: withIdx.filter(r => !itemIsExpress(r.item)), tbody: gnd, table: 'auto' },
+    { rows: withIdx.filter(r =>  itemIsExpress(r.item)), tbody: exp, table: 'express-auto' },
+  ];
+  lanes.forEach(lane => {
+    lane.rows.sort((a, b) => compareBySort(a.item, b.item, lane.table));
+    if (!lane.rows.length) {
+      lane.tbody.innerHTML = '<tr><td colspan="8" class="empty-state">' +
+        (lane.table === 'auto' ? 'No ground packages to auto-code'
+                               : 'No express packages to auto-code') + '</td></tr>';
+      return;
+    }
+    lane.rows.forEach(r => {
+      appendLaneRow(lane.tbody, buildAutoRow(r.item, r.idx), r.item, open, 8);
+    });
+  });
   applyAutoFilter();
+  updateExpressSection();
+}
+
+// Badge, stat card, lane counts and the "no express at all" line. Absence is
+// stated rather than inferred: an empty express lane and a failed express parse
+// must not look the same on a service this closely watched.
+function updateExpressSection() {
+  const expAuto  = autoItems.filter(itemIsExpress).length;
+  // Express review splits by work area: the flagged-area lane is Tyler's own
+  // queue and owns the badge and the stat card; the rest live in their own
+  // section at the bottom of the page and are counted by their own badge.
+  const expMan   = manualLaneItems('express').length;
+  const expOther = manualLaneItems('express-other').length;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('express-auto-badge', expAuto);
+  set('express-manual-badge', expMan);
+  set('express-other-badge', expOther);
+  set('stat-express', expAuto);
+  set('stat-express-manual', expMan);
+  // Absence is stated, never inferred: on a service this closely watched, "no
+  // express today" and "the express column failed to parse" must not look the
+  // same. Each section says so in its own header, which stays readable while
+  // the section is collapsed.
+  // The Ready-to-Enter note is ours; the review note belongs to applyManualSearch,
+  // which also has to express "showing N of M" while a search is active.
+  set('express-auto-note', expAuto === 0 ? 'none in this report' : '');
+  const gndNote = document.getElementById('auto-ground-note');
+  if (gndNote) gndNote.textContent = expAuto ? 'ground only \u00b7 ' + expAuto + ' express above' : '';
 }
 
 function updateManualBadge() {
-  const remaining = manualItems.length;
+  // The badge and stat card describe the GROUND review lane, matching the
+  // section they sit on; express review is counted by updateExpressSection.
+  const remaining = manualLaneItems('ground').length;
   const manualBadge = document.getElementById('manual-badge');
   manualBadge.textContent = remaining;
   document.getElementById('stat-manual').textContent = remaining;
@@ -1942,15 +2660,19 @@ function updateManualBadge() {
 // with a per-group "Apply <code> to N checked" button. Rows start UNCHECKED
 // (deliberate opt-in), the full detail stays visible (expand for more), and the
 // per-row code box still overrides any single row. Nothing is auto-coded.
+// The bucket CODES are single-sourced from lib/ibno-review-plan.js (#631) —
+// they are a coding rule and the bulk buttons depend on them. The titles stay
+// here because they are screen vocabulary: a rules module must not have to know
+// what the heading says.
 const MANUAL_GROUPS = [
-  { key: 'area',  title: '\u{1F6A9} Flagged work area', code: '33' },
-  { key: 'zip',   title: '\u{1F4CD} Unassigned Zip',    code: '65' },
-  { key: 'other', title: '❓ Other — needs review', code: '' },
+  { key: 'area',  title: '\u{1F6A9} Flagged work area', code: ReviewPlan.bucketCode('area') },
+  { key: 'zip',   title: '\u{1F4CD} Unassigned Zip',    code: ReviewPlan.bucketCode('zip')  },
+  { key: 'other', title: '❓ Other — needs review', code: ReviewPlan.bucketCode('other') },
 ];
-function manualBucket(item) {
-  const c = suggestedManualCode(item);       // '33' | '65' | ''
-  return c === '33' ? 'area' : c === '65' ? 'zip' : 'other';
-}
+// Which heading a Manual Review row sits under. The rule itself lives in
+// lib/ibno-review-plan.js (#631); this stays as the tool's name for it so the
+// call sites read the same as they always did.
+function manualBucket(item) { return ReviewPlan.rowPlan(item).bucket; }
 
 // Each bucket can be collapsed to tame long lists (#batch-code). Buckets START
 // collapsed so the section opens compact; click a header to expand. State
@@ -1958,16 +2680,21 @@ function manualBucket(item) {
 const manualCollapsed = { area: true, zip: true, other: true };
 function toggleManualGroup(bucket) {
   manualCollapsed[bucket] = !manualCollapsed[bucket];
-  const gh = document.querySelector('#manual-tbody tr.manual-group-row[data-group="' + bucket + '"]');
-  if (gh) { const ch = gh.querySelector('.g-chevron'); if (ch) ch.textContent = manualCollapsed[bucket] ? '▸' : '▾'; }
+  document.querySelectorAll('.manual-body tr.manual-group-row[data-group="' + bucket + '"]').forEach(gh => {
+    const ch = gh.querySelector('.g-chevron');
+    if (ch) ch.textContent = manualCollapsed[bucket] ? '▸' : '▾';
+  });
   applyManualSearch();   // recompute row visibility (collapse + search combined)
 }
+
+// The tbody a control lives in — the lane scope for every per-lane query.
+function laneBody(el) { return el && el.closest('tbody'); }
 
 function buildGroupHeaderRow(g, count) {
   const tr = document.createElement('tr');
   tr.className = 'manual-group-row';
   tr.dataset.group = g.key;
-  const td = document.createElement('td'); td.colSpan = 10;
+  const td = document.createElement('td'); td.colSpan = MANUAL_COLSPAN;
   const wrap = document.createElement('div');
   wrap.style.cssText = 'display:flex;align-items:center;gap:8px';
   const all = document.createElement('input');
@@ -1975,8 +2702,15 @@ function buildGroupHeaderRow(g, count) {
   all.addEventListener('change', () => {
     // Select every row in the bucket that matches the current search (even if the
     // group is collapsed), so you can collapse-and-bulk without expanding first.
-    const q = String((document.getElementById('manual-search') || {}).value || '').trim().toLowerCase();
-    document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + g.key + '"]').forEach(row => {
+    // Read THIS lane's own search box: each lane filters independently, and
+    // reading the ground box here made an express select-all obey a search the
+    // express lane was not running.
+    const body = laneBody(all);
+    const cfg = MANUAL_LANES.find(l => body && l.tbody === body.id) || MANUAL_LANES[0];
+    const q = String((document.getElementById(cfg.search) || {}).value || '').trim().toLowerCase();
+    // Scoped to THIS header's own tbody so an express select-all never reaches
+    // a ground row, and vice versa.
+    body.querySelectorAll('tr[data-label][data-bucket="' + g.key + '"]').forEach(row => {
       if (q && row.textContent.toLowerCase().indexOf(q) === -1) return;
       const cb = row.querySelector('.manual-check');
       if (cb) { cb.checked = all.checked; row.classList.toggle('row-checked', all.checked); }
@@ -1995,7 +2729,7 @@ function buildGroupHeaderRow(g, count) {
     btn.className = 'btn-bulk' + (g.code === '65' ? ' b65' : '');
     btn.dataset.group = g.key; btn.dataset.code = g.code;
     btn.textContent = 'Apply ' + g.code + ' to 0 checked';
-    btn.addEventListener('click', () => bulkApply(g.key, g.code));
+    btn.addEventListener('click', () => bulkApply(g.key, g.code, laneBody(btn)));
     wrap.appendChild(btn);
   }
   td.appendChild(wrap); tr.appendChild(td);
@@ -2004,32 +2738,53 @@ function buildGroupHeaderRow(g, count) {
 
 // Relabel each group's bulk button with its current checked count, disable at 0.
 function updateBulkButtons() {
-  document.querySelectorAll('#manual-tbody .btn-bulk').forEach(btn => {
+  // The Select-with-area counts move with the same events as the bulk counts.
+  if (typeof updateSelectAreaButtons === 'function') updateSelectAreaButtons();
+
+  // .manual-body spans BOTH lanes; each button still counts only its own tbody.
+  document.querySelectorAll('.manual-body .btn-bulk').forEach(btn => {
     if (!btn.dataset.group) return;   // skip per-row quick-code pills (#373) — they reuse .btn-bulk only for its bucket color
-    const n = document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + btn.dataset.group + '"] .manual-check:checked').length;
+    const n = laneBody(btn).querySelectorAll('tr[data-label][data-bucket="' + btn.dataset.group +
+      '"][data-bulk="' + btn.dataset.code + '"] .manual-check:checked').length;
     btn.textContent = 'Apply ' + btn.dataset.code + ' to ' + n + ' checked';
     btn.disabled = n === 0;
   });
-  // "Copy selected" tracks the total checked across ALL buckets (research copy, no coding).
-  const copySel = document.getElementById('copy-selected-manual');
-  if (copySel) {
-    const total = document.querySelectorAll('#manual-tbody tr[data-label] .manual-check:checked').length;
-    copySel.textContent = 'Copy selected (' + total + ')';
-    copySel.disabled = total === 0;
-  }
+  // Each lane's "Copy selected" counts only its own checked rows (research copy,
+  // no coding), so an express research copy never carries a ground package.
+  MANUAL_LANES.forEach(lane => {
+    const btn = document.getElementById(lane.copyBtn);
+    if (!btn) return;
+    const body = document.getElementById(lane.tbody);
+    const total = body ? body.querySelectorAll('tr[data-label] .manual-check:checked').length : 0;
+    btn.textContent = 'Copy selected (' + total + ')';
+    btn.disabled = total === 0;
+    // The barcode sheet follows the same per-lane count: a printed sheet is
+    // walked by one person working one lane.
+    const bc = document.getElementById(lane.barcodeBtn);
+    if (bc) {
+      bc.innerHTML = '▌▍▌ Barcode selected (' + total + ')';
+      bc.disabled = total === 0;
+    }
+  });
 }
 
 // copySelectedManual() -> copy every checked Manual Review row's value (tracking # or
 // full barcode, per the Copy-as toggle), one per line, for pasting into FTrack. It is
 // READ-ONLY: it never applies a code or moves a row to Manually Resolved.
-function copySelectedManual() {
-  const checked = Array.from(document.querySelectorAll('#manual-tbody tr[data-label] .manual-check:checked'))
+// lane: the MANUAL_LANES key whose checked rows to copy ('ground', 'express',
+// 'express-other'); anything unrecognised copies the ground lane. Never more
+// than one lane — the lists are worked separately and a mixed research copy is
+// exactly the mistake to design out.
+function copySelectedManual(lane) {
+  const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
+  const body = document.getElementById(cfg.tbody);
+  const checked = Array.from(body ? body.querySelectorAll('tr[data-label] .manual-check:checked') : [])
     .map(cb => cb.closest('tr[data-label]'))
     .filter(Boolean);
   if (!checked.length) return;
   const lines = checked.map(tr => copyValueFor(tr.dataset.label, tr.dataset.barcode));
   ToolHelpers.copyText(lines.join('\n')).catch(() => {});
-  const btn = document.getElementById('copy-selected-manual');
+  const btn = document.getElementById(cfg.copyBtn);
   if (btn) {
     const prev = btn.textContent;
     btn.textContent = '✓ Copied ' + lines.length;
@@ -2038,9 +2793,15 @@ function copySelectedManual() {
 }
 
 // Code every checked row in a bucket with the bucket's code, immediately.
-function bulkApply(bucket, code) {
+// `body` is the lane's tbody: a bulk apply only ever touches rows in the lane
+// whose button was clicked, so express and ground bulk coding stay independent.
+function bulkApply(bucket, code, body) {
   const targets = [];
-  document.querySelectorAll('#manual-tbody tr[data-label][data-bucket="' + bucket + '"]').forEach(tr => {
+  const scope = body || document.getElementById('manual-tbody');
+  // data-bulk gates membership: a row grouped into this bucket for visibility
+  // only (QA-Intercept / Invalid HazMat, data-bulk="") is never swept, so a
+  // select-all + Apply 33 cannot write 33 onto an intercept or a hazmat row.
+  scope.querySelectorAll('tr[data-label][data-bucket="' + bucket + '"][data-bulk="' + code + '"]').forEach(tr => {
     const cb = tr.querySelector('.manual-check');
     if (cb && cb.checked) {
       const item = manualItems.find(it => it.label === tr.dataset.label);
@@ -2050,32 +2811,57 @@ function bulkApply(bucket, code) {
   targets.forEach(t => resolveItem(Object.assign({}, t.item, { code: code, skipped: false }), t.tr));
 }
 
+// Manual review renders into THREE lanes. manualItems stays ONE array; rows are
+// looked up by data-label, so resolve/undo/session are unaffected. Each lane
+// grows its OWN bucket headers, so a bulk "Apply 33 to N checked" in one lane
+// can never reach a row in another.
+//
+// MANUAL_LANES is the single ordered description of those lanes \u2014 tbody, sort
+// key, empty state \u2014 read by the renderer, the search and the copy buttons, so
+// a lane is described once instead of respelled at each of them.
+const MANUAL_LANES = [
+  { key: 'ground',        tbody: 'manual-tbody',         table: 'manual',
+    search: 'manual-search',        note: 'manual-search-note', copyBtn: 'copy-selected-manual',       barcodeBtn: 'barcode-selected-manual',        absent: '' },
+  { key: 'express',       tbody: 'express-manual-tbody', table: 'express-manual',
+    search: 'express-manual-search', note: 'express-manual-note', copyBtn: 'copy-selected-express',     barcodeBtn: 'barcode-selected-express',       absent: 'none in this report' },
+  { key: 'express-other', tbody: 'express-other-tbody',  table: 'express-other',
+    search: 'express-other-search',  note: 'express-other-note',  copyBtn: 'copy-selected-express-other', barcodeBtn: 'barcode-selected-express-other', absent: 'none in this report' },
+];
+function manualLaneOf(item) { return IbnoRules.manualLane(item); }
+function manualLaneItems(key) { return manualItems.filter(it => manualLaneOf(it) === key); }
+
 function renderManualSectionRows() {
-  const tbody = document.getElementById('manual-tbody');
-  const open = openedLabels(tbody, tr => ({ label: tr.dataset.label }));
-  tbody.innerHTML = '';
-  if (manualItems.length === 0) {
-    const msg = resolvedItems.length ? 'All packages resolved ✓' : 'No packages need manual review';
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">' + msg + '</td></tr>';
-    updateManualBadge();
-    return;
-  }
-  MANUAL_GROUPS.forEach(g => {
-    const items = manualItems.filter(it => manualBucket(it) === g.key)
-      .sort((a, b) => compareBySort(a, b, 'manual'));
-    if (!items.length) return;
-    tbody.appendChild(buildGroupHeaderRow(g, items.length));
-    items.forEach(item => {
-      const tr = buildManualRow(item, g.key);
-      tbody.appendChild(tr);
-      if (open.has(item.label)) {
-        tr.classList.add('row-open');
-        tbody.appendChild(buildDetailRow(item, 10));
-      }
+  const { bodies, open } = openLanes(MANUAL_LANES.map(l => l.tbody),
+    tr => ({ label: tr.dataset.label }));
+
+  MANUAL_LANES.forEach((lane, i) => {
+    const tbody = bodies[i];
+    if (!tbody) return;
+    const mine = manualLaneItems(lane.key);
+    if (!mine.length) {
+      const msg = lane.key === 'ground'
+        ? (resolvedItems.length ? 'All packages resolved \u2713' : 'No packages need manual review')
+        : (lane.key === 'express'
+            ? 'No express packages in your flagged areas or unassigned zips need review'
+            : 'No other express packages need review');
+      tbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' + msg + '</td></tr>';
+      return;
+    }
+    MANUAL_GROUPS.forEach(g => {
+      // Sort per LANE, not per section-type: each lane has its own sort select,
+      // and passing the ground key here left the express selects inert.
+      const items = mine.filter(it => manualBucket(it) === g.key)
+        .sort((a, b) => compareBySort(a, b, lane.table));
+      if (!items.length) return;
+      tbody.appendChild(buildGroupHeaderRow(g, items.length));
+      items.forEach(item => {
+        appendLaneRow(tbody, buildManualRow(item, g.key), item, open, MANUAL_COLSPAN);
+      });
     });
   });
   updateManualBadge();
   updateBulkButtons();
+  updateExpressSection();
   applyManualSearch();   // apply current collapse (and any search) to the fresh rows
 }
 
@@ -2092,9 +2878,26 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   resetViewControls();
 
   // Stats
-  document.getElementById('stat-auto').textContent  = auto.length;
-  document.getElementById('stat-manual').textContent = manual.length;
-  document.getElementById('stat-total').textContent  = auto.length + manual.length + resolvedItems.length;
+  // Every card counts the lane of the section it scrolls to: Ready to Enter and
+  // Needs Review are the GROUND lanes, Express review is the FLAGGED-AREA lane
+  // only. Express review outside the flagged areas has no card — it is counted
+  // by its own section badge at the bottom of the page — so the cards no longer
+  // sum to Total Flagged, which still counts every row including resolved ones.
+  document.getElementById('stat-auto').textContent   = auto.filter(it => !itemIsExpress(it)).length;
+  document.getElementById('stat-manual').textContent = manual.filter(it => IbnoRules.manualLane(it) === 'ground').length;
+  // Total Flagged counts the work that is OURS: express rows outside the flagged
+  // areas are surfaced for visibility but are not Tyler's queue, so they must not
+  // inflate the day's number (Tyler, 2026-08-06). Applied to resolved rows too,
+  // or coding one would quietly raise the total it was excluded from.
+  //
+  // Ready to Enter is NOT filtered: manualLane classifies REVIEW rows, and an
+  // auto-coded express package is Tyler's work wherever it sorted. Only the
+  // review lanes (open, and the ones he has since resolved) are filtered.
+  const notOurs = (it) => IbnoRules.manualLane(it) === 'express-other';
+  document.getElementById('stat-total').textContent  =
+    auto.length +
+    manual.filter(it => !notOurs(it)).length +
+    resolvedItems.filter(it => !notOurs(it)).length;
   document.getElementById('stat-repeat').textContent = Object.keys(currentRecurringMap).length;
   document.getElementById('summary').style.display   = 'grid';
 
@@ -2110,13 +2913,16 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   banner.style.display = 'block';
 
   // Auto table
-  document.getElementById('auto-badge').textContent = auto.length;
+  document.getElementById('auto-badge').textContent = auto.filter(it => !itemIsExpress(it)).length;
   renderAutoSectionRows();
   // Fresh render starts unfiltered; rebuild chips from this report's facets.
   autoFilter = { codes: [], categories: [] };
   renderAutoChips();
   applyAutoFilter();
   document.getElementById('auto-section').style.display = 'block';
+  document.getElementById('express-auto-section').style.display = 'block';
+  document.getElementById('express-manual-section').style.display = 'block';
+  document.getElementById('express-other-section').style.display = 'block';
 
   // Manual table
   renderManualSectionRows();
@@ -2139,16 +2945,28 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   // path (collapseOnLoad): a session restore on refresh or a rules re-run keeps
   // whatever the user had expanded, so a mid-shift F5 does not throw away their
   // place. Collapse state stays ephemeral (a header click still toggles it).
-  // EXCEPTION: Needs Manual Review lands EXPANDED (its 3 buckets stay collapsed by
-  // default via manualCollapsed) — it's the section Tyler works, so a compact-but-
-  // open manual review is the useful default.
-  if (collapseOnLoad) {
-    collapseAllSections();
-    const manualSec = document.getElementById('manual-section');
-    if (manualSec) manualSec.classList.remove('collapsed');
-  }
+  //
+  // EVERY section, with no exception (Tyler, 2026-08-06). Needs Manual Review
+  // used to land expanded as "the section he works", and the express sections
+  // were exempted from that exception in turn — but with five sections on the
+  // page the one-open-by-default rule stopped picking the right one, and a
+  // report now opens as a list of headers with counts. Each header carries its
+  // own title and badge while collapsed, so nothing is hidden by this: the page
+  // states what it found and he opens the one he wants.
+  if (collapseOnLoad) collapseAllSections();
 
   persistSession();
+
+  // Tier 1/3 (#649): a Post Sort report already loaded before (or reloaded
+  // alongside) the main report gets re-resolved against the FRESH
+  // autoItems/manualItems/resolvedItems set here — no lookup file involved
+  // (lookupResult: null), so this only ever applies/updates tier-1 answers
+  // and merges (never erases) any earlier lookup-tier resolution on a label
+  // the main report still has no answer for.
+  if (postSortItems.length) {
+    postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
+    renderPostSortLane();
+  }
 }
 
 // ─── SESSION PERSISTENCE (#157) ─────────────────────────────────────────────
@@ -2241,10 +3059,7 @@ function renderRecurringSection(recurringMap) {
     labels.forEach(label => {
       const item = recurringMap[label];
       const tr = document.createElement('tr');
-      const recipHtml = item.firm
-        ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(item.firm) + '</div>' +
-          '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '') + '</div>'
-        : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(item.address || '—') + '</div>';
+      const recipHtml = recipientCellHtml(item.firm, item.address);
       tr.innerHTML =
         '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' +
           FTrack.ftrackLink(label) + '</td>' +
@@ -2352,14 +3167,46 @@ function setCopyMode(mode) {
   syncCopyModeControl();
 }
 function syncCopyModeControl() {
-  const sel = document.getElementById('copy-mode');
-  if (sel) sel.value = getCopyMode();
+  const mode = getCopyMode();
+  const wrap = document.getElementById('copy-mode');
+  if (!wrap) return;
+  wrap.querySelectorAll('button[data-mode]').forEach(b => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
-// copyValueFor(label, barcode) -> the string to place on the clipboard for one
-// package given the current mode. barcode falls back to the label so a
-// barcode-mode copy is never empty (mirrors the item-model fallback).
-function copyValueFor(label, barcode) {
-  if (getCopyMode() === 'barcode') return String(barcode || label || '');
+
+// Deliberately NO re-render here. Every table renders the tracking number and
+// resolves the copy value at copy time (attachLabelCopy / copyValueFor), so the
+// mode changes what lands on the clipboard, never what is on screen. Rebuilding
+// Needs Manual Review would also wipe codes typed-but-not-yet-applied, which is
+// exactly the rapid-entry flow resolveItem goes out of its way to protect.
+
+// C / B flip the copy mode from anywhere on the page, so it never costs a scroll.
+// Ignored while typing in a field, and while any modifier is held.
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  const tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (e.key === 'c' || e.key === 'C') setCopyMode('tracking');
+  else if (e.key === 'b' || e.key === 'B') setCopyMode('barcode');
+});
+// copyValueFor(label, barcode, opts) -> the string to place on the clipboard
+// for one package given the current mode. barcode falls back to the label so
+// a barcode-mode copy is never empty (mirrors the item-model fallback) —
+// UNLESS opts.noFallback is true, in which case an empty/missing barcode
+// returns '' instead. The Post Sort lane (issue #635) is the one caller that
+// passes noFallback: true — its barcode-mode guardrail is the opposite of
+// every other lane's (see copySelectedPostSort above): an unresolved row
+// must copy nothing, never the tracking number pretending to be a barcode.
+function copyValueFor(label, barcode, opts) {
+  const noFallback = !!(opts && opts.noFallback);
+  if (getCopyMode() === 'barcode') {
+    if (barcode) return String(barcode);
+    return noFallback ? '' : String(label || '');
+  }
   return String(label || '');
 }
 
@@ -2406,10 +3253,7 @@ function buildAutoRow(item, idx) {
   const tr = document.createElement('tr');
   tr.className = 'expandable';
   tr.dataset.idx = idx; // index into autoItems — the override + export read the model by this
-  const recipHtml = firm
-    ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div>' +
-      '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-    : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+  const recipHtml = recipientCellHtml(firm, address);
   // Closure rows expose a code override. Always offer the day-appropriate base
   // code (59 weekday / 11 weekend) AND 34, regardless of the row's current code —
   // so a 34 override stays revertable after a session restore, where item.code
@@ -2429,12 +3273,13 @@ function buildAutoRow(item, idx) {
     codeCellHtml = '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>';
   }
   tr.innerHTML =
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + '</td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + barcodeChip(item) + streetChip(item) + eopsChip(item) + '</td>' +
     '<td>' + codeCellHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
     '<td>' + recipHtml + '</td>' +
+    '<td>' + servicePillHtml(item) + '</td>' +
     '<td></td>';
   const btn = document.createElement('button');
   btn.className = 'copy-row-btn';
@@ -2446,10 +3291,31 @@ function buildAutoRow(item, idx) {
   tr.lastElementChild.appendChild(btn);
   attachLabelCopy(tr, label, item.scanBarcode);
   tr.addEventListener('click', e => {
-    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link')) return;
-    toggleDetailRow(tr, item, 7);
+    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy')) return;
+    toggleDetailRow(tr, item, 8);
   });
   return tr;
+}
+
+// One spelling of the Express/Ground pill for every table that shows service.
+// Ready to Enter had NO service indicator before the express lane existed, so a
+// ground row now visibly reads "Ground" on the exact list that gets pasted into
+// ITQA, and a pill disagreeing with its section is immediately obvious.
+function servicePillHtml(item) {
+  return itemIsExpress(item)
+    ? '<span class="express-pill express-yes">Express</span>'
+    : '<span class="express-pill express-no">Ground</span>';
+}
+function itemIsExpress(item) { return IbnoRules.isExpress(item && item.express); }
+
+// eOps package-inquiry chip. EXPRESS ONLY: the Inbound and Van Scans report
+// carries this link in its Express column, and a ground package has no eOps
+// package-inquiry entry to open. The URL is derived from the tracking number
+// (lib/eops.js) because a CSV export drops the report's hyperlink entirely.
+function eopsChip(item) {
+  return itemIsExpress(item)
+    ? Eops.eopsLink(item && item.label, { className: 'eops-link express-yes' })
+    : '';
 }
 
 function updateRowCode(sel) {
@@ -2481,12 +3347,19 @@ function updateRowCode(sel) {
 // (autoItems.length) and the note shows "showing N of M", so nothing is silently lost
 // — clearing the filter restores every row. applyAutoFilter relabels the Copy button
 // to "Copy shown" whenever any filter is active.
-function autoExportPairs() {
+// lane: 'express' exports ONLY express rows; anything else exports ONLY ground.
+// This is the guarantee behind the split — Ready to Enter's Copy All reads the
+// ground lane, so it is structurally incapable of carrying an express package
+// into ITQA, and the express Copy All is likewise ground-free. The chip filter
+// is a GROUND-lane control, so it narrows only the ground export.
+function autoExportPairs(lane) {
+  const isExp = lane === 'express';
   const exportFilter = { codes: autoFilter.codes, categories: autoFilter.categories };
   const active = exportFilter.codes.length + exportFilter.categories.length > 0;
   return autoItems
     .filter(item => item && item.label && item.code)
-    .filter(item => !active || IbnoRules.autoItemMatchesFilter(item, exportFilter))
+    .filter(item => itemIsExpress(item) === isExp)
+    .filter(item => isExp || !active || IbnoRules.autoItemMatchesFilter(item, exportFilter))
     .map(item => [item.label, item.code]);
 }
 
@@ -2498,7 +3371,7 @@ function autoExportPairs() {
 // is active (autoExportPairs), and every row when unfiltered.
 function renderAutoChips() {
   const host = document.getElementById('auto-chips');
-  const facets = IbnoRules.autoFilterFacets(autoItems);
+  const facets = IbnoRules.autoFilterFacets(autoItems.filter(it => !itemIsExpress(it)));
   // Nothing to slice by (0/1 code AND 0/1 category) — hide the bar entirely.
   if (!autoItems.length || (facets.codes.length <= 1 && facets.categories.length <= 1)) {
     host.style.display = 'none';
@@ -2536,6 +3409,9 @@ function renderAutoChips() {
 // Toggle row visibility against autoFilter. Detail rows (inserted after their
 // expandable parent) inherit the parent's visibility; rows with no dataset.idx
 // (the empty-state row) always show.
+// The chip filter slices the GROUND lane only. Express is already a separate,
+// short list with its own Copy All, so filtering it would only risk hiding an
+// express row from the one section that exists to make express impossible to miss.
 function applyAutoFilter() {
   const tbody = document.getElementById('auto-tbody');
   // Every filter — codes and categories — narrows both the view AND the export/Copy
@@ -2557,14 +3433,15 @@ function applyAutoFilter() {
     if (match) shown++;
   });
   // Filter active but nothing matches — show a placeholder so the table isn't blank.
-  if (viewActive && shown === 0 && autoItems.length > 0) {
+  if (viewActive && shown === 0 && autoItems.some(it => !itemIsExpress(it))) {
     const empty = document.createElement('tr');
     empty.id = 'auto-filter-empty';
-    empty.innerHTML = '<td colspan="7" class="empty-state">No packages match this filter</td>';
+    empty.innerHTML = '<td colspan="8" class="empty-state">No packages match this filter</td>';
     tbody.appendChild(empty);
   }
+  const groundTotal = autoItems.filter(it => !itemIsExpress(it)).length;
   document.getElementById('auto-filter-note').textContent =
-    viewActive ? 'showing ' + shown + ' of ' + autoItems.length : '';
+    viewActive ? 'showing ' + shown + ' of ' + groundTotal : '';
   document.querySelectorAll('#auto-chips .chip').forEach(chip => {
     chip.classList.toggle('active', autoFilter[chip.dataset.kind].indexOf(chip.dataset.val) !== -1);
   });
@@ -2578,43 +3455,1353 @@ function applyAutoFilter() {
 
 // Manual review search is view-only. Detail rows inherit their parent row's
 // visibility; the unresolved model remains intact for resolve/undo/session state.
+// Search spans BOTH review lanes, so a tracking number is found wherever it
+// sits. Each lane keeps its own group headers and its own empty state.
 function applyManualSearch() {
-  const tbody = document.getElementById('manual-tbody');
-  const input = document.getElementById('manual-search');
-  const note = document.getElementById('manual-search-note');
-  if (!tbody) return;
-  const q = String((input && input.value) || '').trim().toLowerCase();
-  const active = q.length > 0;
-  const priorEmpty = document.getElementById('manual-search-empty');
-  if (priorEmpty) priorEmpty.remove();
-  let shown = 0;
-  let lastVisible = true;
-  const groupHasMatch = {};          // bucket key -> at least one search-matching row (#batch-code)
-  tbody.querySelectorAll('tr').forEach(tr => {
-    if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
-    if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
-    if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
-    const match = !active || tr.textContent.toLowerCase().indexOf(q) !== -1;
-    // A row shows if it matches the search and its bucket isn't collapsed. An
-    // ACTIVE search overrides collapse, so searching always reveals its hits even
-    // when every group starts collapsed; clearing the search re-collapses them.
-    const visible = match && (active || !manualCollapsed[tr.dataset.bucket]);
-    tr.style.display = visible ? '' : 'none';
-    lastVisible = visible;
-    if (match) { shown++; groupHasMatch[tr.dataset.bucket] = true; }
+  // Each review section owns its own search box, so each lane filters by its
+  // own input and reports its own "showing N of M". A search in express must
+  // never hide a ground row, or vice versa.
+  MANUAL_LANES.forEach(lane => {
+    const tbody = document.getElementById(lane.tbody);
+    if (!tbody) return;
+    const input = document.getElementById(lane.search);
+    const note = document.getElementById(lane.note);
+    const q = String((input && input.value) || '').trim().toLowerCase();
+    const active = q.length > 0;
+    const emptyId = lane.tbody + '-search-empty';
+    const priorEmpty = document.getElementById(emptyId);
+    if (priorEmpty) priorEmpty.remove();
+
+    let shown = 0;
+    let lastVisible = true;
+    const groupHasMatch = {};        // bucket key -> a search-matching row (#batch-code)
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
+      if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
+      if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
+      const match = !active || tr.textContent.toLowerCase().indexOf(q) !== -1;
+      // A row shows if it matches the search and its bucket isn't collapsed. An
+      // ACTIVE search overrides collapse, so searching always reveals its hits even
+      // when every group starts collapsed; clearing the search re-collapses them.
+      const visible = match && (active || !manualCollapsed[tr.dataset.bucket]);
+      tr.style.display = visible ? '' : 'none';
+      lastVisible = visible;
+      if (match) { shown++; groupHasMatch[tr.dataset.bucket] = true; }
+    });
+    // The header (the collapse control) shows whenever its bucket has a matching
+    // row, even when collapsed — so you can always expand it back.
+    tbody.querySelectorAll('tr.manual-group-row').forEach(gh => {
+      gh.style.display = groupHasMatch[gh.dataset.group] ? '' : 'none';
+    });
+
+    const total = manualLaneItems(lane.key).length;
+    if (active && shown === 0 && total > 0) {
+      const empty = document.createElement('tr');
+      empty.id = emptyId;
+      empty.innerHTML = '<td colspan="' + MANUAL_COLSPAN + '" class="empty-state">No rows match this search</td>';
+      tbody.appendChild(empty);
+    }
+    // Single owner of this note. While searching it reports the slice; otherwise
+    // it states absence, so "none today" never reads as a parse failure.
+    if (note) note.textContent = active ? ('showing ' + shown + ' of ' + total)
+                                        : (total === 0 ? lane.absent : '');
   });
-  // The header (the collapse control) shows whenever its bucket has a matching
-  // row, even when collapsed — so you can always expand it back.
-  tbody.querySelectorAll('tr.manual-group-row').forEach(gh => {
-    gh.style.display = groupHasMatch[gh.dataset.group] ? '' : 'none';
+}
+
+// ─── ZIP → SERVICE PROVIDER (ISP) ───────────────────────────────────────────
+// Review rows carry the delivery ZIP and the ISP that runs it, so a review list
+// can be worked by service provider — "these six all belong to Lehman" — instead
+// of by tracking number alone. The ZIP→ISP table is lib/zip-isp-belt.js, the SAME
+// table behind the Address Catcher and the printable CSP zip breakdown, so the
+// three can never disagree about who runs a zip (#438).
+//
+// The belt is deliberately NOT shown here. In that lib the belt is humble
+// orientation text only, never a verdict, and a belt column next to a report
+// work area would read as a mismatch check the table cannot support.
+
+// zipOf(item) -> the 5-digit ZIP: the report's POSTAL_CODE when present (ZIP+4
+// normalizes to ZIP5), else the ZIP parsed off the end of the display address so
+// an older session snapshot without the postal field still shows one.
+function zipOf(item) {
+  if (!item) return '';
+  const lib = window.ZipIspBeltLib;
+  const raw = String(item.postal || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 5) return digits.slice(0, 5);
+  return (lib && lib.zipFromDisplay(item.address || '')) || '';
+}
+
+// The Service Provider cell. A ZIP that is not in the list renders '—' with the
+// reason on hover: "no ISP on file" and "this zip is not ours" must not look the
+// same as a blank column, and the list has a date on it.
+function ispCell(item) {
+  const lib = window.ZipIspBeltLib;
+  const row = lib ? lib.lookup(zipOf(item)) : null;
+  if (row) return '<td class="cat-text">' + ToolHelpers.escapeHtml(row.isp) + '</td>';
+  const why = zipOf(item)
+    ? 'ZIP not in the station zip list (' + (lib ? lib.SOURCE_DATE : 'no list loaded') + ')'
+    : 'no ZIP on this row';
+  return '<td class="cat-text" title="' + ToolHelpers.escapeHtml(why) + '">&mdash;</td>';
+}
+
+function ispOf(item) {
+  const lib = window.ZipIspBeltLib;
+  const row = lib ? lib.lookup(zipOf(item)) : null;
+  return row ? row.isp : '';
+}
+
+// ─── ACTUAL WORK AREA ("Goes To") + BARCODES ────────────────────────────────
+//
+// Two features that only pay off together. The barcode is the scannable form of
+// a package's FULL scan barcode; the "Goes To" area is where that package really
+// belongs. Printing them on ONE label is the point — otherwise the person
+// holding the package has to come back to this screen to find out where it goes.
+//
+// The area is a HUMAN ANNOTATION, stored separately from the session snapshot in
+// its own localStorage key. Nothing here reads or writes a package's code,
+// disposition or category — a typed area never codes anything, and re-running
+// the rules or resetting the report leaves the areas alone.
+//
+// Propagation and the two address keys live in lib/actual-area.js; see its
+// header for why sorting clusters a whole building while propagation refuses to
+// cross a unit number.
+
+const ACTUAL_AREA_KEY = 'ibno_actual_area';
+let actualAreaStore = {};
+
+function loadActualAreas() {
+  // Prune on load, on the same 30-day window as Repeat History: an area typed
+  // for a package a month ago is not guidance for the package in hand today.
+  actualAreaStore = ActualArea.prune(
+    ActualArea.restore(toolStorage.get(ACTUAL_AREA_KEY, null)),
+    ToolHelpers.isoDate(),
+    ActualArea.DEFAULT_DAYS
+  );
+}
+
+function saveActualAreas() {
+  toolStorage.set(ACTUAL_AREA_KEY, ActualArea.serialize(actualAreaStore));
+}
+
+function actualAreaOf(item) {
+  return ActualArea.get(actualAreaStore, item && item.label);
+}
+
+// Every row currently in manual review, as the { label, address } pairs
+// propagation matches on. Manual review only — an area typed here never reaches
+// into the auto-coded or resolved lists, which are not being worked by hand.
+function manualAddressPairs() {
+  return manualItems.map(it => ({ label: it.label, address: it.address || '' }));
+}
+
+// goesToCell(item) -> the editable cell. A plain text input, because the set of
+// work areas is open-ended (belts, doors, "HOLD", a bay number) and a dropdown
+// would be a guess about a vocabulary that changes.
+// streetOf(item) -> the house number and street name, or '' when the row has no
+// street to paste (lib/street-address.js decides). Used by the Street column and
+// by its sort comparator, so both agree by construction.
+function streetOf(item) {
+  return StreetAddress.streetOf(item && item.address);
+}
+
+// ─── COPY MODE: the Street column ───────────────────────────────
+//
+// The whole cell is the copy target, not a chip inside it. Tyler's inner loop is
+// copy street -> paste into FRO on the other monitor -> type the area, repeated
+// down a list sorted by service provider, so the two things he touches per row
+// (Street, Goes To) sit next to each other and the click target is as big as the
+// text. A row with no street renders an em dash rather than a button that would
+// put a bare ZIP on the clipboard as if it were an address.
+function streetCell(item) {
+  const street = streetOf(item);
+  if (!street) return '<td class="street-cell"><span class="street-none">\u2014</span></td>';
+  return '<td class="street-cell">' +
+    '<button type="button" class="street-copy" data-street="' + ToolHelpers.escapeHtml(street) + '"' +
+    ' title="Copy just the street: ' + ToolHelpers.escapeHtml(street) + '"' +
+    ' aria-label="Copy street ' + ToolHelpers.escapeHtml(street) + '">' +
+    ToolHelpers.escapeHtml(street) + '</button></td>';
+}
+
+// Columns in a Needs Manual Review lane. Every full-width row (bucket header,
+// empty state, expanded detail) spans exactly this, so adding or removing a
+// column is a one-line change instead of four that drift apart.
+const MANUAL_COLSPAN = 14;
+
+// goesToCell(item, opts) -> opts.noPropagate: true when the caller's own
+// commit path never fills a sibling row at the same address (the Post Sort
+// lane's commitPostSortGoesTo, unlike commitGoesTo) — the tooltip must not
+// claim a propagation that will not happen (/code-review on #642, finding 9;
+// the shared default tooltip previously always said "also fills any other
+// review row at the SAME address", which was simply false for that lane).
+function goesToCell(item, opts) {
+  const o = opts || {};
+  const v = actualAreaOf(item);
+  // A value this feature propagated is tagged, so an area the supervisor never
+  // typed is visible rather than appearing from nowhere. Provenance comes from
+  // the store (lib/actual-area.js), not from guessing at the value.
+  const auto = v && ActualArea.isAuto(actualAreaStore, item && item.label);
+  // A value pre-filled by the Post Sort "early" lane (issue #634) is tagged
+  // too — wherever this row is seen, "early" means it pre-fills Goes To but
+  // has not been confirmed against a scan on this report yet. Shared with the
+  // Post Sort lane's own row builder (see postSortRowHtml), which reuses this
+  // exact function with opts.noPropagate: true.
+  const early = v && ActualArea.isEarly(actualAreaStore, item && item.label);
+  const title = o.noPropagate
+    ? 'Where this package actually goes. Pre-fills this row only — does not fill any other row.'
+    : 'Where this package actually goes. Typing here also fills any other review row at the SAME address.';
+  return '<td class="goesto-cell">' +
+    '<input type="text" class="goesto-input" maxlength="' + ActualArea.MAX_LEN + '"' +
+    ' value="' + ToolHelpers.escapeHtml(v) + '"' +
+    ' data-label="' + ToolHelpers.escapeHtml(item.label) + '"' +
+    ' placeholder="—" aria-label="Actual work area for ' + ToolHelpers.escapeHtml(item.label) + '"' +
+    ' title="' + ToolHelpers.escapeHtml(title) + '">' +
+    (auto ? '<span class="same-addr" title="Filled automatically because another package shares this exact address">same addr</span>' : '') +
+    (early ? '<span class="early-tag" title="Pre-filled by the Post Sort early lane — not yet confirmed by a scan on this report">early</span>' : '') +
+    '</td>';
+}
+
+// Commit on blur and on Enter rather than on every keystroke: a keystroke commit
+// would propagate half-typed values ("1" on the way to "12") across a cluster.
+function attachGoesToInput(tr, item) {
+  const input = tr.querySelector('.goesto-input');
+  if (!input) return;
+  input.addEventListener('click', e => e.stopPropagation());
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();  // the page-level C/B copy-mode shortcuts must not fire while typing
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
   });
-  if (active && shown === 0 && manualItems.length > 0) {
-    const empty = document.createElement('tr');
-    empty.id = 'manual-search-empty';
-    empty.innerHTML = '<td colspan="10" class="empty-state">No manual-review rows match this search</td>';
-    tbody.appendChild(empty);
+  input.addEventListener('change', e => e.stopPropagation());
+  input.addEventListener('blur', () => commitGoesTo(item.label, input.value));
+}
+
+// commitGoesTo(label, raw) -> persist, propagate to the same address, repaint
+// every row the write touched, and say out loud how many rows moved. Silent
+// propagation would be the wrong shape: rows changing off-screen with no notice
+// is how a human stops trusting the field.
+function commitGoesTo(label, raw) {
+  const result = ActualArea.set(actualAreaStore, label, raw, {
+    items: manualAddressPairs(),
+    today: ToolHelpers.isoDate(),
+  });
+  actualAreaStore = result.store;
+  saveActualAreas();
+  result.changed.forEach(repaintGoesTo);
+  // Keep the typed row's own input showing the normalized value even when the
+  // store didn't change (e.g. re-typing "belt 12" over "BELT 12").
+  repaintGoesTo(label);
+  const spread = result.changed.filter(l => l !== label).length;
+  if (spread) {
+    // The spread can now be a correction or a clear, not only a first fill, so
+    // the note says what actually happened to those rows.
+    const nowValue = ActualArea.get(actualAreaStore, label);
+    flashGoesToNote(spread + ' other row' + (spread === 1 ? '' : 's') + ' at this address ' +
+      (nowValue ? 'set to ' + nowValue : 'cleared'));
   }
-  if (note) note.textContent = active ? 'showing ' + shown + ' of ' + manualItems.length : '';
+  syncBarcodeDialogArea(label);
+  updateSelectAreaButtons();
+}
+
+function repaintGoesTo(label) {
+  const value = ActualArea.get(actualAreaStore, label);
+  const auto = !!value && ActualArea.isAuto(actualAreaStore, label);
+  const early = !!value && ActualArea.isEarly(actualAreaStore, label);
+  // Matches every '.goesto-input' with this data-label across the whole
+  // document, which by construction covers both the Manual Review lanes and
+  // the Post Sort lane (issue #634) — the same tracking label can appear in
+  // both, and a write in one must repaint the other's box too.
+  document.querySelectorAll('.goesto-input[data-label="' + cssAttrEscape(label) + '"]').forEach(el => {
+    if (document.activeElement !== el || el.value !== value) el.value = value;
+    el.classList.toggle('has-area', !!value);
+    // The tags are rendered by goesToCell at build time, but propagation
+    // changes a row's provenance without rebuilding it, so keep them in step
+    // here too.
+    const cell = el.closest('.goesto-cell');
+    if (!cell) return;
+    let tag = cell.querySelector('.same-addr');
+    if (auto && !tag) {
+      tag = document.createElement('span');
+      tag.className = 'same-addr';
+      tag.title = 'Filled automatically because another package shares this exact address';
+      tag.textContent = 'same addr';
+      cell.appendChild(tag);
+    } else if (!auto && tag) {
+      tag.remove();
+    }
+    let etag = cell.querySelector('.early-tag');
+    if (early && !etag) {
+      etag = document.createElement('span');
+      etag.className = 'early-tag';
+      etag.title = 'Pre-filled by the Post Sort early lane — not yet confirmed by a scan on this report';
+      etag.textContent = 'early';
+      cell.appendChild(etag);
+    } else if (!early && etag) {
+      etag.remove();
+    }
+  });
+  if (workModeOn) refreshWorkBar();
+}
+
+// Attribute-selector escaping: a tracking number is digits in practice, but a
+// selector built from data must never be able to break out of its own quotes.
+function cssAttrEscape(s) {
+  return String(s == null ? '' : s).replace(/["\\]/g, '\\$&');
+}
+
+// ─── POST SORT "EARLY" LANE (issue #634, third slice of #622) ──────────────
+//
+// Entirely independent of the report above: its own state (postSortItems),
+// its own file input, its own render. Never touches manualItems, never calls
+// lib/ibno-rules.js's decideCode, and never calls lib/ibno-review-plan.js —
+// this lane offers no QA Scan Code, ever. PLA_LOOKUP is genuinely absent from
+// the Post Sort report (lib/post-sort-scans.js TRAP 2), so the classifier
+// that decides ground/express lane, bucket and code cannot run on it; a
+// guessed code here would be this repo's worst bug class (#602/#618).
+//
+// Reuses goesToCell/streetCell/zipOf/ispCell/actualAreaOf/repaintGoesTo as-is
+// (all generic over `item.label`/`item.address`/`item.postal`) rather than
+// forking a second copy of that plumbing — the shared field names are exactly
+// why lib/post-sort-lane.js builds items in that shape.
+
+// mainReportBarcodeMap() -> { trackingId: SCAN_BARCODE } from the main IBNO
+// report ALREADY LOADED ON SCREEN (issue #649, follow-up to #635/#634).
+//
+// CORRECTED (PR #650 code review — confirmed BLOCKING with real data): this
+// used to read autoItems.concat(manualItems, resolvedItems) — the rows lib/
+// ibno-rules.js gave a coding DISPOSITION to. On a real 30,343-row Inbound
+// and Van Scans pull that subset was 2 rows, and tier 1 resolved exactly 2
+// of 56 Post Sort rows instead of the measured 54 of 56 — most rows on a
+// real pull are skip-disposition (already QA-coded, already van-scanned,
+// delivered) and never become an item at all, but they still carry a
+// perfectly good SCAN_BARCODE. `lastRows` holds the FULL parsed report
+// regardless of disposition, so this now reads that instead — delegating to
+// lib/post-sort-lane.js's buildMainReportBarcodeMap, which in turn delegates
+// to lib/ibno-rules.js's mainReportScanBarcodeMap (SCAN_BARCODE only, not
+// the VAN_SCAN_BARCODE fallback item.scanBarcode uses for the copy-mode
+// toggle — see that function's own doc comment for why).
+function mainReportBarcodeMap() {
+  return PostSortLane.buildMainReportBarcodeMap(lastRows);
+}
+
+let postSortItems = [];
+// Stale-read guard for the async parse (same pattern as handleMergeFile's
+// mergeSeq): a second drop started while an earlier one is still resolving
+// must not let the earlier read's rows/status land after the newer one's.
+let postSortSeq = 0;
+// Stale-read guard for the barcode-lookup file read (issue #635), same
+// pattern as postSortSeq above. Also bumped by handlePostSortFile/
+// clearPostSortLane, not just handlePostSortBarcodeFile itself: a fresh Post
+// Sort report load (or a clear) replaces postSortItems out from under any
+// barcode-lookup read still in flight, so that read must not be allowed to
+// land afterward (code review finding 5).
+let postSortBarcodeSeq = 0;
+
+// setPostSortStatusEl(id, msg, isError) -> shared body for postSortStatus and
+// postSortBarcodeStatus (issue #635 added the second status line, for the
+// barcode-lookup ingest, without duplicating this styling logic).
+function setPostSortStatusEl(id, msg, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? '' : 'none';
+  // var(--danger-ink)/var(--text-faint), not a hardcoded hex: an inline
+  // style="color:#c0392b" would never be reachable by theme.css's dark rules
+  // (the cascade trap this repo has hit before), and #c0392b on the dark
+  // --surface (#1e1f29) reads at roughly 3:1, under the 4.5:1 bar for body
+  // text. var(--danger-ink) is defined for both themes below (near
+  // --brand-ink, the same per-tool token pattern already used in this file),
+  // so the color is theme-correct without theme.css needing to know about it.
+  el.style.color = isError ? 'var(--danger-ink)' : 'var(--text-faint)';
+}
+function postSortStatus(msg, isError) {
+  setPostSortStatusEl('post-sort-status', msg, isError);
+}
+function postSortBarcodeStatus(msg, isError) {
+  setPostSortStatusEl('post-sort-barcode-status', msg, isError);
+}
+
+// handlePostSortFile(file) -> read the dropped file, sniff CSV vs xlsx via
+// SpreadsheetLib.readSpreadsheet (same dialect-sniffing entry point
+// nvs-builder.html uses), then hand the rows to PostSortScans.
+//
+// TRAP: readSpreadsheet (and the parseXlsx it delegates to for an .xlsx) both
+// return a PROMISE, not rows. Calling PostSortScans.parsePostSortRows on the
+// bytes directly, instead of inside this .then(), yields 0 records SILENTLY
+// with no error at all — this chain is the fix, not a stylistic choice.
+//
+// A CSV drop reaches parsePostSortRows too and throws PostSortMangledTrackingError
+// (TRAP 1) — surfaced here as a rejected promise, same as any other parse
+// failure, so it lands in the .catch() below with its own message intact.
+function handlePostSortFile(file) {
+  // Re-arm immediately, same as #merge-input: this is otherwise only cleared
+  // by clearPostSortLane, so re-selecting the SAME file after a refusal, a
+  // cancel, or a routine re-pull (the filename is often identical) fires no
+  // further 'change' event and the button goes dead. Every path below —
+  // including the early return on no file — leaves this cleared.
+  document.getElementById('post-sort-file-input').value = '';
+  if (!file) return;
+  const seq = ++postSortSeq; // guards a stale read from landing after a newer drop or a clear
+  // A fresh Post Sort report load changes postSortItems entirely, so any
+  // barcode-lookup read still in flight from before this load must not be
+  // allowed to land on the NEW rows and report counts computed against the
+  // OLD ones (issue #635 code review finding 5).
+  postSortBarcodeSeq++;
+  postSortStatus('Reading ' + file.name + '\u2026', false);
+  const reader = new FileReader();
+  reader.onerror = function () {
+    if (seq !== postSortSeq) return;
+    postSortStatus('Could not read ' + file.name + '.', true);
+  };
+  reader.onload = function () {
+    if (seq !== postSortSeq) return; // superseded by a newer drop or a clear before this fired
+    SpreadsheetLib.readSpreadsheet(reader.result).then(function (rows) {
+      if (seq !== postSortSeq) return;
+      const parsed = PostSortScans.parsePostSortRows(rows);
+      if (seq !== postSortSeq) return;
+      postSortItems = PostSortLane.buildPostSortLane(parsed.records);
+      // Tier 1 (#649): resolve against the main report's SCAN_BARCODE
+      // immediately, before any lookup file is ever dropped — no lookupResult
+      // yet (null), just the already-loaded main report's answers.
+      postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
+      const mainResolvedCount = postSortItems.filter(it => it.barcodeSource === 'main').length;
+      // #649 code review finding 4: a note only ever appearing when the count
+      // is above zero makes a TOTAL cross-report join failure (e.g. the map-
+      // building regression this same PR shipped and fixed) indistinguishable
+      // from legitimate zero coverage — nothing looked wrong on screen either
+      // way. When a main report IS loaded, always say something, including an
+      // explicit "0 of N" when nothing joined.
+      const hasMainReport = Array.isArray(lastRows) && lastRows.length > 0;
+      let mainNote = '';
+      if (hasMainReport) {
+        mainNote = mainResolvedCount
+          ? ' ' + mainResolvedCount + ' already resolved from the loaded Inbound and Van Scans report.'
+          : ' 0 of ' + postSortItems.length + ' matched the loaded Inbound and Van Scans report — every row awaits the lookup.';
+      }
+      postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
+        ' loaded from ' + file.name + '.' + mainNote, false);
+      renderPostSortLane();
+    }).catch(function (err) {
+      if (seq !== postSortSeq) return;
+      // Reset to the empty state on ANY read/parse failure — including the
+      // loud TRAP 1 / TRAP 2 refusals from lib/post-sort-scans.js — so a bad
+      // drop never leaves a previously-rendered lane on screen.
+      postSortItems = [];
+      renderPostSortLane();
+      postSortStatus('Error reading Post Sort report: ' + (err && err.message ? err.message : err), true);
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearPostSortLane() {
+  postSortSeq++; // invalidate any in-flight read from before this clear
+  postSortBarcodeSeq++; // and any in-flight barcode-lookup read too
+  postSortItems = [];
+  const input = document.getElementById('post-sort-file-input');
+  if (input) input.value = '';
+  postSortStatus('', false);
+  postSortBarcodeStatus('', false);
+  renderPostSortLane();
+}
+
+// handlePostSortBarcodeFile(file) -> read the dropped "Track IDs to Full
+// Barcode" lookup result (issue #635, final slice of #622), join it onto
+// postSortItems by tracking number, and re-render.
+//
+// CSV, read as TEXT (reader.readAsText, not the xlsx path handlePostSortFile
+// above uses): notes/report-registry.md's warning is specifically about
+// OPENING this file IN EXCEL — an Excel round-trip pushes the 34-char
+// PKG_BARCODE value past IEEE-754 precision and irrecoverably destroys
+// digits. Reading raw bytes as text here never goes through Excel's number
+// parser, so that risk does not apply to this input path; the file accepts
+// only .csv (see the file input's accept attribute) to keep it that way —
+// this lookup report has no xlsx dialect documented, unlike the Post Sort
+// report above.
+function handlePostSortBarcodeFile(file) {
+  document.getElementById('post-sort-barcode-file-input').value = '';
+  if (!file) return;
+  if (!postSortItems.length) {
+    // The load button is hidden until postSortItems is non-empty (see
+    // renderPostSortLane), but guard anyway — a stale drop event or a
+    // programmatic click could still reach here with nothing to join onto.
+    postSortBarcodeStatus('Load the Post Sort report first — nothing to join the barcode lookup against.', true);
+    return;
+  }
+  const seq = ++postSortBarcodeSeq;
+  postSortBarcodeStatus('Reading ' + file.name + '…', false);
+  const reader = new FileReader();
+  reader.onerror = function () {
+    if (seq !== postSortBarcodeSeq) return;
+    postSortBarcodeStatus('Could not read ' + file.name + '.', true);
+  };
+  reader.onload = function () {
+    if (seq !== postSortBarcodeSeq) return;
+    const text = typeof reader.result === 'string' ? reader.result : '';
+
+    // TWO-PASS PARSE — fixes code review CONFIRMED 1 (blocking) and
+    // CONFIRMED 2 on issue #635's own PR.
+    //
+    // The first cut of this passed EVERY lane row's label (all 289, say) as
+    // `requested` on a single parse call. lib/barcode-lookup.js puts every
+    // requested id the file doesn't mention into `unresolved`
+    // (lib/barcode-lookup.js:190) — correct on its own terms, but
+    // applyBarcodeLookup treats "in unresolved" as "this batch investigated
+    // this label and found nothing", so EVERY row not in the just-uploaded
+    // file got its barcode wiped, including rows a PRIOR targeted batch had
+    // already resolved. Since Tyler works this lookup in small batches
+    // through a shift (notes/report-registry.md: "targeted, not bulk"), that
+    // meant batch 2 always ate batch 1. Same root cause made the status line
+    // read e.g. "1 of 289 matched" for a perfect 1-of-1 batch, in red.
+    //
+    // Fix: first parse WITHOUT `requested` to learn which TRKIDs THIS FILE
+    // actually mentions (found + invalid — invalid rows still name a TRKID,
+    // they just failed the integrity check). Intersect that with the labels
+    // actually in the lane, and use ONLY that intersection as `requested` on
+    // a second parse. `result.unresolved` then only ever contains labels
+    // this specific batch (a) is about, and (b) genuinely failed to resolve
+    // — never the whole lane. A label this file never mentions is left
+    // completely untouched by applyBarcodeLookup (see its own doc comment:
+    // merge, not replace), so an earlier batch's resolution survives.
+    const scoped = BarcodeLookup.parseBarcodeLookup(text);
+    if (scoped.reason) {
+      // Early-return path (empty file, CsvLib missing, unparseable content,
+      // or a header mismatch — e.g. the wrong report was dropped here).
+      // Never silently apply an empty result as if it resolved anything.
+      postSortBarcodeStatus('Could not read the barcode lookup file: ' + scoped.reason + '.', true);
+      return;
+    }
+    const fileTrkids = Array.from(new Set(
+      scoped.found.map(r => r.trackingId).concat(scoped.invalid.map(r => r.trackingId))
+    ));
+    const laneLabels = new Set(postSortItems.map(it => it.label));
+    const requested = fileTrkids.filter(id => laneLabels.has(id));
+
+    if (!requested.length) {
+      postSortBarcodeStatus('None of the tracking numbers in ' + file.name + ' match a row in the currently loaded Post Sort report.', true);
+      return;
+    }
+
+    const result = BarcodeLookup.parseBarcodeLookup(text, { requested: requested });
+    // mainReportBarcodeMap() arbitrates (#649 tier 3): a label this batch
+    // resolves that ALSO has a main-report SCAN_BARCODE still ends up on the
+    // main report's answer, never the lookup's.
+    postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, result, mainReportBarcodeMap());
+    renderPostSortLane();
+
+    // #649 code review finding 3: the status line used to be computed from
+    // `result` — the RAW lookup parse, before tier-3 arbitration ran. A
+    // conflicted TRKID that tier 3 just resolved (a SCAN_BARCODE present)
+    // still read as "left awaiting manual resolution" in error styling, in
+    // error, even though the row on screen shows no conflict at all.
+    // Recompute both counts from postSortItems — the ACTUAL post-arbitration
+    // state — scoped to this batch's `requested` labels.
+    const byLabel = new Map(postSortItems.map(it => [it.label, it]));
+    const stillUnresolved = requested.filter(id => { const it = byLabel.get(id); return !it || !it.barcode; });
+    // Start from result.conflicts (the file-level truth: every TRKID this
+    // lookup file itself holds two disagreeing barcodes for, independent of
+    // lane membership — a conflicting TRKID that is not even a Post Sort row
+    // is still worth reporting, exactly as before #649), then drop any entry
+    // tier 3 just answered (a lane row now showing a real barcode with
+    // barcodeConflict false — "answered, not a conflict").
+    const stillConflicted = result.conflicts.filter(c => {
+      const it = byLabel.get(c.trackingId);
+      return !(it && !it.barcodeConflict && it.barcode);
+    });
+    const matched = requested.length - stillUnresolved.length;
+    let msg = matched + ' of ' + requested.length + ' tracking number' + (requested.length === 1 ? '' : 's') +
+      ' in this batch matched a barcode from ' + file.name + '.';
+    if (stillConflicted.length) {
+      const n = stillConflicted.length;
+      msg += ' ' + n + ' TRKID' + (n === 1 ? '' : 's') + ' had conflicting barcodes in the lookup file and ' +
+        (n === 1 ? 'was' : 'were') + ' left awaiting manual resolution.';
+    }
+    if (result.invalid.length) {
+      const n = result.invalid.length;
+      msg += ' ' + n + ' row' + (n === 1 ? '' : 's') +
+        ' in the lookup file failed the barcode integrity check and ' + (n === 1 ? 'was' : 'were') + ' skipped.';
+    }
+    // Only styled as an error when something in THIS batch genuinely failed
+    // — a perfect targeted lookup (the common, intended case) reads as an
+    // ordinary status line, not a red near-total-failure message.
+    postSortBarcodeStatus(msg, matched < requested.length);
+  };
+  reader.readAsText(file);
+}
+
+function postSortItemByLabel(label) {
+  return postSortItems.find(it => it.label === label);
+}
+
+// ─── POST SORT LANE: SELECT + COPY (issue #635, final slice of #622) ───────
+// Reuses the SAME copy-mode toggle (#copy-mode) and copyValueFor every other
+// lane's "Copy selected" already uses — not a parallel mechanism. The one
+// difference: { noFallback: true }, because this lane's barcode-mode
+// guardrail is the opposite of every other lane's. Every other lane falls
+// back to the tracking number so a barcode-mode copy is never empty
+// (lib/ibno-rules.js:225's own reasoning). That reasoning does NOT hold here
+// — see lib/post-sort-lane.js's applyBarcodeLookup doc comment — so an
+// unresolved row here must copy NOTHING in barcode mode, not a bare tracking
+// number that looks like a barcode but does not scan.
+
+function togglePostSortSelectAll(checked) {
+  const body = document.getElementById('post-sort-tbody');
+  if (!body) return;
+  body.querySelectorAll('.postsort-check').forEach(cb => { cb.checked = checked; });
+  updatePostSortCopyButton();
+}
+
+// updatePostSortCopyButton() -> the count on "Copy selected" IS the point of
+// this half of the ticket, not decoration: this lookup is targeted, not
+// bulk, so the count is how Tyler confirms the batch he checked is the batch
+// he intended before he pastes it into the lookup report.
+//
+// #649 code review finding 2: in tracking mode, copySelectedPostSort silently
+// excludes a main-resolved row (data-barcode-source="main") from the paste
+// batch — a row that needs no lookup round-trip. Showing the raw checked
+// count here and then flashing a smaller "Copied N" after the click reads as
+// a bug. When some checked rows will be excluded, this now shows the
+// EFFECTIVE count that will actually be copied, "(effective of checked)", so
+// the number on the button already matches what lands on the clipboard.
+function updatePostSortCopyButton() {
+  const btn = document.getElementById('copy-selected-post-sort');
+  if (!btn) return;
+  const body = document.getElementById('post-sort-tbody');
+  const checkedTrs = body
+    ? Array.from(body.querySelectorAll('tr[data-label] .postsort-check:checked')).map(cb => cb.closest('tr[data-label]'))
+    : [];
+  const n = checkedTrs.length;
+  const effective = getCopyMode() === 'tracking'
+    ? checkedTrs.filter(tr => tr.dataset.barcodeSource !== 'main').length
+    : n;
+  btn.textContent = effective === n
+    ? 'Copy selected (' + n + ')'
+    : 'Copy selected (' + effective + ' of ' + n + ')';
+  // Deliberately gated on the RAW checked count, not the effective one: a
+  // batch that is entirely main-resolved (effective 0) must still be
+  // clickable so copySelectedPostSort's own status message ("already
+  // resolved ... excluded from the lookup paste batch") can explain why
+  // nothing was copied, rather than a disabled button offering no reason.
+  btn.disabled = n === 0;
+}
+
+function copySelectedPostSort() {
+  const body = document.getElementById('post-sort-tbody');
+  const checked = Array.from(body ? body.querySelectorAll('tr[data-label] .postsort-check:checked') : [])
+    .map(cb => cb.closest('tr[data-label]'))
+    .filter(Boolean);
+  if (!checked.length) return;
+  // #649 acceptance criterion: "the pasted batch is only the tail that needs
+  // it." In tracking-# mode — the mode this copy is used in to build the
+  // paste batch for the Track IDs to Full Barcode lookup — a row already
+  // resolved from the main report's SCAN_BARCODE (data-barcode-source="main")
+  // needs no lookup round-trip at all, so it is excluded here. Barcode mode
+  // is unaffected: a main-resolved row already has a real barcode to copy,
+  // same as a lookup-resolved one.
+  const mode = getCopyMode();
+  let mainResolvedSkipped = 0;
+  const rowsToCopy = mode === 'tracking'
+    ? checked.filter(tr => {
+        if (tr.dataset.barcodeSource === 'main') { mainResolvedSkipped++; return false; }
+        return true;
+      })
+    : checked;
+  const values = rowsToCopy.map(tr => copyValueFor(tr.dataset.label, tr.dataset.barcode, { noFallback: true }));
+  const lines = values.filter(v => v !== '');
+  const skipped = values.length - lines.length;
+  const btn = document.getElementById('copy-selected-post-sort');
+  if (lines.length) {
+    // ToolHelpers.copyText CAN reject (its own execCommand fallback rejects
+    // when it fails too — lib/tool-helpers.js's fallbackCopyText). The
+    // original version here swallowed that with a bare .catch(() => {})
+    // while marking the button "Copied N" synchronously beforehand, so a
+    // failed clipboard write still read as success (code review finding 7).
+    // Wait for the real outcome instead.
+    ToolHelpers.copyText(lines.join('\n')).then(() => {
+      if (btn) {
+        btn.textContent = '✓ Copied ' + lines.length;
+        setTimeout(() => { updatePostSortCopyButton(); }, 1200);
+      }
+    }).catch(() => {
+      if (btn) {
+        btn.textContent = 'Copy failed';
+        setTimeout(() => { updatePostSortCopyButton(); }, 1200);
+      }
+      postSortBarcodeStatus('Could not copy to the clipboard — try again.', true);
+    });
+  } else if (btn) {
+    btn.textContent = '0 copied';
+    setTimeout(() => { updatePostSortCopyButton(); }, 1200);
+  }
+  if (skipped > 0) {
+    postSortBarcodeStatus(skipped + ' checked row' + (skipped === 1 ? '' : 's') +
+      ' skipped: awaiting a barcode. Switch Copy as to Tracking # to copy tracking numbers for the lookup instead.', true);
+  } else if (mainResolvedSkipped > 0) {
+    postSortBarcodeStatus(mainResolvedSkipped + ' checked row' + (mainResolvedSkipped === 1 ? '' : 's') +
+      ' already resolved from the loaded Inbound and Van Scans report — excluded from the lookup paste batch.', false);
+  }
+}
+
+// postSortBarcodeTagHtml(item) -> the "awaiting barcode" / "barcode conflict"
+// tag next to the tracking number (issue #635). Mirrors .early-tag's
+// wherever-the-row-is-seen visibility: this is state Tyler needs to notice
+// without hunting for it, not something tucked behind a hover or a click.
+function postSortBarcodeTagHtml(item) {
+  if (item.barcodeConflict) {
+    return '<span class="bc-flag conflict" title="The Track IDs to Full Barcode lookup returned two different barcodes for this tracking number — resolve manually before scanning; barcode-mode copy will not guess">barcode conflict</span>';
+  }
+  if (!item.barcode) {
+    return '<span class="bc-flag" title="No scannable barcode yet. Check this row, Copy selected (Copy as: Tracking #), paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.">awaiting barcode</span>';
+  }
+  return '';
+}
+
+function postSortRowHtml(item) {
+  // data-barcode-source (#649): 'main' | 'lookup' | '' — lets
+  // copySelectedPostSort tell a row the already-loaded main report resolved
+  // (no lookup round-trip needed, excluded from the tracking-# paste batch)
+  // from one the lookup resolved or hasn't resolved at all.
+  return '<tr data-label="' + ToolHelpers.escapeHtml(item.label) + '" data-barcode="' + ToolHelpers.escapeHtml(item.barcode || '') +
+    '" data-barcode-source="' + ToolHelpers.escapeHtml(item.barcodeSource || '') + '">' +
+    '<td class="chk-cell"><input type="checkbox" class="postsort-check" onchange="updatePostSortCopyButton()" aria-label="select for copy"></td>' +
+    '<td class="mono">' + ToolHelpers.escapeHtml(item.label) + postSortBarcodeTagHtml(item) + '</td>' +
+    streetCell(item) +
+    // noPropagate: true — this lane's Goes To never fills a sibling row (see
+    // commitPostSortGoesTo below), so goesToCell's default tooltip ("also
+    // fills any other review row at the SAME address") would be false here.
+    goesToCell(item, { noPropagate: true }) +
+    '<td>' + ToolHelpers.escapeHtml(zipOf(item)) + '</td>' +
+    ispCell(item) +
+    '<td>' + ToolHelpers.escapeHtml(item.ibScanTime || '') + '</td>' +
+    '<td>' + ToolHelpers.escapeHtml(item.address || '') + '</td>' +
+    '</tr>';
+}
+
+function renderPostSortLane() {
+  const table = document.getElementById('post-sort-table');
+  const tbody = document.getElementById('post-sort-tbody');
+  const badge = document.getElementById('post-sort-badge');
+  const clearBtn = document.getElementById('post-sort-clear-btn');
+  const barcodeLoadBtn = document.getElementById('post-sort-barcode-load-btn');
+  if (!tbody) return;
+  // Preserve the checked selection across a re-render (issue #635 code
+  // review finding 4): ingesting the barcode lookup CSV calls this after
+  // updating postSortItems, which used to rebuild every row's checkbox
+  // unchecked. The intended loop is check rows -> Copy selected (tracking) ->
+  // paste into the lookup -> load its result HERE -> flip Copy as to Barcode
+  // -> Copy selected again for the SAME rows. Wiping the selection at this
+  // exact step broke that loop on every real ingest. Captured by
+  // data-label, not DOM node identity, so it survives the innerHTML rebuild
+  // below; a label the new postSortItems no longer has is simply dropped,
+  // which is correct (nothing to re-check it onto).
+  const previouslyChecked = new Set(
+    Array.from(tbody.querySelectorAll('tr[data-label] .postsort-check:checked'))
+      .map(cb => cb.closest('tr[data-label]').getAttribute('data-label'))
+  );
+  if (badge) badge.textContent = String(postSortItems.length);
+  if (clearBtn) clearBtn.style.display = postSortItems.length ? '' : 'none';
+  if (table) table.style.display = postSortItems.length ? '' : 'none';
+  // Nothing to join a barcode lookup onto until a Post Sort report is loaded.
+  if (barcodeLoadBtn) barcodeLoadBtn.style.display = postSortItems.length ? '' : 'none';
+  tbody.innerHTML = postSortItems.map(postSortRowHtml).join('');
+  tbody.querySelectorAll('tr[data-label]').forEach(tr => {
+    const label = tr.getAttribute('data-label');
+    const item = postSortItemByLabel(label);
+    if (item) attachPostSortGoesToInput(tr, item);
+    if (previouslyChecked.has(label)) {
+      const cb = tr.querySelector('.postsort-check');
+      if (cb) cb.checked = true;
+    }
+  });
+  const selectAll = document.getElementById('post-sort-select-all');
+  if (selectAll) selectAll.checked = postSortItems.length > 0 && previouslyChecked.size === postSortItems.length;
+  updatePostSortCopyButton();
+}
+
+// Commit on blur and on Enter, same discipline as attachGoesToInput, but this
+// lane's input writes with EARLY provenance (below) and never propagates to
+// other rows — the pre-assignment pass only ever answers for the exact label
+// it was fed.
+function attachPostSortGoesToInput(tr, item) {
+  const input = tr.querySelector('.goesto-input');
+  if (!input) return;
+  input.addEventListener('click', e => e.stopPropagation());
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
+  });
+  input.addEventListener('change', e => e.stopPropagation());
+  input.addEventListener('blur', () => commitPostSortGoesTo(item.label, input.value));
+}
+
+// commitPostSortGoesTo(label, raw) -> write with EARLY provenance
+// (lib/actual-area.js's setEarly). setEarly refuses to overwrite ANY value it
+// did not itself write, so a hand-typed or propagated (auto) area from the
+// Manual Review lanes below always wins over anything typed here — the ticket's
+// hard requirement. This never calls lib/ibno-review-plan.js and never writes
+// a code, category, or disposition; it is Goes To only.
+function commitPostSortGoesTo(label, raw) {
+  const result = ActualArea.setEarly(actualAreaStore, label, raw, { today: ToolHelpers.isoDate() });
+  actualAreaStore = result.store;
+  saveActualAreas();
+  result.changed.forEach(repaintGoesTo);
+  // Keep the typed row's own input showing the normalized/refused value even
+  // when the store didn't change (e.g. a blocked overwrite attempt).
+  repaintGoesTo(label);
+  // A refused write (setEarly reports changed: [] because this row already
+  // carries a hand-typed or propagated value it must not touch) must not be
+  // silent: repaintGoesTo alone snaps the box back to the protected value
+  // with no explanation, which reads as "my correction landed" when it did
+  // not. flashGoesToNote already exists for exactly this kind of notice.
+  const normalized = ActualArea.normalizeArea(raw);
+  if (normalized && result.changed.length === 0 && ActualArea.get(actualAreaStore, label) !== normalized) {
+    flashGoesToNote('Not changed: this row already has a confirmed area from the report');
+  }
+  syncBarcodeDialogArea(label);
+  // Mirrors commitGoesTo: keeps every "Select with area (N)" button honest.
+  // Missing this left a stale count after typing here (/code-review on #642,
+  // finding 8) — a Post Sort tracking label can already be showing in a
+  // Manual Review lane if both reports overlap, so this lane's own writes can
+  // change what those buttons should say.
+  updateSelectAreaButtons();
+}
+
+let goesToNoteTimer = null;
+function flashGoesToNote(text) {
+  const el = document.getElementById('goesto-note');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(goesToNoteTimer);
+  goesToNoteTimer = setTimeout(() => { el.style.display = 'none'; }, 2600);
+}
+
+// ─── BARCODE ────────────────────────────────────────────────────────────────
+
+// barcodeValueOf(item) -> what actually gets encoded: the FULL scan barcode.
+// item.scanBarcode already falls back to the 12-digit tracking number when the
+// report carried no barcode column (lib/ibno-rules.js), so this is never empty —
+// but the dialog says which of the two it is rather than letting a short code
+// pass for a full one.
+function barcodeValueOf(item) {
+  return String((item && item.scanBarcode) || (item && item.label) || '');
+}
+
+function barcodeIsFallback(item) {
+  return barcodeValueOf(item) === String((item && item.label) || '');
+}
+
+// ─── RECIPIENT / ADDRESS CELL ───────────────────────────────────────────────
+// One builder for the Recipient / Address cell, used by every table that has
+// one (auto-coded, all three review lanes, manually resolved, repeat history).
+// It was four near-identical inline copies before this; click-to-copy would
+// have had to be added to each of them separately, which is exactly how one of
+// them ends up behaving differently from the others.
+//
+// The ADDRESS line is click-to-copy and carries the FULL address — street,
+// city, state and ZIP, as displayed. The street-only value lives on the
+// separate chip beside the tracking number, so the two are never confused: what
+// you click is what you get. The firm/recipient line is deliberately NOT
+// clickable — a click there is someone aiming for the address and missing, and
+// silently copying a person's name instead would be worse than doing nothing.
+function recipientCellHtml(firm, address) {
+  const addr = String(address == null ? '' : address).trim();
+  const firmHtml = firm
+    ? '<div class="recip-firm">' + ToolHelpers.escapeHtml(firm) + '</div>'
+    : '';
+  const addrHtml = addr
+    ? '<div class="recip-addr addr-copy" data-addr="' + ToolHelpers.escapeHtml(addr) +
+      '" title="Click to copy the full address">' + ToolHelpers.escapeHtml(addr) + '</div>'
+    : '<div class="recip-addr">&mdash;</div>';
+  return firmHtml + addrHtml;
+}
+
+// Delegated so it covers every table at once, including rows rendered later.
+// Stops the event so a click on the address never also toggles the row open.
+document.addEventListener('click', function (e) {
+  const el = e.target.closest ? e.target.closest('.addr-copy') : null;
+  if (!el) return;
+  e.stopPropagation();
+  const addr = el.dataset.addr || '';
+  if (!addr) return;
+  ToolHelpers.copyText(addr).catch(() => {});
+  el.classList.add('copied');
+  const prevTitle = el.title;
+  el.title = 'Copied!';
+  setTimeout(() => { el.classList.remove('copied'); el.title = prevTitle; }, 1200);
+});
+
+
+// ─── WORK MODE ──────────────────────────────────────────────
+//
+// A layer over Needs Manual Review for the pass where a supervisor walks the
+// list sorted by Service Provider, copies each street into FRO on the other
+// screen, and types where the package actually goes. Off by default and purely
+// additive: switching it off restores the everyday table exactly.
+//
+// Named Work mode deliberately. "Copy mode" is already this tool's Copy-as
+// tracking/barcode toggle, and C / B are already bound to it.
+
+let workModeOn = false;
+let workIndex = 0;
+const WORK_MODE_KEY = 'ibno_work_mode';
+
+// The rows Work mode walks: every Needs Manual Review row currently on screen,
+// in the order they are displayed, across all three lanes. Rows inside a
+// collapsed bucket are display:none and are skipped, so the cursor never lands
+// somewhere the eye cannot follow.
+function workRows() {
+  return Array.from(document.querySelectorAll('.manual-body tr[data-label]'))
+    .filter(tr => {
+      const cs = window.getComputedStyle(tr);
+      return cs && cs.display !== 'none';
+    });
+}
+function workLabels() { return workRows().map(tr => tr.getAttribute('data-label')); }
+function workStreetOf(tr) {
+  const btn = tr && tr.querySelector('.street-copy');
+  return btn ? (btn.dataset.street || '') : '';
+}
+function workContextOf(tr) {
+  const item = tr ? itemByLabel(tr.getAttribute('data-label')) : null;
+  if (!item) return '';
+  const bits = [];
+  const isp = ispOf(item);
+  if (isp) bits.push(isp);
+  const z = zipOf(item);
+  if (z) bits.push('ZIP ' + z);
+  return bits.join('  ·  ');
+}
+
+function clampWorkIndex() {
+  const n = workRows().length;
+  if (!n) { workIndex = 0; return; }
+  if (workIndex < 0) workIndex = 0;
+  if (workIndex > n - 1) workIndex = n - 1;
+}
+
+// Paint the active row and the bar to match workIndex, and put the street on the
+// clipboard. copyStreet=false when only redrawing (a repaint must not silently
+// replace what the supervisor just copied).
+function focusWorkRow(copyStreet) {
+  clampWorkIndex();
+  const rows = workRows();
+  document.querySelectorAll('.manual-body tr.work-active').forEach(tr => tr.classList.remove('work-active'));
+  const tr = rows[workIndex];
+  if (!tr) { refreshWorkBar(); return; }
+  tr.classList.add('work-active');
+  if (tr.scrollIntoView) tr.scrollIntoView({ block: 'center' });
+  const street = workStreetOf(tr);
+  if (copyStreet && street) ToolHelpers.copyText(street).catch(() => {});
+  refreshWorkBar();
+  const input = document.getElementById('work-area');
+  if (input) { input.value = ActualArea.get(actualAreaStore, tr.getAttribute('data-label')); input.focus(); input.select(); }
+}
+
+function refreshWorkBar() {
+  const bar = document.getElementById('work-bar');
+  if (!bar || !workModeOn) return;
+  const rows = workRows();
+  const tr = rows[workIndex];
+  const street = tr ? workStreetOf(tr) : '';
+  // isScanned, not get(): a Post Sort "early" value (issue #634) has a Goes To
+  // value to show but must NOT count toward the progress bar — it has not
+  // been confirmed against a scan on this report yet.
+  const done = rows.filter(r => ActualArea.isScanned(actualAreaStore, r.getAttribute('data-label'))).length;
+  const ctx = document.getElementById('work-context');
+  const st = document.getElementById('work-street');
+  const cp = document.getElementById('work-copied');
+  const pr = document.getElementById('work-prog');
+  if (ctx) ctx.textContent = tr
+    ? (workContextOf(tr) + '  ·  ' + (workIndex + 1) + ' of ' + rows.length + '  ·  ' + done + ' with an area')
+    : 'No rows to work';
+  if (st) st.textContent = street || (tr ? '(no street on this row)' : '—');
+  if (cp) cp.style.display = street ? '' : 'none';
+  if (pr) pr.style.width = rows.length ? Math.round(done / rows.length * 100) + '%' : '0%';
+}
+
+// Move to the next package that still needs an area. Skipping the ones an
+// address already answered is the point: typing a belt once covers every
+// package for that stop, so stopping on them again is pure friction.
+function stepWork(dir) {
+  const labels = workLabels();
+  if (!labels.length) return;
+  const next = ActualArea.nextNeedingArea(actualAreaStore, labels, workIndex, dir);
+  workIndex = (typeof next === 'number' && isFinite(next)) ? next : workIndex;
+  focusWorkRow(true);
+}
+
+function commitWorkArea() {
+  const rows = workRows();
+  const tr = rows[workIndex];
+  const input = document.getElementById('work-area');
+  if (!tr || !input) return;
+  commitGoesTo(tr.getAttribute('data-label'), input.value);
+}
+
+// Collapse state as it was before Work mode expanded everything, so leaving the
+// layer puts the section back the way it was found.
+let workCollapsedBefore = null;
+
+function expandAllManualGroups() {
+  Object.keys(manualCollapsed).forEach(k => { manualCollapsed[k] = false; });
+  document.querySelectorAll('.manual-body tr.manual-group-row').forEach(gh => {
+    const ch = gh.querySelector('.g-chevron');
+    if (ch) ch.textContent = '\u25be';
+  });
+  applyManualSearch();
+}
+function restoreManualGroups(snapshot) {
+  if (!snapshot) return;
+  Object.keys(snapshot).forEach(k => { manualCollapsed[k] = snapshot[k]; });
+  document.querySelectorAll('.manual-body tr.manual-group-row').forEach(gh => {
+    const ch = gh.querySelector('.g-chevron');
+    if (ch) ch.textContent = manualCollapsed[gh.dataset.group] ? '\u25b8' : '\u25be';
+  });
+  applyManualSearch();
+}
+
+function setWorkMode(on) {
+  const was = workModeOn;
+  workModeOn = !!on;
+  document.body.classList.toggle('work-mode', workModeOn);
+  if (workModeOn && !was) {
+    workCollapsedBefore = Object.assign({}, manualCollapsed);
+    expandAllManualGroups();
+  } else if (!workModeOn && was) {
+    restoreManualGroups(workCollapsedBefore);
+    workCollapsedBefore = null;
+  }
+  const btn = document.getElementById('work-toggle');
+  if (btn) {
+    btn.classList.toggle('on', workModeOn);
+    btn.innerHTML = workModeOn ? '&#9632; Work mode' : '&#9654; Work mode';
+  }
+  try { toolStorage.set(WORK_MODE_KEY, workModeOn ? '1' : ''); } catch (e) { /* storage full */ }
+  if (workModeOn) {
+    // Start on the first package that still needs an area rather than at the
+    // top, so re-entering mid-shift picks up where the work actually is.
+    const labels = workLabels();
+    workIndex = 0;
+    if (labels.length && ActualArea.isScanned(actualAreaStore, labels[0])) {
+      const n = ActualArea.nextNeedingArea(actualAreaStore, labels, 0, 1);
+      if (typeof n === 'number' && isFinite(n)) workIndex = n;
+    }
+    focusWorkRow(true);
+  } else {
+    document.querySelectorAll('.manual-body tr.work-active').forEach(tr => tr.classList.remove('work-active'));
+  }
+}
+
+// selectRowsWithArea(lane) -> check every row in that lane that already carries a
+// Goes To area, so "Barcode selected" covers exactly the packages that have a
+// destination. Selection only; it never codes or resolves anything.
+function selectRowsWithArea(lane) {
+  const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
+  const body = document.getElementById(cfg.tbody);
+  if (!body) return;
+  let n = 0;
+  body.querySelectorAll('tr[data-label]').forEach(tr => {
+    const cb = tr.querySelector('.manual-check');
+    if (!cb) return;
+    const has = !!ActualArea.get(actualAreaStore, tr.getAttribute('data-label'));
+    if (!has) return;
+    cb.checked = true;
+    tr.classList.add('row-checked');
+    n++;
+  });
+  updateBulkButtons();
+  updateSelectAreaButtons();
+  if (!n) flashGoesToNote('No rows in this lane have a work area yet');
+  else flashGoesToNote('Selected ' + n + ' row' + (n === 1 ? '' : 's') + ' with a work area');
+}
+
+// Keep each lane's button honest about how many rows it would select.
+function updateSelectAreaButtons() {
+  MANUAL_LANES.forEach(lane => {
+    const btn = document.getElementById('select-area-' + lane.key);
+    const body = document.getElementById(lane.tbody);
+    if (!btn || !body) return;
+    let n = 0;
+    body.querySelectorAll('tr[data-label]').forEach(tr => {
+      if (ActualArea.get(actualAreaStore, tr.getAttribute('data-label'))) n++;
+    });
+    btn.innerHTML = '&#10003; Select with area (' + n + ')';
+    btn.disabled = n === 0;
+  });
+}
+
+// W toggles Work mode from anywhere; Escape leaves it. Ignored while typing, so
+// it never fights the Goes To fields — except in the bar's own input, where
+// Enter commits and advances and Escape exits.
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  const inBar = t && t.id === 'work-area';
+  if (inBar) {
+    if (e.key === 'Enter') { e.preventDefault(); commitWorkArea(); stepWork(1); }
+    else if (e.key === 'Escape') { e.preventDefault(); setWorkMode(false); }
+    return;
+  }
+  const tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (e.key === 'w' || e.key === 'W') { e.preventDefault(); setWorkMode(!workModeOn); return; }
+  if (!workModeOn) return;
+  if (e.key === 'Escape') { e.preventDefault(); setWorkMode(false); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); stepWork(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); stepWork(-1); }
+});
+
+// Clicking a street copies it and makes that row the one being worked, so mouse
+// and keyboard drive the same cursor instead of two competing ones.
+//
+// Work mode's cursor (workIndex / the shared #work-area bar input) is scoped
+// to workRows(), which is `.manual-body` rows ONLY. The Post Sort "early" lane
+// (issue #634) reuses this exact .street-copy button but its rows are NOT
+// `.manual-body` rows. Fixed (/code-review on #642, finding 3): without this
+// guard, clicking a Post Sort row's street while Work mode happened to be on
+// left workIndex pointed at whatever `.manual-body` row it already sat on,
+// then handed keyboard focus to the SHARED #work-area bar input anyway — so
+// typing a belt and pressing Enter would commit it onto a DIFFERENT package
+// than the one just clicked (a wrong record against a package nobody
+// touched). A row outside `.manual-body` must never drive the Work-mode
+// cursor or the work bar; it always gets its own goesto-input focused instead.
+document.addEventListener('click', e => {
+  const btn = e.target.closest ? e.target.closest('.street-copy') : null;
+  if (!btn) return;
+  e.stopPropagation();
+  const street = btn.dataset.street || '';
+  if (!street) return;
+  ToolHelpers.copyText(street).catch(() => {});
+  btn.classList.add('copied');
+  setTimeout(() => btn.classList.remove('copied'), 900);
+  const tr = btn.closest('tr[data-label]');
+  if (!tr) return;
+  const inWorkableLane = !!tr.closest('.manual-body');
+  if (inWorkableLane) {
+    const rows = workRows();
+    const i = rows.indexOf(tr);
+    if (i >= 0) { workIndex = i; if (workModeOn) focusWorkRow(false); }
+  }
+  const inp = (inWorkableLane && workModeOn) ? document.getElementById('work-area') : tr.querySelector('.goesto-input');
+  if (inp) { inp.focus(); if (inp.select) inp.select(); }
+});
+
+// ─── STREET-ONLY COPY ───────────────────────────────────────────────────────
+// A chip that puts JUST the house number and street name on the clipboard — no
+// unit, city, state or ZIP (Tyler, 2026-08-08; the unit is dropped by his call).
+// It joins the existing chip cluster rather than restyling the address column,
+// so every copy action on a row still lives in one place.
+//
+// The rule is lib/street-address.js. A row whose address has no street (an empty
+// LABEL_ADDRESS1 composes down to a bare ZIP — 14 of 45 rows on the 2026-07-08
+// report) gets NO chip at all, rather than a button that copies "85032" as if it
+// were an address.
+function streetChip(item) {
+  const street = StreetAddress.streetOf(item && item.address);
+  if (!street) return '';
+  return ' <button type="button" class="street-chip" data-street="' + ToolHelpers.escapeHtml(street) +
+    '" title="Copy street only: ' + ToolHelpers.escapeHtml(street) + '" aria-label="Copy street ' +
+    ToolHelpers.escapeHtml(street) + '" onclick="copyStreetChip(this)">&#9106; St</button>';
+}
+
+function copyStreetChip(btn) {
+  const street = btn.dataset.street || '';
+  if (!street) return;
+  ToolHelpers.copyText(street).catch(() => {});
+  const prev = btn.innerHTML;
+  btn.innerHTML = '&#10003; Copied';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.innerHTML = prev; btn.classList.remove('copied'); }, 1200);
+}
+
+function barcodeChip(item) {
+  if (!barcodeValueOf(item)) return '';
+  return ' <button type="button" class="barcode-chip" data-label="' + ToolHelpers.escapeHtml(item.label) +
+    '" title="Show a scannable barcode for the full scan barcode" aria-label="Barcode for ' +
+    ToolHelpers.escapeHtml(item.label) + '" onclick="openBarcodeDialog(this.dataset.label)">&#9612;&#9613;&#9612;</button>';
+}
+
+// itemByLabel(label) -> the package model from whichever list holds it, so the
+// barcode dialog works from an auto-coded, manual or resolved row alike.
+function itemByLabel(label) {
+  const l = String(label);
+  return manualItems.find(i => i.label === l) ||
+    autoItems.find(i => i.label === l) ||
+    resolvedItems.find(i => i.label === l) || null;
+}
+
+let barcodeDialogLabel = '';
+
+function openBarcodeDialog(label) {
+  const item = itemByLabel(label);
+  if (!item) return;
+  barcodeDialogLabel = String(label);
+  const value = barcodeValueOf(item);
+  const host = document.getElementById('barcode-dialog-body');
+  let svg;
+  try {
+    svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 96, showText: false });
+  } catch (e) {
+    // An unencodable barcode is shown as a plain failure, never as a barcode
+    // that scans to something other than what is printed on it.
+    svg = '<div class="barcode-error">This value can\'t be encoded as Code 128: ' +
+      ToolHelpers.escapeHtml(e.message) + '</div>';
+  }
+  host.innerHTML =
+    '<div class="barcode-stage">' + svg + '</div>' +
+    '<div class="barcode-value mono">' + ToolHelpers.escapeHtml(value) + '</div>' +
+    (barcodeIsFallback(item)
+      ? '<div class="barcode-warn">This report had no full barcode column, so this is the 12-digit tracking number.</div>'
+      : '') +
+    '<label class="barcode-area-label">Goes to' +
+      '<input type="text" id="barcode-area-input" class="goesto-input big" maxlength="' + ActualArea.MAX_LEN + '"' +
+      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
+    '</label>' +
+    '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
+
+  const input = document.getElementById('barcode-area-input');
+
+  // Capture the label THIS dialog was opened for. The blur handler below used
+  // to read the mutable barcodeDialogLabel at fire time, so a close-then-reopen
+  // on a different package could commit the field to the wrong label — and
+  // closeBarcodeDialog clears the global before a late blur even arrives. The
+  // row inputs already close over item.label (see attachGoesToInput); this
+  // brings the dialog in line with them.
+  const dialogLabel = barcodeDialogLabel;
+
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();  // the page-level C/B copy-mode shortcuts must not fire while typing
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    // Escape MUST be handled here, not left to the document-level listener at
+    // the bottom of this file. The stopPropagation above eats the event
+    // whenever this input has focus — and focus lands here the moment the
+    // dialog opens — so that listener could only ever fire when the field was
+    // NOT focused. Escape while typing did nothing at all.
+    //
+    // Same shape as the row inputs: revert the field, blur it (which commits
+    // the reverted value, so the revert sticks), then close.
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.value = actualAreaOf(item);
+      input.blur();
+      closeBarcodeDialog();
+    }
+  });
+  input.addEventListener('blur', () => commitGoesTo(dialogLabel, input.value));
+
+  document.getElementById('barcode-dialog').style.display = 'flex';
+  input.focus();
+}
+
+// Keep the dialog's own field in step when a commit (possibly from the row
+// behind it) changes the area for the package it is showing.
+function syncBarcodeDialogArea(label) {
+  if (!barcodeDialogLabel || String(label) !== barcodeDialogLabel) return;
+  const input = document.getElementById('barcode-area-input');
+  if (!input) return;
+  const v = ActualArea.get(actualAreaStore, barcodeDialogLabel);
+  if (document.activeElement !== input) input.value = v;
+}
+
+function closeBarcodeDialog() {
+  barcodeDialogLabel = '';
+  document.getElementById('barcode-dialog').style.display = 'none';
+}
+
+function printBarcodeDialog() {
+  if (!barcodeDialogLabel) return;
+  printBarcodesFor([barcodeDialogLabel]);
+}
+
+// printBarcodesFor(labels) -> a standalone print window, one card per package:
+// barcode, the encoded value, the "Goes to" area in large type, and the address.
+//
+// It is written as its own document rather than a print stylesheet over this
+// page because the sheet must be pure black-on-white regardless of the tool's
+// theme — a dark-mode barcode does not scan and wastes toner.
+function printBarcodesFor(labels) {
+  const cards = labels.map(label => {
+    const item = itemByLabel(label);
+    if (!item) return '';
+    const value = barcodeValueOf(item);
+    let svg;
+    try {
+      svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 80, showText: false });
+    } catch (e) {
+      return '<div class="card"><div class="err">Cannot encode ' +
+        ToolHelpers.escapeHtml(value) + '</div></div>';
+    }
+    const area = ActualArea.get(actualAreaStore, label);
+    // Mark an EARLY area on the physical card itself (/code-review on #642,
+    // finding 2): a Post Sort pre-fill (issue #634) has never been confirmed
+    // against a scan on this report. A bulk "Select with area" + "Barcode
+    // selected" pass is provenance-blind by design (see selectRowsWithArea),
+    // so without a mark ON THE CARD an unconfirmed guess is physically
+    // indistinguishable from a confirmed area on the sheet Tyler hands to a
+    // package handler. Deliberately NOT blocked from selection/printing —
+    // see the reasoning in the PR discussion: over-blocking would stop Tyler
+    // printing a card for a package whose only area info is an early guess
+    // he has already visually reviewed and is satisfied with, for a benefit
+    // this on-card mark already delivers (one more visible check before the
+    // label reaches a package).
+    const early = area && ActualArea.isEarly(actualAreaStore, label);
+    return '<div class="card">' +
+      '<div class="area">' + (area ? ToolHelpers.escapeHtml(area) : '&mdash;') + '</div>' +
+      (early ? '<div class="unconfirmed">UNCONFIRMED &mdash; Post Sort early guess, not yet scanned</div>' : '') +
+      '<div class="bars">' + svg + '</div>' +
+      '<div class="val">' + ToolHelpers.escapeHtml(value) + '</div>' +
+      '<div class="addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>' +
+      '</div>';
+  }).filter(Boolean).join('');
+
+  if (!cards) return;
+  const doc = '<!doctype html><html><head><meta charset="utf-8">' +
+    // Same opt-out as the on-screen stage: a print window on a dark-mode machine
+    // must not be auto-darkened before it reaches the printer.
+    '<meta name="color-scheme" content="only light">' +
+    '<title>IBNO barcodes ' + ToolHelpers.escapeHtml(ToolHelpers.isoDate()) + '</title><style>' +
+    ':root{color-scheme:only light}' +
+    'svg,svg rect,svg text{forced-color-adjust:none}' +
+    // Named colors, not hex: this document is deliberately plain black on white
+    // (a scanner needs contrast and a printer needs no flooded background), and
+    // saying so in words keeps it obvious that it is NOT meant to follow the
+    // tool's theme.
+    'body{font-family:system-ui,sans-serif;margin:12px;background:white;color:black}' +
+    'h1{font-size:14px;margin:0 0 10px}' +
+    '.card{border:1px solid black;border-radius:6px;padding:10px 12px;margin:0 0 10px;' +
+      'break-inside:avoid;page-break-inside:avoid;text-align:center}' +
+    '.area{font-size:30px;font-weight:800;letter-spacing:0.04em;line-height:1.1}' +
+    '.unconfirmed{display:inline-block;margin:3px 0 0;padding:2px 8px;border:1px dashed black;' +
+      'border-radius:4px;font-size:10.5px;font-weight:800;letter-spacing:0.02em}' +
+    '.bars{margin:6px 0 2px}' +
+    '.bars svg{max-width:100%;height:auto}' +
+    '.val{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:0.02em}' +
+    '.addr{font-size:11px;margin-top:3px}' +
+    '.err{font-size:12px;font-weight:700}' +
+    '@media print{body{margin:0}h1{display:none}}' +
+    '</style></head><body><h1>IBNO barcodes — ' + ToolHelpers.escapeHtml(ToolHelpers.isoDate()) +
+    ' (' + labels.length + ')</h1>' + cards + '</body></html>';
+
+  const w = window.open('', '_blank');
+  if (!w) { flashGoesToNote('Allow pop-ups to print barcodes'); return; }
+  w.document.write(doc);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+// barcodeSelected(lane) -> print sheet for the checked rows of ONE lane, the
+// same single-lane rule "Copy selected" follows.
+function barcodeSelected(lane) {
+  const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
+  const body = document.getElementById(cfg.tbody);
+  const labels = Array.from(body ? body.querySelectorAll('tr[data-label] .manual-check:checked') : [])
+    .map(cb => cb.closest('tr[data-label]'))
+    .filter(Boolean)
+    .map(tr => tr.dataset.label);
+  if (!labels.length) return;
+  printBarcodesFor(labels);
 }
 
 function buildManualRow(item, bucket) {
@@ -2623,22 +4810,37 @@ function buildManualRow(item, bucket) {
   tr.className = 'expandable';
   tr.dataset.label    = label;
   tr.dataset.category = category;
-  tr.dataset.bucket   = bucket || manualBucket(item);   // area | zip | other (#batch-code)
+  // One plan per row, read for both attributes below, so the bucket a row is
+  // filed under and the code a bulk button may write onto it can never be
+  // derived from two separate answers (#631).
+  const plan = ReviewPlan.rowPlan(item);
+  tr.dataset.bucket   = bucket || plan.bucket;           // area | zip | other (#batch-code)
+  // The bucket code this row may receive from a bulk apply. '' means the row is
+  // grouped for visibility only (QA-Intercept / Invalid HazMat) and no bulk
+  // button may write a code onto it.
+  //
+  // Sourced from `bulkable`, NOT from the offered code: the sweep selector
+  // below matches on this attribute, so this is where the module's "grouped for
+  // visibility can never be swept" guarantee is actually enforced on screen.
+  // The two agree today; reading bulkable means they still agree if the bucket
+  // mapping is ever retuned.
+  tr.dataset.bulk     = plan.bulkable ? plan.code : '';
   tr.dataset.barcode  = item.scanBarcode || '';         // so "Copy selected" honors the copy-mode toggle per row
   const expressHtml = express
     ? '<span class="express-pill express-yes">Express</span>'
     : '<span class="express-pill express-no">Ground</span>';
-  const recipHtml = firm
-    ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div>' +
-      '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-    : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>';
+  const recipHtml = recipientCellHtml(firm, address);
   tr.innerHTML =
     '<td class="chk-cell"><input type="checkbox" class="manual-check" aria-label="select for batch coding"></td>' +
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + '</td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) + barcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork) + '</td>' +
+    streetCell(item) +
+    goesToCell(item) +
+    '<td class="cat-text mono">' + ToolHelpers.escapeHtml(zipOf(item) || '\u2014') + '</td>' +
+    ispCell(item) +
     '<td>' + reasonPills(reason) + '</td>' +
     '<td>' + recipHtml + '</td>' +
     '<td>' + expressHtml + '</td>';
@@ -2648,25 +4850,24 @@ function buildManualRow(item, bucket) {
   const cb = tr.querySelector('.manual-check');
   cb.addEventListener('click', e => e.stopPropagation());
   cb.addEventListener('change', () => { tr.classList.toggle('row-checked', cb.checked); updateBulkButtons(); });
+  attachGoesToInput(tr, item);
   tr.addEventListener('click', e => {
-    if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link')) return;
-    toggleDetailRow(tr, item, 10);
+    if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy') || e.target.closest('.goesto-cell')) return;
+    toggleDetailRow(tr, item, MANUAL_COLSPAN);
   });
   return tr;
 }
 
-// Bucket code for a manual row (#batch-code): most flagged rows come out the same
-// way — Unassigned Zip → 65, a flagged work area → 33 — which is how the section
-// groups them and what each group's bulk button applies. Unassigned Zip wins over
-// the work-area flag (a zip row flagged on work area still buckets to 65). Returns
-// '' for rows that need an individual look (no bulk bucket).
-function suggestedManualCode(item) {
-  const category = (item && item.category) || '';
-  const reason   = (item && item.reason) || '';
-  if (category === 'Unassigned Zip') return '65';
-  if (/Work area:/i.test(reason)) return '33';
-  return '';
-}
+// The QA Scan Code this row is OFFERED — the quick-code pill, and the code the
+// bucket's bulk button may write onto it. The rule moved to
+// lib/ibno-review-plan.js (#631), where it is swept by a plain table test
+// across every category on both flagged and unflagged work areas; the split
+// between this file and lib/ is what let #618 ship. This stays as the tool's
+// name for it so the five call sites read the same as they always did.
+//
+// '' means the row needs an individual look, AND that no bulk button may reach
+// it — see `bulkable` in the module for why those are the same answer.
+function suggestedManualCode(item) { return ReviewPlan.rowPlan(item).code; }
 
 function buildActionCell(item, tr) {
   const td = document.createElement('td');
@@ -2705,7 +4906,7 @@ function buildActionCell(item, tr) {
       applyBtn.click();
     } else if (e.key === 'Tab') {
       e.preventDefault();
-      const inputs = Array.from(document.querySelectorAll('#manual-tbody .code-input-mini'));
+      const inputs = Array.from(document.querySelectorAll('.manual-body .code-input-mini'));
       const idx = inputs.indexOf(input);
       const next = e.shiftKey ? inputs[idx - 1] : inputs[idx + 1];
       if (next) next.focus();
@@ -2746,6 +4947,7 @@ function resolveItem(item, tr) {
   // workflow (type several, then apply each). Removing one row leaves the others'
   // sort order and search visibility unchanged, so a rebuild is never needed here.
   let bucket = null;
+  let laneTbody = tr ? laneBody(tr) : null;
   if (tr) {
     bucket = tr.dataset.bucket;
     const detail = tr.nextElementSibling;
@@ -2762,14 +4964,19 @@ function resolveItem(item, tr) {
 
   updateManualBadge();
   // Drop the group header once its bucket has no rows left (#batch-code).
-  if (bucket && !document.querySelector('#manual-tbody tr[data-label][data-bucket="' + bucket + '"]')) {
-    const gh = document.querySelector('#manual-tbody tr.manual-group-row[data-group="' + bucket + '"]');
+  // Both are per-lane: resolving the last express row must not clear the ground
+  // lane's header or paint its empty state (and vice versa).
+  if (bucket && laneTbody && !laneTbody.querySelector('tr[data-label][data-bucket="' + bucket + '"]')) {
+    const gh = laneTbody.querySelector('tr.manual-group-row[data-group="' + bucket + '"]');
     if (gh) gh.remove();
   }
-  if (manualItems.length === 0) {
-    document.getElementById('manual-tbody').innerHTML =
-      '<tr><td colspan="10" class="empty-state">All packages resolved ✓</td></tr>';
+  if (laneTbody && !laneTbody.querySelector('tr[data-label]')) {
+    const isExp = laneTbody.id === 'express-manual-tbody';
+    const msg = isExp ? 'No express packages need review'
+                      : (manualItems.length === 0 ? 'All packages resolved ✓' : 'No packages need manual review');
+    laneTbody.innerHTML = '<tr><td colspan="10" class="empty-state">' + msg + '</td></tr>';
   }
+  updateExpressSection();
   updateBulkButtons();
   applyManualSearch();          // refresh the "showing N of M" note (no rebuild)
   renderResolvedSection();
@@ -2828,9 +5035,7 @@ function renderResolvedSection() {
       '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
       '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork || '—') + '</td>' +
       '<td>' + reasonPills(reason) + '</td>' +
-      '<td>' + (firm
-        ? '<div style="font-size:12px;font-weight:600;color:var(--text)">' + ToolHelpers.escapeHtml(firm) + '</div><div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '') + '</div>'
-        : '<div style="font-size:11px;color:var(--text-faint)">' + ToolHelpers.escapeHtml(address || '—') + '</div>') + '</td>' +
+      '<td>' + recipientCellHtml(firm, address) + '</td>' +
       '<td>' + expressHtml + '</td>' +
       '<td></td>';
     const undoBtn = document.createElement('button');
@@ -2840,7 +5045,7 @@ function renderResolvedSection() {
     tr.lastElementChild.appendChild(undoBtn);
     attachLabelCopy(tr, label, item.scanBarcode);
     tr.addEventListener('click', e => {
-      if (e.target.closest('.btn-undo-mini') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link')) return;
+      if (e.target.closest('.btn-undo-mini') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.addr-copy')) return;
       toggleDetailRow(tr, item, 8);
     });
     tbody.appendChild(tr);
@@ -2890,13 +5095,13 @@ function downloadResolvedTable() {
 }
 
 // ─── COPY ─────────────────────────────────────────────────────────────────────
-function copyAutoTable() {
+function copyAutoTable(lane) {
   // Copy-mode toggle (#copy-mode): the first column follows the mode (tracking # or
   // full barcode); the code column is unchanged. A label->barcode map keeps the
   // barcode aligned to each exported pair without changing what gets exported.
   const barcodeByLabel = {};
   autoItems.forEach(it => { if (it && it.label) barcodeByLabel[it.label] = it.scanBarcode; });
-  const lines = autoExportPairs().map(p => copyValueFor(p[0], barcodeByLabel[p[0]]) + '\t' + p[1]);
+  const lines = autoExportPairs(lane).map(p => copyValueFor(p[0], barcodeByLabel[p[0]]) + '\t' + p[1]);
   if (!lines.length) return;
   const text = lines.join('\n');
   const doCopy = () => {
@@ -2913,7 +5118,7 @@ function copyAutoTable() {
   } else {
     doCopy();
   }
-  const btn = document.getElementById('copy-btn');
+  const btn = document.getElementById(lane === 'express' ? 'express-copy-btn' : 'copy-btn');
   const orig = btn.textContent;
   btn.textContent = '✓ Copied!';
   btn.className = 'btn btn-success';
@@ -2921,12 +5126,12 @@ function copyAutoTable() {
 }
 
 
-function downloadAutoTable() {
-  const outRows = autoExportPairs();
+function downloadAutoTable(lane) {
+  const outRows = autoExportPairs(lane);
   if (!outRows.length) return;
   const content = ToolHelpers.buildTSV([], outRows).split('\n').slice(1).join('\n') + '\n';
   const today = ToolHelpers.isoDate();
-  ToolHelpers.downloadTSV('ibno-ready-' + today + '.tsv', content);
+  ToolHelpers.downloadTSV('ibno-ready-' + (lane === 'express' ? 'express-' : '') + today + '.tsv', content);
 }
 
 // ─── CLEAN EXCEL-READY EXPORT (#385) ────────────────────────────────────────────
@@ -3123,6 +5328,8 @@ function resetApp() {
   document.getElementById('summary').style.display         = 'none';
   document.getElementById('day-banner').style.display      = 'none';
   document.getElementById('auto-section').style.display    = 'none';
+  document.getElementById('express-auto-section').style.display = 'none';
+  document.getElementById('express-manual-section').style.display = 'none';
   document.getElementById('manual-section').style.display  = 'none';
   document.getElementById('resolved-section').style.display = 'none';
   document.getElementById('repeat-section').style.display  = 'none';
@@ -3240,6 +5447,23 @@ initSortControls();
 
 // Reflect the saved copy-mode choice (#copy-mode) in the toggle on load.
 syncCopyModeControl();
+
+// Typed "Goes To" areas, pruned to the 30-day window. Loaded BEFORE any restore
+// renders rows, so a restored session's inputs come up already filled.
+loadActualAreas();
+// Work mode is remembered across a reload, but only takes effect once there
+// are rows to work — restoring it onto an empty page would show a bar with
+// nothing in it.
+try {
+  if (toolStorage.get(WORK_MODE_KEY, '')) setWorkMode(true);
+} catch (e) { /* storage unavailable: start with it off */ }
+
+// Escape closes the barcode dialog; clicking the backdrop does too. The dialog
+// is display-only, so dismissing it can never lose a code — the area field
+// commits on blur before the dialog goes away.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && barcodeDialogLabel) closeBarcodeDialog();
+});
 
 // Restore an in-progress session if one was persisted (#157), so a mid-shift
 // reload lands back on the work instead of the empty drop zone.
