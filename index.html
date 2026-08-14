@@ -177,27 +177,31 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       display: none;
     }
-    /* #post-sort-section (issue #634) is deliberately ALWAYS visible, unlike
-       every other .section here. Fixed 2026-08-12 — a real-browser pass on
-       PR #642 found the section was NEVER shown: every other section is
-       revealed by an explicit `el.style.display = 'block'` somewhere in the
-       main report's render path (e.g. #manual-section at applySnapshot), but
-       nothing ever did that for this one — renderPostSortLane() only ever
-       set the display of the TABLE inside it, never the section itself, so
-       the base `.section { display: none; }` above silently won forever.
-       jsdom's getComputedStyle still answers inside a display:none subtree
-       (no layout engine), so every earlier probe that read computed style or
-       .style.display on a child element looked healthy while nothing was
-       actually on screen — this is why an ID-selector CSS rule, not another
-       JS call on a render path, is the fix: this lane's whole purpose is to
-       be worked BEFORE the main report loads, so it cannot wait for a
-       render path gated on the main report (or on having any Post Sort rows
-       yet either — the "Load Post Sort report" button lives INSIDE this
-       section, so hiding the section at zero rows would hide the only way
-       to ever load a first row). An ID selector beats the class selector
-       above regardless of source order or any future JS bug, so this cannot
-       regress silently again the way the class-only version did. */
-    #post-sort-section { display: block; }
+    /* #manual-section (issue #669 review finding 1, CRITICAL) is deliberately
+       ALWAYS visible, unlike every other .section here — the exact same
+       pattern #post-sort-section carried pre-#662 (Fixed 2026-08-12 on PR
+       #642, same root cause). Issue #662 moved the "↑ Load Post Sort report"
+       button and both file inputs INSIDE this section, on the assumption
+       that renderEarlyLane()'s `if (postSortItems.length)` guard and
+       renderResults()'s main-report path between them would always reveal it
+       in time — but on a COLD PAGE, with no report of either kind loaded yet,
+       postSortItems is empty and renderResults has never run, so nothing
+       ever calls `el.style.display = 'block'` and the base
+       `.section { display: none; }` above wins forever. Confirmed in a real
+       browser: the button measures 0x0, hidden by this ancestor, and cannot
+       be clicked — the lane can never be started at all, which defeats the
+       entire point of #634/#661 (working Post Sort BEFORE the main report
+       lands). Exactly the deadlock the #post-sort-section comment this
+       replaces already named: "the 'Load Post Sort report' button lives
+       INSIDE this section, so hiding the section at zero rows would hide the
+       only way to ever load a first row." An ID-selector CSS rule beats the
+       class selector above regardless of source order or any future JS bug
+       (or, as happened here, any future refactor that quietly re-nests the
+       button one level deeper), so this cannot regress silently again. No JS
+       anywhere sets `#manual-section.style.display` any more (search removed
+       from renderResults/renderEarlyLane/resetApp/clearPostSortLane) — this
+       rule is the section's only visibility control, permanently on. */
+    #manual-section { display: block; }
     /* Clickable, sticky section header (collapse + whole-page sticky, #166).
        NOTE: .section must NOT set overflow:hidden, or position:sticky here would
        be clipped to the section box instead of pinning to the viewport. */
@@ -806,16 +810,13 @@
        wiring stay constant; only its visibility is conditional. */
     .street-col, .street-cell { display: none; }
     body.work-mode .street-col, body.work-mode .street-cell { display: table-cell; }
-    /* The Post Sort "early" lane (issue #634) reuses streetCell/.street-copy,
-       but Work mode never operates over it (workRows() is `.manual-body`
-       only — see the .street-copy click handler and workRows() below) — so
-       Tyler would never toggle Work mode on to see it in this lane's own
-       primary use case, working BEFORE the main report even loads and there
-       is nothing in `.manual-body` yet. Fixed (/code-review on #642, finding
-       4): without this override the Street column — the whole point of the
-       lane, copy street -> type belt — stayed invisible exactly when Tyler
-       needs it. Always visible here, independent of body.work-mode. */
-    #post-sort-section .street-col, #post-sort-section .street-cell { display: table-cell; }
+    /* Issue #662: the Post Sort "early" lane no longer has its own section or
+       table — its rows render inside the ground Needs Manual Review lane's
+       #post-sort-tbody (a sibling tbody of #manual-tbody, both `.manual-body`),
+       through the SAME buildManualRow() row builder every other manual review
+       row uses. That means the Street column now follows the SAME visibility
+       rule as every other manual review row: hidden until Work mode is on,
+       not always-on the way the old standalone section kept it. */
     .street-copy {
       font: 700 13px/1.35 inherit; text-align: left; color: var(--text);
       background: none; border: 0; padding: 2px 4px; margin: -2px -4px;
@@ -863,6 +864,49 @@
       border: 1px solid var(--border-soft);
     }
     .bc-flag.conflict { color: var(--danger-ink); }
+
+    /* The Category-cell chip on an early row with no category yet (issue
+       #662) — same pill shape as .bc-flag, deliberately a DIFFERENT class so
+       the two never collide in a selector on the same row (one means
+       "awaiting a barcode", this one means "no code offered yet"). Theme
+       tokens only, same discipline as .bc-flag above. */
+    .early-category-chip {
+      display: inline-block; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      background: var(--hover-soft); color: var(--text-muted); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* The read-only code chip on an early row the disposition fold or the
+       flagged-Work-Area fallback offers a code for (issue #664) — display
+       only, never a button: an early row's action cell stays non-interactive
+       (see buildManualRow's own comment on why resolveItem must never reach
+       postSortItems). Theme tokens only, same pill shape as the chips above. */
+    .early-code-chip {
+      display: inline-block; margin-right: 4px; padding: 1px 6px; border-radius: 8px;
+      font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+      background: var(--hover-soft); color: var(--text); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* The ONLY marker distinguishing a fallback-coded early row (no
+       PLA_LOOKUP behind its code — Work Area alone) from one the main report
+       actually classified (issue #664, Tyler's 2026-08-13 decision to keep
+       the fallback conditioned on this marker never being silently
+       droppable). Deliberately a DISTINCT class from every other chip on this
+       row so a selector for one never accidentally matches another. */
+    .no-pla-marker {
+      display: inline-block; margin-right: 4px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      background: var(--hover-soft); color: var(--danger-ink); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
+    /* An early row's Category cell when the ONLY classification available is
+       the main report's own answer on a row it says needs no work (#664
+       review, finding 5). Muted, no pill, no border: it is reference text,
+       not a state the row is in and not something to act on. */
+    .cat-from-main { color: var(--text-muted); }
 
     /* The disposition fold's toggle (#651 follow-up). Reads as a link rather
        than a button on purpose: it changes what is on screen, it does not act
@@ -1119,7 +1163,8 @@
 
 <div class="day-banner" id="day-banner"></div>
 
-<!-- SECTION: POST SORT "EARLY" LANE (issue #634, third slice of #622) ───────
+<!-- POST SORT "EARLY" LANE (issue #634, third slice of #622; folded into the
+     ground Needs Manual Review lane by #662) ───────────────────────────────
      A supplement, not a replacement: independent of the Inbound and Van Scans
      report above, fed by the fresher "Inbound Scan - No Van Scan - Post Sort"
      export (2-5 minute scan-to-report lag vs 15-30 minutes on the report
@@ -1144,52 +1189,15 @@
      GUARDRAIL: an unresolved or conflicting row copies NOTHING in barcode
      mode — never the tracking number, never one of two disagreeing barcodes
      (see copyValueFor's noFallback option and applyBarcodeLookup's doc
-     comment). -->
-<div class="section" id="post-sort-section">
-  <div class="section-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <h2>&#9201; Post Sort (early)</h2>
-      <span class="badge" id="post-sort-badge">0</span>
-      <span class="filter-note">pre-fills Goes To only &mdash; never offers a code</span>
-    </div>
-    <div class="right">
-      <button class="btn btn-gray" id="copy-selected-post-sort" onclick="copySelectedPostSort()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle). Tracking # to paste into the Track IDs to Full Barcode lookup; barcode once that lookup's result is loaded back in below.">Copy selected (0)</button>
-      <button class="btn btn-gray" id="post-sort-barcode-load-btn" onclick="document.getElementById('post-sort-barcode-file-input').click()" style="display:none" title="Load the Track IDs to Full Barcode lookup's result CSV — joins onto these rows by tracking number">&#8593; Load barcode lookup CSV</button>
-      <button class="btn btn-gray" onclick="document.getElementById('post-sort-file-input').click()">&#8593; Load Post Sort report</button>
-      <button class="btn btn-gray" id="post-sort-clear-btn" onclick="clearPostSortLane()" style="display:none">&larr; Clear</button>
-    </div>
-  </div>
-  <input type="file" id="post-sort-file-input"
-    accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-    onchange="handlePostSortFile(this.files[0])">
-  <!-- Track IDs to Full Barcode lookup result — CSV ONLY (notes/report-registry.md:
-       never open this file in Excel, it destroys the 34-char barcode's precision;
-       reading it as text here never round-trips through Excel so that risk does
-       not apply to this input, but only a .csv is accepted to keep it that way). -->
-  <input type="file" id="post-sort-barcode-file-input" accept=".csv,text/csv"
-    onchange="handlePostSortBarcodeFile(this.files[0])">
-  <div id="post-sort-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
-  <!-- The disposition fold's only control. Always states the count it is
-       holding back, so folded rows are never a silent absence (constraint 1,
-       map #608). -->
-  <div id="post-sort-fold" style="display:none;margin:8px 0;font-size:13px;color:var(--text-muted);"></div>
-  <div id="post-sort-barcode-status" style="display:none;margin:8px 0;font-size:13px;color:var(--text-faint);"></div>
-  <table id="post-sort-table" style="display:none">
-    <thead>
-      <tr>
-        <th style="width:28px"><input type="checkbox" id="post-sort-select-all" onchange="togglePostSortSelectAll(this.checked)" aria-label="select all rows"></th>
-        <th>Tracking #</th>
-        <th class="street-col">Street</th>
-        <th class="goesto-col" title="Where this package actually goes — pre-filled here, never coded">Goes To</th>
-        <th>ZIP</th>
-        <th>Service Provider</th>
-        <th>Inbound Time</th>
-        <th>Recipient / Address</th>
-      </tr>
-    </thead>
-    <tbody id="post-sort-tbody"></tbody>
-  </table>
-</div>
+     comment).
+
+     ISSUE #662: this lane is no longer its own top-of-page section (#634
+     shipped it as one). Its controls now live in the "early strip" inside
+     #manual-section's header (see that section below), and its rows render
+     into #post-sort-tbody, a sibling `<tbody>` of #manual-tbody inside that
+     section's own <table> — same table, same columns, same buildManualRow()
+     row builder every other manual review row uses, one group heading at the
+     top of the lane. See renderEarlyLane() / buildEarlyGroupHeaderRow(). -->
 
 <!-- SECTIONS 0a/0b: EXPRESS ─────────────────────────────────────────────────
      849 is a 2.0 station, so Express runs a separate process from Ground and
@@ -1282,6 +1290,16 @@
         <th style="width:180px">Resolve</th>
       </tr>
     </thead>
+    <!-- Issue #663: early Express rows (Post Sort report, before the main
+         report arrives) render into their own "early" group here, the SAME
+         relationship #post-sort-tbody already has with #manual-tbody in the
+         ground lane's table below — a sibling `.manual-body` tbody in the
+         SAME table, populated by renderEarlyLane().
+         Option B (Tyler, 2026-08-13): only the early rows whose WORK AREA is
+         flagged reach this lane, decided by the same IbnoRules.manualLane()
+         call that routes full-report rows; the rest go to
+         #post-sort-express-other-tbody. -->
+    <tbody id="post-sort-express-tbody" class="manual-body"></tbody>
     <tbody id="express-manual-tbody" class="manual-body"></tbody>
   </table>
 </div>
@@ -1357,6 +1375,42 @@
       </select>
     </div>
   </div>
+  <!-- Issue #662: the "early strip" — everything the deleted #post-sort-section
+       box used to carry (badge, fold toggle, Clear early, load buttons, both
+       file inputs, both status lines, the tracking-number Copy selected for
+       the barcode lookup loop) lives here now, on the ground Needs Manual
+       Review section's own header, above the table. Element ids are UNCHANGED
+       from the #634/#635/#649/#657/#658 lane (#post-sort-badge, #post-sort-fold,
+       #post-sort-select-all, #post-sort-tbody, .postsort-check,
+       clearPostSortLane()) so every prior test that locked down the fold
+       behaviour (issue #657, PR #658's four code-review fixes) still finds the
+       exact same controls by the exact same selectors — only their on-screen
+       location moved. -->
+  <div class="early-strip" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--border);font-size:13px;">
+    <span style="font-weight:600">&#9201; Post Sort (early)</span>
+    <span class="badge" id="post-sort-badge">0</span>
+    <span class="filter-note">pre-fills Goes To only &mdash; never offers a code</span>
+    <button class="btn btn-gray" id="copy-selected-post-sort" onclick="copySelectedPostSort()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle). Tracking # to paste into the Track IDs to Full Barcode lookup; barcode once that lookup's result is loaded back in below.">Copy selected (0)</button>
+    <button class="btn btn-gray" id="copy-flagged-post-sort" onclick="copyFlaggedLookupBatch()" disabled title="One click: copies the tracking numbers for rows in YOUR flagged work areas (the same list as the Flagged Work Areas setting above) that still need the barcode lookup — skips rows the loaded reports already resolved and barcode conflicts. Paste straight into the Track IDs to Full Barcode lookup.">Copy flagged-area tracking #s (0)</button>
+    <button class="btn btn-gray" id="post-sort-barcode-load-btn" onclick="document.getElementById('post-sort-barcode-file-input').click()" style="display:none" title="Load the Track IDs to Full Barcode lookup's result CSV — joins onto these rows by tracking number">&#8593; Load barcode lookup CSV</button>
+    <button class="btn btn-gray" id="post-sort-load-btn" onclick="document.getElementById('post-sort-file-input').click()">&#8593; Load Post Sort report</button>
+    <button class="btn btn-gray" id="post-sort-clear-btn" onclick="clearPostSortLane()" style="display:none">&larr; Clear early</button>
+    <input type="file" id="post-sort-file-input"
+      accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+      onchange="handlePostSortFile(this.files[0])">
+    <!-- Track IDs to Full Barcode lookup result — CSV ONLY (notes/report-registry.md:
+         never open this file in Excel, it destroys the 34-char barcode's precision;
+         reading it as text here never round-trips through Excel so that risk does
+         not apply to this input, but only a .csv is accepted to keep it that way). -->
+    <input type="file" id="post-sort-barcode-file-input" accept=".csv,text/csv"
+      onchange="handlePostSortBarcodeFile(this.files[0])">
+    <div id="post-sort-status" style="display:none;margin:0;font-size:13px;color:var(--text-faint);width:100%;"></div>
+    <!-- The disposition fold's only control. Always states the count it is
+         holding back, so folded rows are never a silent absence (constraint 1,
+         map #608). -->
+    <div id="post-sort-fold" style="display:none;margin:0;font-size:13px;color:var(--text-muted);width:100%;"></div>
+    <div id="post-sort-barcode-status" style="display:none;margin:0;font-size:13px;color:var(--text-faint);width:100%;"></div>
+  </div>
   <table>
     <thead>
       <tr>
@@ -1376,6 +1430,7 @@
         <th style="width:180px">Resolve</th>
       </tr>
     </thead>
+    <tbody id="post-sort-tbody" class="manual-body"></tbody>
     <tbody id="manual-tbody" class="manual-body"></tbody>
   </table>
 </div>
@@ -1498,6 +1553,15 @@
         <th style="width:180px">Resolve</th>
       </tr>
     </thead>
+    <!-- Issue #663 (Option B, Tyler 2026-08-13): early Express rows are routed
+         by the SAME IbnoRules.manualLane() rule that routes full-report rows,
+         so an early Express row OUTSIDE the flagged work areas belongs here,
+         not in Tyler's own Express queue. On a real pull that is 72 of 73
+         Express rows — routing them by the Express label alone would have made
+         this lane's whole reason for existing (2026-08-06: his queue must not
+         read longer than it is) fail for early rows. Same sibling-tbody
+         relationship #post-sort-tbody has with #manual-tbody. -->
+    <tbody id="post-sort-express-other-tbody" class="manual-body"></tbody>
     <tbody id="express-other-tbody" class="manual-body"></tbody>
   </table>
 </div>
@@ -1602,6 +1666,10 @@ function saveSettings() {
   FLAGGED_WORK_AREAS = raw.split(/[\n,]+/).map(v => v.trim()).filter(v => v.length > 0);
   IbnoRules.setFlaggedWorkAreas(FLAGGED_WORK_AREAS);
   toolStorage.set('ibno_flagged_areas', FLAGGED_WORK_AREAS);
+  // The early lane's "Copy flagged-area tracking #s" count filters on this
+  // same list (PostSortLane.flaggedLookupBatch -> IbnoRules.isWorkAreaFlagged),
+  // so a settings save must refresh it without waiting for a lane re-render.
+  updateFlaggedCopyButton();
   const status = document.getElementById('settings-status');
   status.textContent = '✓ Saved';
   status.classList.add('show');
@@ -1611,6 +1679,7 @@ function saveSettings() {
 function resetSettings() {
   FLAGGED_WORK_AREAS = IbnoRules.setFlaggedWorkAreas(DEFAULT_FLAGGED_WORK_AREAS);
   toolStorage.remove('ibno_flagged_areas');
+  updateFlaggedCopyButton(); // same staleness as saveSettings — the count filters on this list
   document.getElementById('flagged-areas-input').value = FLAGGED_WORK_AREAS.join('\n');
   const status = document.getElementById('settings-status');
   status.textContent = '↺ Reset';
@@ -1969,9 +2038,24 @@ function rawViewerQuickCodeRender(record) {
 // in the SAME click (no stale duplicate row until the next full re-render).
 // Uses Array#find over the dataset rather than a selector built from the label
 // so a label containing selector-special characters never breaks the lookup.
+//
+// EXCLUDES every early tbody (EARLY_TBODY_IDS, defined with MANUAL_LANES
+// below — issue #669 review finding 4, extended to the Express early tbodies
+// by issue #663): they all carry class .manual-body (issue #662/#663),
+// precede their lane's own full-report tbody in document order, and #662
+// deliberately does not dedup a label that exists in BOTH reports — so a
+// package the main report calls manual AND the Post Sort report also saw
+// would match its EARLY row here first. This function's only caller
+// (onRawViewerRowAction) always works from `manualItems`, which the early row
+// is never a member of; resolveItem() on the wrong <tr> would remove the early
+// row (and possibly its group header) while the real coded row stayed on
+// screen as a stale duplicate, then the early row would simply come back on
+// the next renderEarlyLane(). Each lane's OWN tbody (#manual-tbody,
+// #express-manual-tbody, #express-other-tbody) is also `.manual-body` and must
+// stay reachable here — only the early ones are excluded.
 function findManualRow(label) {
   return Array.from(document.querySelectorAll('.manual-body tr[data-label]'))
-    .find(tr => tr.dataset.label === label) || null;
+    .find(tr => tr.dataset.label === label && EARLY_TBODY_IDS.indexOf(tr.closest('tbody').id) === -1) || null;
 }
 
 // Row action handler for the raw viewer (#392). Applies the SAME quick-code
@@ -2524,7 +2608,24 @@ function setSort(table, key, dir) {
   syncSortSelect(table);
   updateSortHeaders();
   if (table === 'auto' || table === 'express-auto') renderAutoSectionRows();
-  else if (table === 'manual' || table === 'express-manual' || table === 'express-other') { renderManualSectionRows(); applyManualSearch(); }
+  else if (table === 'manual' || table === 'express-manual' || table === 'express-other') {
+    renderManualSectionRows();
+    // Issue #673 review finding 3: every early tbody is a SIBLING of its
+    // lane's own tbody, not a set of rows inside it, so
+    // renderManualSectionRows() never touches them and a sort change left the
+    // lane's early group in report order. renderEarlyLane() re-sorts all three
+    // early tbodies (compareBySort with each lane's own table key) and
+    // re-applies the search itself, so early rows obey the same sort the
+    // lane's full-report rows just picked up. All three lanes route early rows
+    // under #663 Option B — 'express-other' included, and on a real pull that
+    // is the one holding 72 of the 73 early Express rows.
+    //
+    // PR #673 review finding 7: no standalone applyManualSearch() call between
+    // these two any more. renderManualSectionRows() ends with one and
+    // renderEarlyLane() ends with one, so a third in the middle re-filtered
+    // every row of every lane for nothing — three full passes per sort click.
+    renderEarlyLane();
+  }
   else if (table === 'resolved') renderResolvedSection();
   else if (table === 'repeat') renderRecurringSection(currentRecurringMap);
 }
@@ -2635,8 +2736,35 @@ function updateExpressSection() {
   // Express review splits by work area: the flagged-area lane is Tyler's own
   // queue and owns the badge and the stat card; the rest live in their own
   // section at the bottom of the page and are counted by their own badge.
-  const expMan   = manualLaneItems('express').length;
-  const expOther = manualLaneItems('express-other').length;
+  // Issue #663 acceptance criterion: "the Express lane's badge count includes
+  // its early rows" — earlyLaneItems(key) is the SAME fold-aware population
+  // renderEarlyLane() renders into that lane's early tbody, so neither badge
+  // can read a different count than what is actually on screen. Option B
+  // (2026-08-13) makes this matter for BOTH express lanes: an early Express
+  // row outside the flagged areas counts toward the Other Work Areas badge,
+  // not Tyler's own.
+  //
+  // PR #673 review finding 2: counted by UNIQUE LABEL, not by summing two row
+  // counts. A package can hold a row in BOTH reports — that is the common case
+  // on a real mid-sort pull, where the main report already answers most of the
+  // early lane (117 of 285 overlap, #657/#661's own measurement) — and the two
+  // rows are one PACKAGE. updateStatTotal() already dedups this exact overlap
+  // for the Total card ("cards count PACKAGES, not rows"); a lane badge is the
+  // same kind of number and read side by side with it, so summing the raw row
+  // counts here made the two disagree by the size of the overlap.
+  //
+  // The LANE itself still shows both rows on purpose (#662: the full report's
+  // row and the early row are separate things to look at, and #661's "the full
+  // report's row wins" dedup is its own later ticket) — this is a counting
+  // rule, not a rendering one.
+  const laneUniquePackages = (key) => {
+    const labels = new Set();
+    manualLaneItems(key).forEach(it => labels.add(it.label));
+    earlyLaneItems(key).forEach(it => labels.add(it.label));
+    return labels.size;
+  };
+  const expMan   = laneUniquePackages('express');
+  const expOther = laneUniquePackages('express-other');
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('express-auto-badge', expAuto);
   set('express-manual-badge', expMan);
@@ -2727,7 +2855,7 @@ function buildGroupHeaderRow(g, count) {
     // Scoped to THIS header's own tbody so an express select-all never reaches
     // a ground row, and vice versa.
     body.querySelectorAll('tr[data-label][data-bucket="' + g.key + '"]').forEach(row => {
-      if (q && row.textContent.toLowerCase().indexOf(q) === -1) return;
+      if (!rowMatchesQuery(row, q)) return;   // one shared predicate (#673 finding 8)
       const cb = row.querySelector('.manual-check');
       if (cb) { cb.checked = all.checked; row.classList.toggle('row-checked', all.checked); }
     });
@@ -2835,16 +2963,80 @@ function bulkApply(bucket, code, body) {
 // MANUAL_LANES is the single ordered description of those lanes \u2014 tbody, sort
 // key, empty state \u2014 read by the renderer, the search and the copy buttons, so
 // a lane is described once instead of respelled at each of them.
+//
+// Issue #663 (Option B) adds the early half of each lane to the SAME
+// description: `earlyTbody` is the sibling `.manual-body` tbody the Post Sort
+// early group renders into (a sibling of `tbody`, in the same <table>, NOT a
+// row inside it), `earlySelectAll` is that group's own header checkbox, and
+// `section` is the .section element whose visibility renderEarlyLane()
+// recomputes on every pass — revealed when the lane has early rows, hidden
+// again when it has none and no main report is loaded (PR #673 review finding
+// 1: that reveal used to be add-only, which left ghost sections behind on a
+// re-drop that yielded no rows for the lane). All three lanes now have
+// an early counterpart, because an early row is routed by the SAME
+// IbnoRules.manualLane() call a full-report row is (see earlyLaneOf).
+// #manual-section has no `section` entry on purpose: it is permanently
+// visible (see its CSS rule's own comment) and no JS may set its display.
 const MANUAL_LANES = [
   { key: 'ground',        tbody: 'manual-tbody',         table: 'manual',
-    search: 'manual-search',        note: 'manual-search-note', copyBtn: 'copy-selected-manual',       barcodeBtn: 'barcode-selected-manual',        absent: '' },
+    search: 'manual-search',        note: 'manual-search-note', copyBtn: 'copy-selected-manual',       barcodeBtn: 'barcode-selected-manual',        absent: '',
+    earlyTbody: 'post-sort-tbody',                    earlySelectAll: 'post-sort-select-all',              section: '' },
   { key: 'express',       tbody: 'express-manual-tbody', table: 'express-manual',
-    search: 'express-manual-search', note: 'express-manual-note', copyBtn: 'copy-selected-express',     barcodeBtn: 'barcode-selected-express',       absent: 'none in this report' },
+    search: 'express-manual-search', note: 'express-manual-note', copyBtn: 'copy-selected-express',     barcodeBtn: 'barcode-selected-express',       absent: 'none in this report',
+    earlyTbody: 'post-sort-express-tbody',            earlySelectAll: 'post-sort-select-all-express',      section: 'express-manual-section' },
   { key: 'express-other', tbody: 'express-other-tbody',  table: 'express-other',
-    search: 'express-other-search',  note: 'express-other-note',  copyBtn: 'copy-selected-express-other', barcodeBtn: 'barcode-selected-express-other', absent: 'none in this report' },
+    search: 'express-other-search',  note: 'express-other-note',  copyBtn: 'copy-selected-express-other', barcodeBtn: 'barcode-selected-express-other', absent: 'none in this report',
+    earlyTbody: 'post-sort-express-other-tbody',      earlySelectAll: 'post-sort-select-all-express-other', section: 'express-other-section' },
 ];
 function manualLaneOf(item) { return IbnoRules.manualLane(item); }
 function manualLaneItems(key) { return manualItems.filter(it => manualLaneOf(it) === key); }
+
+// Issue #673 review finding 2: every Needs Manual Review lane has an early-row
+// sibling tbody (issue #662/#663) that MANUAL_LANES' own `tbody` ids never
+// reach, because early rows render into a SIBLING tbody of the lane's
+// full-report one, not into it. Both of these are DERIVED from MANUAL_LANES
+// rather than respelled, so a fourth lane (or a renamed tbody) can never leave
+// one of them silently stale \u2014 the exact drift #673's review found between the
+// lane list and the early-tbody list.
+const EARLY_TBODY_FOR_LANE = MANUAL_LANES.reduce((m, l) => { m[l.key] = l.earlyTbody; return m; }, {});
+const EARLY_TBODY_IDS = MANUAL_LANES.map(l => l.earlyTbody);
+// PR #673 review finding 10: NO `|| MANUAL_LANES[0]` fallback. An unknown
+// early-tbody id is a programming error (a renamed tbody, a typo, a fourth
+// lane wired only half-way), and answering it with the GROUND lane made that
+// error look like working code — the caller would silently read the ground
+// search box and scope a select-all to the wrong lane. Fail loudly instead.
+function earlyLaneCfg(tbodyId) {
+  const cfg = MANUAL_LANES.find(l => l.earlyTbody === tbodyId);
+  if (!cfg) throw new Error('earlyLaneCfg: unknown early tbody id "' + tbodyId + '"');
+  return cfg;
+}
+
+// rowMatchesQuery(tr, q) -> the ONE row-matches-the-search predicate (PR #673
+// review finding 8). It had been hand-copied at five call sites — both halves
+// of applyManualSearch, the deleted countMatchingEarlyRows, the bucket
+// header's select-all and togglePostSortSelectAll — so the "showing N of M"
+// note could drift from what is actually visible. `q` is already trimmed and
+// lower-cased by the caller; an empty query matches everything.
+function rowMatchesQuery(tr, q) {
+  return !q || tr.textContent.toLowerCase().indexOf(q) !== -1;
+}
+
+// manualLaneEmptyMessage(laneKey) -> the "this lane has nothing in it" line,
+// single-sourced (PR #673 review finding 4). renderManualSectionRows() and
+// resolveItem() both paint it, and the copy in resolveItem had drifted: it
+// tested only `id === 'express-manual-tbody'`, so the Express-other lane —
+// which #663 Option B fills with 72 of a real pull's 73 early Express rows —
+// got the GROUND lane's wording.
+function manualLaneEmptyMessage(laneKey) {
+  if (laneKey === 'ground') {
+    return resolvedItems.length ? 'All packages resolved ✓' : 'No packages need manual review';
+  }
+  // The flagged-area lane says WHAT it holds, not just that it is empty: on a
+  // 2.0 station most Express review is the OTHER lane's, so "no express
+  // packages need review" alone read as "no express today" and was wrong.
+  return laneKey === 'express' ? 'No express packages in your flagged areas or unassigned zips need review'
+                               : 'No other express packages need review';
+}
 
 function renderManualSectionRows() {
   const { bodies, open } = openLanes(MANUAL_LANES.map(l => l.tbody),
@@ -2855,12 +3047,18 @@ function renderManualSectionRows() {
     if (!tbody) return;
     const mine = manualLaneItems(lane.key);
     if (!mine.length) {
-      const msg = lane.key === 'ground'
-        ? (resolvedItems.length ? 'All packages resolved \u2713' : 'No packages need manual review')
-        : (lane.key === 'express'
-            ? 'No express packages in your flagged areas or unassigned zips need review'
-            : 'No other express packages need review');
-      tbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' + msg + '</td></tr>';
+      // PR #673 review finding 5: "nothing needs review here" is a statement
+      // about the LANE as Tyler sees it, and since #662/#663 a lane is TWO
+      // tbodies \u2014 its full-report rows and its early Post Sort group in the
+      // sibling tbody just above. Gated on manualLaneItems alone, this painted
+      // "No express packages ... need review" directly beneath 72 real, visible
+      // early Express rows. The early group owns its own rendering
+      // (renderEarlyLane); all that is needed here is to stay quiet when it has
+      // something to show.
+      if (!earlyLaneItems(lane.key).length) {
+        tbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
+          manualLaneEmptyMessage(lane.key) + '</td></tr>';
+      }
       return;
     }
     MANUAL_GROUPS.forEach(g => {
@@ -2910,10 +3108,17 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   // auto-coded express package is Tyler's work wherever it sorted. Only the
   // review lanes (open, and the ones he has since resolved) are filtered.
   const notOurs = (it) => IbnoRules.manualLane(it) === 'express-other';
-  document.getElementById('stat-total').textContent  =
-    auto.length +
-    manual.filter(it => !notOurs(it)).length +
-    resolvedItems.filter(it => !notOurs(it)).length;
+  // Issue #662: Total counts early rows too — updateStatTotal() (below) is the
+  // single owner of #stat-total now, so both this fresh render AND a Post Sort
+  // load/clear that happens with no report change (handlePostSortFile,
+  // clearPostSortLane, handlePostSortBarcodeFile) recompute it the same way.
+  // The Repeats card and the 30-day repeat history are DELIBERATELY untouched
+  // here: currentRecurringMap is built only from the main report's own parse,
+  // and postSortItems never feeds it — an early row's Category is only ever
+  // borrowed from the main report's own classification (#664) or absent
+  // entirely, and writing a borrowed or blank category into history is not
+  // recoverable.
+  updateStatTotal(auto, manual);
   document.getElementById('stat-repeat').textContent = Object.keys(currentRecurringMap).length;
   document.getElementById('summary').style.display   = 'grid';
 
@@ -2943,7 +3148,9 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   // Manual table
   renderManualSectionRows();
   applyManualSearch();
-  document.getElementById('manual-section').style.display = 'block';
+  // #manual-section is always visible now (issue #669 review finding 1 —
+  // see the #manual-section CSS rule's own comment); no JS reveal needed
+  // here any more.
 
   renderRecurringSection(currentRecurringMap);
 
@@ -2987,7 +3194,11 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
     // that needs working from one that never will. This is where it finds
     // out. Merges, so an earlier drop's answers survive.
     postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
-    renderPostSortLane();
+    // Early-code decision (issue #664): now that the disposition fold ran,
+    // resolve each row's category/reason/plaArbitrated from it (or the
+    // flagged-Work-Area fallback for the fresh tail it missed).
+    postSortItems = PostSortLane.applyEarlyCode(postSortItems);
+    renderEarlyLane();
   }
 }
 
@@ -3247,20 +3458,7 @@ function attachLabelCopy(tr, label, barcode) {
 function copyRowBtn(e) {
   const btn = e.currentTarget;
   const text = btn.dataset.label + '\t' + btn.dataset.code;
-  const doCopy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  };
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).catch(doCopy);
-  } else {
-    doCopy();
-  }
+  ToolHelpers.copyText(text).catch(() => {});
   btn.textContent = '✓';
   btn.classList.add('copied');
   setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 1500);
@@ -3480,9 +3678,60 @@ function applyAutoFilter() {
 // Search spans BOTH review lanes, so a tracking number is found wherever it
 // sits. Each lane keeps its own group headers and its own empty state.
 function applyManualSearch() {
-  // Each review section owns its own search box, so each lane filters by its
-  // own input and reports its own "showing N of M". A search in express must
-  // never hide a ground row, or vice versa.
+  // PASS 1 — the EARLY tbodies (issue #662 acceptance criterion, extended to
+  // all three lanes by #663). Each `earlyTbody` is a sibling of its lane's own
+  // tbody (not one of MANUAL_LANES' `tbody` ids, so pass 2 never reaches it)
+  // and filters against the SAME search box that lane already uses — one
+  // search box, one query, both tbodies of the same lane. A search in one lane
+  // must never hide another lane's row.
+  //
+  // PR #673 review finding 8: this pass now RETURNS its per-lane match count
+  // (earlyShownByLane), which pass 2 reads for its "showing N of M" note and
+  // its "No rows match this search" decision. Those used to come from a
+  // separate countMatchingEarlyRows() helper that re-walked the same tbodies
+  // with its own hand-copy of the match predicate — two walks and two rules
+  // for one number, free to disagree with what is actually on screen. One
+  // walk, one predicate (rowMatchesQuery), one count.
+  //
+  // Pass 1 runs FIRST for exactly that reason: the count has to exist before
+  // pass 2 can report it.
+  const earlyShownByLane = {};
+  MANUAL_LANES.forEach(lane => {
+    earlyShownByLane[lane.key] = 0;
+    const earlyBody = document.getElementById(lane.earlyTbody);
+    if (!earlyBody) return;
+    const earlyInput = document.getElementById(lane.search);
+    const eq = String((earlyInput && earlyInput.value) || '').trim().toLowerCase();
+    // Issue #669 review finding 5: an early-returning detail-row left an
+    // expanded detail panel orphaned (still shown) once its parent row was
+    // filtered out of a search — pass 2 tracks lastVisible for exactly this,
+    // and this block never did.
+    let eLastVisible = true;
+    // Issue #669 review finding 6: the header row's own count is baked in at
+    // render time (buildEarlyGroupHeaderRow(mine.length)) and this block used
+    // to leave it always shown, so a search matching zero early rows still
+    // read "⏱ Post Sort (early) 289" over an empty group. The lanes' own group
+    // headers already hide when nothing in the bucket matches (groupHasMatch,
+    // in pass 2) — mirror that here.
+    let eShown = 0;
+    earlyBody.querySelectorAll('tr').forEach(tr => {
+      if (tr.classList.contains('detail-row')) { tr.style.display = eLastVisible ? '' : 'none'; return; }
+      if (tr.classList.contains('manual-group-row')) { return; } // resolved after the pass, below
+      if (!tr.dataset.label) { tr.style.display = ''; eLastVisible = true; return; }
+      const visible = rowMatchesQuery(tr, eq);
+      tr.style.display = visible ? '' : 'none';
+      eLastVisible = visible;
+      if (visible) eShown++;
+    });
+    earlyShownByLane[lane.key] = eShown;
+    const earlyHeader = earlyBody.querySelector('tr.manual-group-row[data-group="early"]');
+    if (earlyHeader) earlyHeader.style.display = eShown ? '' : 'none';
+  });
+
+  // PASS 2 — each lane's FULL-REPORT tbody. Each review section owns its own
+  // search box, so each lane filters by its own input and reports its own
+  // "showing N of M". A search in express must never hide a ground row, or
+  // vice versa.
   MANUAL_LANES.forEach(lane => {
     const tbody = document.getElementById(lane.tbody);
     if (!tbody) return;
@@ -3501,7 +3750,7 @@ function applyManualSearch() {
       if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
       if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
       if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
-      const match = !active || tr.textContent.toLowerCase().indexOf(q) !== -1;
+      const match = rowMatchesQuery(tr, q);
       // A row shows if it matches the search and its bucket isn't collapsed. An
       // ACTIVE search overrides collapse, so searching always reveals its hits even
       // when every group starts collapsed; clearing the search re-collapses them.
@@ -3516,8 +3765,28 @@ function applyManualSearch() {
       gh.style.display = groupHasMatch[gh.dataset.group] ? '' : 'none';
     });
 
-    const total = manualLaneItems(lane.key).length;
-    if (active && shown === 0 && total > 0) {
+    // Issue #673 review finding 2: total previously only counted full-report
+    // rows (manualLaneItems), so a Post Sort-only load with zero full-report
+    // rows but a nonzero early-lane badge wrote the lane's absent text
+    // ("none in this report") under a visibly nonzero badge, and an active
+    // search matching only early rows (which this loop never touches --
+    // early tbodies are filtered separately, below) injected a false "No
+    // rows match this search" empty row on top of real, matching early rows.
+    // Every lane has an early population now (issue #663 Option B), the
+    // 'express-other' lane emphatically included: on a real pull it is where
+    // 72 of the 73 early Express rows land.
+    const total = manualLaneItems(lane.key).length + earlyLaneItems(lane.key).length;
+    // Issue #673 review finding 2 (continued): `shown` above only counts
+    // matches inside THIS lane's full-report tbody -- the lane's early rows
+    // live in a sibling tbody this loop never iterates, and were filtered by
+    // pass 1 above. Without adding their match count here, a search matching
+    // ONLY early rows read shown===0 against the now-nonzero `total` and
+    // injected a false "No rows match this search" row into the full-report
+    // tbody, right on top of real, matching early rows visible just above it.
+    // The count comes straight out of pass 1's own filtering loop (finding 8),
+    // so it cannot disagree with which rows that loop actually left visible.
+    const shownWithEarly = shown + earlyShownByLane[lane.key];
+    if (active && shownWithEarly === 0 && total > 0) {
       const empty = document.createElement('tr');
       empty.id = emptyId;
       empty.innerHTML = '<td colspan="' + MANUAL_COLSPAN + '" class="empty-state">No rows match this search</td>';
@@ -3525,7 +3794,7 @@ function applyManualSearch() {
     }
     // Single owner of this note. While searching it reports the slice; otherwise
     // it states absence, so "none today" never reads as a parse failure.
-    if (note) note.textContent = active ? ('showing ' + shown + ' of ' + total)
+    if (note) note.textContent = active ? ('showing ' + shownWithEarly + ' of ' + total)
                                         : (total === 0 ? lane.absent : '');
   });
 }
@@ -3665,8 +3934,8 @@ function goesToCell(item, opts) {
   // A value pre-filled by the Post Sort "early" lane (issue #634) is tagged
   // too — wherever this row is seen, "early" means it pre-fills Goes To but
   // has not been confirmed against a scan on this report yet. Shared with the
-  // Post Sort lane's own row builder (see postSortRowHtml), which reuses this
-  // exact function with opts.noPropagate: true.
+  // shared buildManualRow() row builder (issue #662), which reuses this
+  // exact function with opts.noPropagate: true for an early row.
   const early = v && ActualArea.isEarly(actualAreaStore, item && item.label);
   const title = o.noPropagate
     ? 'Where this package actually goes. Pre-fills this row only — does not fill any other row.'
@@ -3840,6 +4109,26 @@ let postSortSeq = 0;
 // barcode-lookup read still in flight, so that read must not be allowed to
 // land afterward (code review finding 5).
 let postSortBarcodeSeq = 0;
+// Feedback-text sequence for copySelectedPostSort (PR #669, five red CI runs).
+// Each copy shows transient button text ("✓ Copied N" / "0 copied") and
+// schedules a 1200ms revert. Those timers outlive the copy that scheduled
+// them, so an EARLIER copy's revert can fire during a LATER copy's feedback
+// and repaint the button with whatever the current checked count implies.
+//
+// Proven, not theorized: a CI textContent-write trace on this exact case
+// logged "Copy failed" at t+0, then "Copy selected (1)" at t+43ms and again
+// at t+103ms, both from updatePostSortCopyButton() inside timer callbacks
+// scheduled by previous copies. Neither is the 1200ms revert of the failing
+// copy itself — the failure path schedules none.
+//
+// Why it never reproduced locally: it needs an earlier copy's 1200ms timer
+// to still be pending when a later copy runs, which depends entirely on how
+// fast the preceding work finished. It missed on macOS every time across
+// nine runs and hit on the Linux runner every time across five.
+//
+// Every copy bumps this; every revert only reverts if it is still the latest.
+// A stale timer becomes a no-op instead of clobbering newer feedback.
+let postSortCopyFeedbackSeq = 0;
 
 // setPostSortStatusEl(id, msg, isError) -> shared body for postSortStatus and
 // postSortBarcodeStatus (issue #635 added the second status line, for the
@@ -3863,6 +4152,67 @@ function postSortStatus(msg, isError) {
 }
 function postSortBarcodeStatus(msg, isError) {
   setPostSortStatusEl('post-sort-barcode-status', msg, isError);
+}
+
+// earlyWorkingItems() -> the early rows that count as "the working set"
+// (issue #662): PostSortLane.needsWork's fold (#657), nothing more.
+//
+// DELIBERATELY NOT deduped against manualItems here. A label the main report
+// ALSO calls 'manual' still needsWork (it is not 'skip'/'auto'), and issue
+// #661's decision to drop an early row once the full report's OWN row for
+// the same label has landed ("the full report's row wins", user story 10) is
+// explicitly out of scope for #662 — a later ticket's job. Pinned by
+// PR #658's own fold regression test, which asserts a label the main report
+// calls manual STAYS in the early lane (tests/ibno-post-sort-lane-dom.test.js,
+// "a main report that says SKIP folds that row away, keeps the MANUAL one").
+// ALSO deliberately not filtered by lane, and this is an OPEN QUESTION issue
+// #663 (Option B) leaves exactly as it found it rather than deciding silently:
+// full-report rows in 'express-other' are excluded from Total Flagged
+// (`notOurs`, below — "not Tyler's queue, so they must not inflate the day's
+// number", 2026-08-06), and as of Option B we finally know WHICH early rows
+// are express-other too (72 of 73 on a real pull). Applying the same exclusion
+// here would be the consistent read, but it changes a number Tyler reads on
+// screen, so it stays a product decision for him, not a side effect of a
+// routing change. Nothing here is blocked on it: the lane badges are already
+// correct either way (updateExpressSection counts per lane).
+function earlyWorkingItems() {
+  return postSortItems.filter(PostSortLane.needsWork);
+}
+
+// updateStatTotal(auto, manual) -> the Total Flagged stat card, now the ONE
+// place that counts it (issue #662: it used to be inlined in renderResults,
+// which never ran again on a Post Sort load/clear — those now call this too,
+// via renderEarlyLane, so the card tracks postSortItems changes with no main
+// report re-run needed). Falls back to the current module-level autoItems/
+// manualItems when called with no report just loaded.
+function updateStatTotal(auto, manual) {
+  const a = auto || autoItems;
+  const m = manual || manualItems;
+  // Same exclusion renderResults always used: express rows outside the
+  // flagged areas are surfaced for visibility but are not Tyler's queue, so
+  // they must not inflate the day's number (Tyler, 2026-08-06).
+  const notOurs = (it) => IbnoRules.manualLane(it) === 'express-other';
+  // Issue #669 review finding 2: #662 deliberately does NOT dedup an early
+  // row against the main report's own row for the same label — PR #658's own
+  // fold regression test requires a label the main report calls 'manual' to
+  // STAY in the early lane, and #661's "the full report's row wins" dedup is
+  // explicitly a later ticket. That is correct for the LANE (both rows are
+  // real, separate things to look at), but the Total stat card counts
+  // PACKAGES, not rows, and on a real mid-sort pull most of the 285-row
+  // early working set (117 of 285, #657/#661's own measurement) is exactly
+  // this overlap — counting both a manual-review row AND its early
+  // duplicate as two separate packages inflates the card toward double,
+  // confirmed 643 against 85 ground manual + 285 early rows in a real
+  // browser. Count by UNIQUE LABEL across auto/manual/resolved first, then
+  // add only the early rows whose label isn't already counted there.
+  const countedLabels = new Set();
+  a.forEach(it => countedLabels.add(it.label));
+  m.filter(it => !notOurs(it)).forEach(it => countedLabels.add(it.label));
+  resolvedItems.filter(it => !notOurs(it)).forEach(it => countedLabels.add(it.label));
+  const base = countedLabels.size;
+  const uniqueEarly = earlyWorkingItems().filter(it => !countedLabels.has(it.label)).length;
+  const el = document.getElementById('stat-total');
+  if (el) el.textContent = base + uniqueEarly;
 }
 
 // handlePostSortFile(file) -> read the dropped file, sniff CSV vs xlsx via
@@ -3917,6 +4267,9 @@ function handlePostSortFile(file) {
       // tier 1 and for the same reason: both answer "what does the already
       // loaded main report already know about this row".
       postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
+      // Early-code decision (issue #664), same call as the main-report-reload
+      // path above: resolves category/reason/plaArbitrated per row.
+      postSortItems = PostSortLane.applyEarlyCode(postSortItems);
       const mainResolvedCount = postSortItems.filter(it => it.barcodeSource === 'main').length;
       const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
       // #649 code review finding 4: a note only ever appearing when the count
@@ -3946,14 +4299,14 @@ function handlePostSortFile(file) {
       }
       postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
         ' loaded from ' + file.name + '.' + mainNote, false);
-      renderPostSortLane();
+      renderEarlyLane();
     }).catch(function (err) {
       if (seq !== postSortSeq) return;
       // Reset to the empty state on ANY read/parse failure — including the
       // loud TRAP 1 / TRAP 2 refusals from lib/post-sort-scans.js — so a bad
       // drop never leaves a previously-rendered lane on screen.
       postSortItems = [];
-      renderPostSortLane();
+      renderEarlyLane();
       postSortStatus('Error reading Post Sort report: ' + (err && err.message ? err.message : err), true);
     });
   };
@@ -3976,7 +4329,26 @@ function clearPostSortLane() {
   if (input) input.value = '';
   postSortStatus('', false);
   postSortBarcodeStatus('', false);
-  renderPostSortLane();
+  renderEarlyLane();
+  // Issue #669 review finding 7/8: #manual-section itself is never hidden
+  // again (see its CSS rule's own comment) — the early strip's "Load Post
+  // Sort report" button must stay reachable, "Clear early" included, which
+  // is the same reason it must be reachable on a cold page in the first
+  // place. #summary is different: nothing depends on the stat cards being
+  // reachable for further input, so it is hidden again here, but ONLY when
+  // there is truly nothing left to report — a main report loaded on its own
+  // (lastRows) still owns the cards even with no early rows left.
+  //
+  // The lane SECTIONS are not hidden here any more (PR #673 review finding 1):
+  // renderEarlyLane(), called just above, now recomputes each one's visibility
+  // in both directions under the same "no early rows and no main report" rule
+  // this block used. Two copies of that rule is how the two got to disagree in
+  // the first place — a re-drop that yielded no Express rows never came
+  // through here at all, and left a ghost section behind.
+  if (!postSortItems.length && !(Array.isArray(lastRows) && lastRows.length > 0)) {
+    const summary = document.getElementById('summary');
+    if (summary) summary.style.display = 'none';
+  }
 }
 
 // handlePostSortBarcodeFile(file) -> read the dropped "Track IDs to Full
@@ -4061,7 +4433,7 @@ function handlePostSortBarcodeFile(file) {
     // resolves that ALSO has a main-report SCAN_BARCODE still ends up on the
     // main report's answer, never the lookup's.
     postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, result, mainReportBarcodeMap());
-    renderPostSortLane();
+    renderEarlyLane();
 
     // #649 code review finding 3: the status line used to be computed from
     // `result` — the RAW lookup parse, before tier-3 arbitration ran. A
@@ -4135,13 +4507,39 @@ function onPostSortCheck(cb) {
 // Acts on the VISIBLE rows only, which is what "select all" means with a fold
 // on screen: it must never reach behind the fold and check rows Tyler cannot
 // see, and it must not clear ones he checked before folding either.
-function togglePostSortSelectAll(checked) {
-  const body = document.getElementById('post-sort-tbody');
+//
+// Issue #663: tbodyId (default 'post-sort-tbody', the ground group, for every
+// pre-existing caller) scopes this to ONE of the three early groups at a time
+// — an Express group's own select-all must never reach across into another
+// group's rows. Each group reads its OWN lane's search box (earlyLaneCfg),
+// mirroring the ground/#manual-search pairing this function already had.
+function togglePostSortSelectAll(checked, tbodyId) {
+  const id = tbodyId || 'post-sort-tbody';
+  const body = document.getElementById(id);
   if (!body) return;
+  // Scoped to VISIBLE rows only (issue #669 review finding 3) — never reach
+  // behind the fold or an active search. Before #662 this lane had no search
+  // of its own, so every row here was implicitly visible; applyManualSearch's
+  // early-lane block now filters #post-sort-tbody against the SAME
+  // #manual-search box the ground lane uses, and this select-all kept
+  // checking every row in the tbody regardless — confirmed in a real browser:
+  // searching "WALGREEN" (3 visible rows) and clicking select-all checked all
+  // 285, pasting packages Tyler never selected into the Track IDs to Full
+  // Barcode lookup. buildGroupHeaderRow's own select-all (the ground lane's
+  // bucket headers) already reads its lane's search box and skips
+  // non-matching rows for exactly this reason — same pattern here.
+  const searchId = earlyLaneCfg(id).search;
+  const q = String((document.getElementById(searchId) || {}).value || '').trim().toLowerCase();
   body.querySelectorAll('tr[data-label]').forEach(tr => {
+    if (!rowMatchesQuery(tr, q)) return;   // one shared predicate (#673 finding 8)
     const label = tr.getAttribute('data-label');
     const cb = tr.querySelector('.postsort-check');
-    if (cb) cb.checked = checked;
+    // .row-checked is normally toggled by the checkbox's own 'change'
+    // listener (buildManualRow), which never fires for a programmatic
+    // .checked assignment (issue #669 review finding 9) — set it directly
+    // here so the highlighted-row styling (.manual-body tr.row-checked td)
+    // stays in sync with a select-all click, not just an individual click.
+    if (cb) { cb.checked = checked; tr.classList.toggle('row-checked', checked); }
     if (!label) return;
     if (checked) postSortChecked.add(label);
     else postSortChecked.delete(label);
@@ -4161,13 +4559,30 @@ function togglePostSortSelectAll(checked) {
 // a bug. When some checked rows will be excluded, this now shows the
 // EFFECTIVE count that will actually be copied, "(effective of checked)", so
 // the number on the button already matches what lands on the clipboard.
+// earlyCheckedRows() -> every checked early row's <tr>, across ALL THREE early
+// tbodies (issue #663). The early strip's "Copy selected" / paste-to-lookup
+// workflow (#635) is ONE control shared by every early group now that rows are
+// split across the three lanes — splitting the ROWS must not split that
+// workflow, so this reads across EARLY_TBODY_IDS instead of the ground tbody
+// alone. Note this is the EARLY strip's own copy control (.postsort-check,
+// #copy-selected-post-sort), deliberately unlike each lane's per-lane
+// "Copy selected" button (copySelectedManual), which stays scoped to ONE
+// lane's own full-report tbody and must never mix lanes.
+function earlyCheckedRows() {
+  return EARLY_TBODY_IDS.reduce((acc, id) => {
+    const body = document.getElementById(id);
+    if (body) {
+      Array.from(body.querySelectorAll('tr[data-label] .postsort-check:checked'))
+        .forEach(cb => { const tr = cb.closest('tr[data-label]'); if (tr) acc.push(tr); });
+    }
+    return acc;
+  }, []);
+}
+
 function updatePostSortCopyButton() {
   const btn = document.getElementById('copy-selected-post-sort');
   if (!btn) return;
-  const body = document.getElementById('post-sort-tbody');
-  const checkedTrs = body
-    ? Array.from(body.querySelectorAll('tr[data-label] .postsort-check:checked')).map(cb => cb.closest('tr[data-label]'))
-    : [];
+  const checkedTrs = earlyCheckedRows();
   const n = checkedTrs.length;
   const effective = getCopyMode() === 'tracking'
     ? checkedTrs.filter(tr => tr.dataset.barcodeSource !== 'main').length
@@ -4184,10 +4599,7 @@ function updatePostSortCopyButton() {
 }
 
 function copySelectedPostSort() {
-  const body = document.getElementById('post-sort-tbody');
-  const checked = Array.from(body ? body.querySelectorAll('tr[data-label] .postsort-check:checked') : [])
-    .map(cb => cb.closest('tr[data-label]'))
-    .filter(Boolean);
+  const checked = earlyCheckedRows();
   if (!checked.length) return;
   // #649 acceptance criterion: "the pasted batch is only the tail that needs
   // it." In tracking-# mode — the mode this copy is used in to build the
@@ -4196,6 +4608,9 @@ function copySelectedPostSort() {
   // needs no lookup round-trip at all, so it is excluded here. Barcode mode
   // is unaffected: a main-resolved row already has a real barcode to copy,
   // same as a lookup-resolved one.
+  // Claim the button's feedback text for THIS copy, invalidating any revert
+  // timer an earlier copy still has pending (see postSortCopyFeedbackSeq).
+  const feedbackSeq = ++postSortCopyFeedbackSeq;
   const mode = getCopyMode();
   let mainResolvedSkipped = 0;
   const rowsToCopy = mode === 'tracking'
@@ -4207,7 +4622,6 @@ function copySelectedPostSort() {
   const values = rowsToCopy.map(tr => copyValueFor(tr.dataset.label, tr.dataset.barcode, { noFallback: true }));
   const lines = values.filter(v => v !== '');
   const skipped = values.length - lines.length;
-  const btn = document.getElementById('copy-selected-post-sort');
   if (lines.length) {
     // ToolHelpers.copyText CAN reject (its own execCommand fallback rejects
     // when it fails too — lib/tool-helpers.js's fallbackCopyText). The
@@ -4215,21 +4629,58 @@ function copySelectedPostSort() {
     // while marking the button "Copied N" synchronously beforehand, so a
     // failed clipboard write still read as success (code review finding 7).
     // Wait for the real outcome instead.
+    //
+    // The button is re-queried FRESH inside each callback below, rather than
+    // closed over once at the top of this function — this.then()/.catch()
+    // fire on a LATER turn of the event loop, after the button was captured,
+    // and this is the one gap in this function where something async
+    // genuinely runs between "found the button" and "write to the button".
+    // A stale reference here would mean the failure feedback (the entire
+    // point of this code review finding) lands on a detached node instead of
+    // the one on screen.
     ToolHelpers.copyText(lines.join('\n')).then(() => {
-      if (btn) {
-        btn.textContent = '✓ Copied ' + lines.length;
-        setTimeout(() => { updatePostSortCopyButton(); }, 1200);
+      const liveBtn = document.getElementById('copy-selected-post-sort');
+      if (liveBtn) {
+        liveBtn.textContent = '✓ Copied ' + lines.length;
+        setTimeout(() => {
+          if (feedbackSeq !== postSortCopyFeedbackSeq) return; // a newer copy owns the button now
+          updatePostSortCopyButton();
+        }, 1200);
       }
     }).catch(() => {
-      if (btn) {
-        btn.textContent = 'Copy failed';
-        setTimeout(() => { updatePostSortCopyButton(); }, 1200);
-      }
+      const liveBtn = document.getElementById('copy-selected-post-sort');
+      // NO auto-revert timer on the FAILURE path (unlike the success/"0
+      // copied" branches, which DO clear themselves after 1200ms). Root
+      // cause of a CI-only timeout in "finding 7"'s clipboard-rejection
+      // test (PR #669): the button's failure text and its own 1200ms
+      // auto-revert are both scheduled on the SAME timer queue the test's
+      // waitFor polls through. Under CI's real GC/scheduling pauses (this
+      // file's cumulative DOM work grew substantially once #662 moved
+      // 289+ rows through the full-width buildManualRow() builder rather
+      // than the old lean 8-column row), the polling loop can itself be
+      // delayed past the 1200ms mark before it gets a chance to sample —
+      // so "Copy failed" genuinely renders, then reverts, entirely between
+      // two poll ticks, and the poll never observes it. That is a REAL
+      // user-facing defect, not just a test race: the same gap can just as
+      // easily swallow the message for a human whose machine stutters for
+      // a second at the wrong moment — the exact "a failure must not read
+      // as success" guarantee #635 finding 7 exists to protect, generalized
+      // to "a failure must not read as NOTHING HAPPENED" either. Failure
+      // feedback now persists until the next real change to the selection
+      // (a checkbox/select-all toggle or a fresh render already calls
+      // updatePostSortCopyButton() on its own), never on a blind clock.
+      if (liveBtn) liveBtn.textContent = 'Copy failed';
       postSortBarcodeStatus('Could not copy to the clipboard — try again.', true);
     });
-  } else if (btn) {
-    btn.textContent = '0 copied';
-    setTimeout(() => { updatePostSortCopyButton(); }, 1200);
+  } else {
+    const liveBtn = document.getElementById('copy-selected-post-sort');
+    if (liveBtn) {
+      liveBtn.textContent = '0 copied';
+      setTimeout(() => {
+        if (feedbackSeq !== postSortCopyFeedbackSeq) return; // a newer copy owns the button now
+        updatePostSortCopyButton();
+      }, 1200);
+    }
   }
   if (skipped > 0) {
     postSortBarcodeStatus(skipped + ' checked row' + (skipped === 1 ? '' : 's') +
@@ -4238,6 +4689,39 @@ function copySelectedPostSort() {
     postSortBarcodeStatus(mainResolvedSkipped + ' checked row' + (mainResolvedSkipped === 1 ? '' : 's') +
       ' already resolved from the loaded Inbound and Van Scans report — excluded from the lookup paste batch.', false);
   }
+}
+
+// copyFlaggedLookupBatch() -> the one-click version of building the lookup
+// paste batch: PostSortLane.flaggedLookupBatch(postSortItems) decides WHICH
+// tracking numbers (flagged work area per the Flagged Work Areas setting,
+// still needing work, no barcode yet, no conflict — see that function's own
+// doc comment); this only copies them and reports the outcome. Always
+// tracking numbers, regardless of the Copy-as toggle — the toggle governs
+// "Copy selected"; this button exists solely to feed the lookup.
+function copyFlaggedLookupBatch() {
+  const batch = PostSortLane.flaggedLookupBatch(postSortItems);
+  if (!batch.length) return;
+  // Same clipboard-failure discipline as copySelectedPostSort (#635 finding
+  // 7): wait for the real outcome, never mark success before it.
+  ToolHelpers.copyText(batch.join('\n')).then(() => {
+    postSortStatus('Copied ' + batch.length + ' flagged-area tracking number' +
+      (batch.length === 1 ? '' : 's') + ' — paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.', false);
+  }).catch(() => {
+    postSortBarcodeStatus('Could not copy to the clipboard — try again.', true);
+  });
+}
+
+// updateFlaggedCopyButton() -> keep the button's count and disabled state in
+// step with postSortItems. Called from renderEarlyLane (next to
+// updatePostSortCopyButton) so every trigger that re-renders the lane — a
+// fresh Post Sort drop, a barcode-lookup ingest, a main-report re-join, a
+// clear — recomputes the batch size the same way.
+function updateFlaggedCopyButton() {
+  const btn = document.getElementById('copy-flagged-post-sort');
+  if (!btn) return;
+  const n = PostSortLane.flaggedLookupBatch(postSortItems).length;
+  btn.textContent = 'Copy flagged-area tracking #s (' + n + ')';
+  btn.disabled = n === 0;
 }
 
 // postSortBarcodeTagHtml(item) -> the "awaiting barcode" / "barcode conflict"
@@ -4254,35 +4738,174 @@ function postSortBarcodeTagHtml(item) {
   return '';
 }
 
-function postSortRowHtml(item) {
-  // data-barcode-source (#649): 'main' | 'lookup' | '' — lets
-  // copySelectedPostSort tell a row the already-loaded main report resolved
-  // (no lookup round-trip needed, excluded from the tracking-# paste batch)
-  // from one the lookup resolved or hasn't resolved at all.
-  return '<tr data-label="' + ToolHelpers.escapeHtml(item.label) + '" data-barcode="' + ToolHelpers.escapeHtml(item.barcode || '') +
-    '" data-barcode-source="' + ToolHelpers.escapeHtml(item.barcodeSource || '') + '">' +
-    '<td class="chk-cell"><input type="checkbox" class="postsort-check" onchange="onPostSortCheck(this)"' +
-      (postSortChecked.has(item.label) ? ' checked' : '') + ' aria-label="select for copy"></td>' +
-    '<td class="mono">' + ToolHelpers.escapeHtml(item.label) + postSortBarcodeTagHtml(item) + '</td>' +
-    streetCell(item) +
-    // noPropagate: true — this lane's Goes To never fills a sibling row (see
-    // commitPostSortGoesTo below), so goesToCell's default tooltip ("also
-    // fills any other review row at the SAME address") would be false here.
-    goesToCell(item, { noPropagate: true }) +
-    '<td>' + ToolHelpers.escapeHtml(zipOf(item)) + '</td>' +
-    ispCell(item) +
-    '<td>' + ToolHelpers.escapeHtml(item.ibScanTime || '') + '</td>' +
-    '<td>' + ToolHelpers.escapeHtml(item.address || '') + '</td>' +
-    '</tr>';
+// earlyReviewFields(item) -> shapes ONE lib/post-sort-lane.js item into the
+// field shape buildManualRow() expects (issue #662, extended by #664). No
+// code/category/reason is DECIDED here -- that happens in
+// PostSortLane.applyEarlyCode, called right after applyDisposition wherever
+// postSortItems is (re)built. This function only reads what applyEarlyCode
+// already resolved onto item.category/item.reason (the main report's real
+// classification when it has one, or the flagged-Work-Area fallback for the
+// fresh tail, each with item.plaArbitrated saying which) and falls back to
+// the pre-#664 canned strings when applyEarlyCode has not run yet (e.g. a
+// direct call in a context that skips it). provenance: 'early' is the ONLY
+// signal buildManualRow reads to take the early-specific branches.
+function earlyReviewFields(item) {
+  return Object.assign({}, item, {
+    category: item.category || '',
+    reason: item.reason || 'Post Sort, awaiting full report',
+    scanBarcode: item.barcode || '',
+    provenance: 'early',
+  });
 }
 
-function renderPostSortLane() {
-  const table = document.getElementById('post-sort-table');
+// earlyLaneOf(item) -> which Needs Manual Review lane an early Post Sort row
+// belongs in: the SAME three MANUAL_LANES keys a full-report row is routed to
+// ('ground' / 'express' / 'express-other'), decided by the SAME function
+// (issue #663, OPTION B -- Tyler's decision, 2026-08-13).
+//
+// It reads the `express` and `ibWork` fields lib/post-sort-lane.js's
+// buildPostSortLane already derives from EXPRESS_TRACK (the report's own
+// service label -- "Express" -- NOT a tracking number, the exact trap #663
+// calls out) and IB_WORK_AREA, so manualLane's rule 1
+// (isWorkAreaFlagged(row.ibWork)) does the work here: an early Express row
+// outside the flagged areas falls through to 'express-other', which is
+// precisely the intent.
+//
+// Its category-based rules 2 and 3 (Unassigned Zip, and the AREA_GROUPED
+// "worked alongside the flagged area" categories) used to be inert for an early
+// row by construction, because earlyReviewFields always set category '' (#662).
+// Since #664 they are LIVE: PostSortLane.applyEarlyCode fills item.category
+// from the main report's OWN classification for a label it has already coded
+// 'manual' (and leaves it '' for the fresh tail the main report has never
+// seen). That is the RIGHT outcome under Option B rather than a leak of #664
+// into routing -- an early Express QA-Intercept now lands in the same lane its
+// full-report twin lands in a few minutes later, instead of jumping lanes the
+// moment the main report catches up. It changes nothing about CODING: routing
+// reads item.category, and #661's "explicitly not modified" list still keeps
+// decideCode/decideCodeInner untouched (applyEarlyCode never calls them).
+//
+// Why Option B and not "every early Express row into Tyler's queue": on a real
+// pull (2026-08-12 fixture) 72 of the 73 early Express rows are OUTSIDE the
+// flagged work areas. Routing them by the Express label alone would put 72
+// rows he does not work at the top of the lane that exists to show what he
+// DOES work -- exactly the mis-read the express-other lane was created on
+// 2026-08-06 to prevent. The Express split still holds for early rows; it
+// simply holds the same way it holds everywhere else in this tool, through
+// one shared rule rather than a second one that only early rows obey.
+function earlyLaneOf(item) {
+  return manualLaneOf(item);
+}
+
+// earlyVisibleItems() -> postSortItems after the disposition fold (issue
+// #657/#662), the exact computation renderEarlyLane() already did inline --
+// pulled out so updateExpressSection()'s badge count (issue #663 acceptance
+// criterion: "the Express lane's badge count includes its early rows") reads
+// the SAME fold-aware population that is actually on screen, rather than
+// re-deriving it and silently drifting from what renderEarlyLane() renders.
+function earlyVisibleItems() {
+  return postSortShowAll ? postSortItems : postSortItems.filter(PostSortLane.needsWork);
+}
+
+// PR #673 review finding 9: the three-way lane split is computed ONCE per data
+// change, not per lane per caller. earlyLaneItems() is read by renderEarlyLane
+// (3x), updateExpressSection (2x), applyManualSearch (3x per pass) and
+// resetApp — and every one of those calls used to re-run IbnoRules.manualLane
+// over the whole early population, which builds a fresh set of RegExps on each
+// invocation. On a real 2,868-row mid-sort pull that is ~8 full passes per
+// render AND per search keystroke. The partition is a plain Map-shaped object
+// (laneKey -> items in report order) rebuilt only when postSortItems or the
+// disposition fold changes.
+//
+// Invalidation is BOTH explicit (invalidateEarlyLanes(), called at the top of
+// renderEarlyLane, which every data change funnels through) and defensive (the
+// cached array identity + fold state are re-checked on every read), so an
+// in-place mutation of postSortItems can never be served a stale split.
+let earlyLaneCache = null;
+function invalidateEarlyLanes() { earlyLaneCache = null; }
+function earlyLanesByKey() {
+  if (earlyLaneCache && earlyLaneCache.src === postSortItems && earlyLaneCache.showAll === postSortShowAll) {
+    return earlyLaneCache.byKey;
+  }
+  const byKey = {};
+  MANUAL_LANES.forEach(l => { byKey[l.key] = []; });
+  earlyVisibleItems().forEach(it => {
+    const key = earlyLaneOf(it);
+    (byKey[key] || (byKey[key] = [])).push(it);
+  });
+  earlyLaneCache = { src: postSortItems, showAll: postSortShowAll, byKey: byKey };
+  return byKey;
+}
+function earlyLaneItems(laneKey) {
+  return earlyLanesByKey()[laneKey] || [];
+}
+
+// buildEarlyGroupHeaderRow(count, selectAllId, tbodyId) -> the early group's
+// OWN heading row (issue #662's acceptance criteria: "under their own group
+// heading at the top of the lane"). No bulk-apply button -- early rows never
+// carry a bucket code, so there is nothing for one to sweep.
+//
+// Issue #663: now called once per early tbody — all three lanes get their own
+// heading + select-all (MANUAL_LANES' earlySelectAll/earlyTbody) — so the
+// checkbox id and the tbody it selects within are parameters rather than
+// hard-coded. #post-sort-select-all keeps its pre-#662 ground-lane id so every
+// test that already locks down the fold's identity-based select-all (issue
+// #657, PR #658) still finds it by the same selector.
+function buildEarlyGroupHeaderRow(count, selectAllId, tbodyId) {
+  const tr = document.createElement('tr');
+  tr.className = 'manual-group-row';
+  tr.dataset.group = 'early';
+  const td = document.createElement('td'); td.colSpan = MANUAL_COLSPAN;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:8px';
+  const all = document.createElement('input');
+  all.type = 'checkbox';
+  all.id = selectAllId || 'post-sort-select-all';
+  all.title = 'select all visible early rows';
+  all.setAttribute('aria-label', 'select all rows');
+  all.addEventListener('change', () => togglePostSortSelectAll(all.checked, tbodyId));
+  wrap.appendChild(all);
+  const title = document.createElement('span');
+  title.innerHTML = '\u23F1 Post Sort (early)<span class="g-count">' + count + '</span>';
+  wrap.appendChild(title);
+  td.appendChild(wrap); tr.appendChild(td);
+  return tr;
+}
+
+// renderEarlyLane() -> rebuild every lane's early group (issue #662, split
+// across three lanes by #663). Renamed from the pre-#662 renderPostSortLane,
+// which built its own 8-column row markup (postSortRowHtml, now deleted) into
+// a standalone #post-sort-table. Rows now render through buildManualRow() --
+// the SAME builder every Needs Manual Review row uses -- into each lane's
+// `earlyTbody`, a sibling `<tbody>` of that lane's own tbody inside its
+// <table>. #post-sort-tbody (the ground group) also owns the early strip's
+// shared controls -- badge, fold toggle, Clear -- so it is read out here
+// before the per-lane loop below.
+function renderEarlyLane() {
+  // Every data change that reaches the early lane funnels through here, so this
+  // is the one place the memoized lane split has to be dropped (PR #673 review
+  // finding 9). Cheap and unconditional: a stale partition would render rows
+  // into the wrong lane, which is far worse than one extra rebuild.
+  invalidateEarlyLanes();
   const tbody = document.getElementById('post-sort-tbody');
   const badge = document.getElementById('post-sort-badge');
   const clearBtn = document.getElementById('post-sort-clear-btn');
   const barcodeLoadBtn = document.getElementById('post-sort-barcode-load-btn');
   if (!tbody) return;
+  // #manual-section is permanently visible now (issue #669 review finding 1
+  // — see the #manual-section CSS rule's own comment), so no reveal call is
+  // needed here for it any more. #summary (the Total/Ready/Needs Review stat
+  // cards), however, is still JS-revealed like every other optional block on
+  // this page — unlike the section itself, nothing depends on the cards
+  // being reachable for further input, so leaving them display:none until
+  // there is something to report is safe. Pre-#669 this only ever happened
+  // inside renderResults, gated on a loaded main report — so the lane's own
+  // "before the main report ever loads" scenario (issue #669 review finding
+  // 8) left the Total card updated in the DOM but invisible on screen. Mirror
+  // the same reveal here, independent of whether a main report has loaded.
+  if (postSortItems.length) {
+    const summary = document.getElementById('summary');
+    if (summary) summary.style.display = 'grid';
+  }
   // Preserve the checked selection across a re-render (issue #635 code
   // review finding 4): ingesting the barcode lookup CSV calls this after
   // updating postSortItems, which used to rebuild every row's checkbox
@@ -4304,11 +4927,12 @@ function renderPostSortLane() {
   Array.from(previouslyChecked).forEach(label => {
     if (!liveLabels.has(label)) previouslyChecked.delete(label);
   });
-  // Disposition fold (2026-08-13, issue #651 follow-up). The lane renders one
-  // row per Post Sort record, and on a real mid-sort pull that is 2,868 rows
-  // of which the already-loaded main report says 2,583 will never be worked.
-  // Tyler's words: "i only need to do the ones that will actually get flagged
-  // and have me work them."
+  // Disposition fold (2026-08-13, issue #651 follow-up; carried into the
+  // merged lane by #662, unmodified). The lane renders one row per Post Sort
+  // record, and on a real mid-sort pull that is 2,868 rows of which the
+  // already-loaded main report says 2,583 will never be worked. Tyler's
+  // words: "i only need to do the ones that will actually get flagged and
+  // have me work them."
   //
   // FOLDED, NOT REMOVED. Constraint 1 on map #608 is that nothing this tool
   // does disappears, so the skip rows stay one click away behind a toggle
@@ -4321,8 +4945,17 @@ function renderPostSortLane() {
   // that need work". The two numbers coincide in one state and diverge in the
   // other, which is exactly the kind of thing that ships looking fine.
   const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
-  const visibleItems = postSortShowAll ? postSortItems : postSortItems.filter(PostSortLane.needsWork);
   const foldedCount = postSortItems.length - needWorkCount;
+  // compareBySort's default 'report' sort key reads item._ord, which
+  // autoItems/manualItems get assigned in renderResults but a raw
+  // lib/post-sort-lane.js item never does. Without this, EVERY early item's
+  // _ord read as 0, so the default sort's tie-break (label, lexicographic)
+  // silently reordered the lane away from the report's own scan order.
+  // Assigning it here, once per fresh postSortItems array (a new drop always
+  // replaces the array, so positions are always freshly correct for that
+  // drop), keeps the default view in the report's own order like every other
+  // sort key already expects _ord to mean.
+  postSortItems.forEach((it, i) => { if (it._ord === undefined) it._ord = i; });
   if (badge) {
     badge.textContent = foldedCount && !postSortShowAll
       ? needWorkCount + ' of ' + postSortItems.length
@@ -4330,37 +4963,102 @@ function renderPostSortLane() {
   }
   renderPostSortFoldToggle(foldedCount, needWorkCount);
   if (clearBtn) clearBtn.style.display = postSortItems.length ? '' : 'none';
-  if (table) table.style.display = postSortItems.length ? '' : 'none';
   // Nothing to join a barcode lookup onto until a Post Sort report is loaded.
   if (barcodeLoadBtn) barcodeLoadBtn.style.display = postSortItems.length ? '' : 'none';
-  tbody.innerHTML = visibleItems.map(postSortRowHtml).join('');
-  tbody.querySelectorAll('tr[data-label]').forEach(tr => {
-    const label = tr.getAttribute('data-label');
-    const item = postSortItemByLabel(label);
-    if (item) attachPostSortGoesToInput(tr, item);
-    if (previouslyChecked.has(label)) {
-      const cb = tr.querySelector('.postsort-check');
-      if (cb) cb.checked = true;
+
+  // Issue #663 (Option B): split the fold-aware visible set by the SAME lane
+  // rule that routes full-report rows (earlyLaneOf -> IbnoRules.manualLane),
+  // so each of the three Needs Manual Review lanes renders its own early
+  // group. Filter BEFORE sort so each lane obeys its OWN sort order
+  // (acceptance criterion 3 — "same... control behaviour established in
+  // #662"): each early group sorts with its lane's own `table` key, the SAME
+  // key that lane's sort dropdown already drives for its full-report rows.
+  //
+  // PR #673 review finding 7: the early tbodies go through openLanes() now,
+  // exactly like renderManualSectionRows()' full-report tbodies. They were
+  // wiped with a bare innerHTML = '' that preserved only the checkbox
+  // selection, so an expanded detail row silently collapsed on every
+  // re-render -- and setSort() calls this function on EVERY manual sort
+  // change, so opening a detail row and then sorting closed it. The open set
+  // spans all three early tbodies on purpose (openLanes' own contract): a row
+  // that changes lane between renders keeps its expanded detail.
+  const { bodies: earlyBodies, open: earlyOpen } =
+    openLanes(EARLY_TBODY_IDS, tr => ({ label: tr.dataset.label }));
+  // Whether a MAIN report is loaded decides who owns a lane section's
+  // visibility below (PR #673 review finding 1). renderResults() reveals every
+  // express section unconditionally when a report loads, so this function must
+  // not hide one out from under it.
+  const mainReportLoaded = Array.isArray(lastRows) && lastRows.length > 0;
+  MANUAL_LANES.forEach((lane, i) => {
+    const body = earlyBodies[i];
+    if (!body) return;
+    const mine = earlyLaneItems(lane.key);
+    if (postSortItems.length) {
+      body.appendChild(buildEarlyGroupHeaderRow(mine.length, lane.earlySelectAll, lane.earlyTbody));
+      mine.slice().sort((a, b) => compareBySort(a, b, lane.table))
+        .forEach(item => {
+          const fields = earlyReviewFields(item);
+          appendLaneRow(body, buildManualRow(fields, 'early'), fields, earlyOpen, MANUAL_COLSPAN);
+        });
+    }
+
+    // Issue #663 mirrors #669 review finding 8 (#summary, below): an express
+    // lane's early group is JS-revealed independent of the main report too,
+    // exactly like #summary already is — those sections otherwise only reveal
+    // themselves once a main report loads (renderResults), which would leave
+    // real early rows correctly built in the DOM but hidden behind an ancestor
+    // `.section { display: none }` on a cold page with only a Post Sort report
+    // dropped, the SAME deadlock class finding 1/8 fixed for
+    // #manual-section/#summary. Gated on the FOLD-AWARE population (`mine`,
+    // not the raw postSortItems — PR #673 review finding 5), so a disposition
+    // map that folds every early row in a lane away never reveals an empty
+    // ghost section.
+    //
+    // PR #673 review finding 1: this RECOMPUTES visibility, show AND hide, on
+    // every pass. It used to only ever ADD it, leaving clearPostSortLane() and
+    // resetApp() as the only things that could take it away — so with no main
+    // report loaded, dropping a Post Sort pull with Express rows and then
+    // re-dropping an all-ground pull (or a file that fails to parse, whose
+    // catch sets postSortItems = [] and calls only this function) left both
+    // Express sections on screen as empty ghosts with a badge of 0. The
+    // main-report guard is what keeps the reveal one-directional where it has
+    // to be: renderResults() owns these sections whenever a report is loaded,
+    // whether or not that report put anything in this lane.
+    if (lane.section) {
+      const sec = document.getElementById(lane.section);
+      if (sec) {
+        if (mine.length) sec.style.display = 'block';
+        else if (!mainReportLoaded) sec.style.display = 'none';
+      }
+    }
+
+    // Compared over the VISIBLE LABELS THEMSELVES, not two counts (code
+    // review, 2026-08-13). A count comparison says nothing about WHICH rows
+    // are checked: with 400 folded rows checked in show-all and 285 needing
+    // work, `size >= mine.length` reads true and the header box
+    // renders checked while not one visible row is -- so Tyler's first click
+    // on it fires togglePostSortSelectAll(false) and appears to do nothing.
+    const selectAll = document.getElementById(lane.earlySelectAll);
+    if (selectAll) {
+      selectAll.checked = mine.length > 0 && mine.every(it => previouslyChecked.has(it.label));
     }
   });
-  const selectAll = document.getElementById('post-sort-select-all');
-  // Compared over the VISIBLE LABELS THEMSELVES, not two counts (code review,
-  // 2026-08-13). A count comparison says nothing about WHICH rows are
-  // checked: with 400 folded rows checked in show-all and 285 needing work,
-  // `size >= visibleItems.length` reads true and the header box renders
-  // checked while not one visible row is — so Tyler's first click on it fires
-  // togglePostSortSelectAll(false) and appears to do nothing.
-  if (selectAll) {
-    selectAll.checked = visibleItems.length > 0 &&
-      visibleItems.every(it => previouslyChecked.has(it.label));
-  }
+
   updatePostSortCopyButton();
+  updateFlaggedCopyButton();
+  // Total Flagged counts early rows too (issue #662); a Post Sort load/clear
+  // has no fresh auto/manual list of its own, so pass none -- updateStatTotal
+  // falls back to the current module-level autoItems/manualItems.
+  updateStatTotal();
+  // Issue #663: the Express lane's badge must include early rows too, and
+  // renderEarlyLane() is the ONLY place postSortItems changes without a full
+  // renderResults() re-run — no caller of this function called
+  // updateExpressSection() before now, so nothing else keeps it in step.
+  updateExpressSection();
+  // Early rows obey each lane's own search box.
+  applyManualSearch();
 }
 
-// renderPostSortFoldToggle(foldedCount, visibleCount) -> the one control that
-// makes the fold reversible, and the reason folding satisfies constraint 1 on
-// map #608 rather than violating it. It ALWAYS states its own count, so the
-// rows it is holding back are never a silent absence.
 function renderPostSortFoldToggle(foldedCount, visibleCount) {
   const host = document.getElementById('post-sort-fold');
   if (!host) return;
@@ -4388,7 +5086,7 @@ function renderPostSortFoldToggle(foldedCount, visibleCount) {
 
 function togglePostSortFold() {
   postSortShowAll = !postSortShowAll;
-  renderPostSortLane();
+  renderEarlyLane();
 }
 
 // Commit on blur and on Enter, same discipline as attachGoesToInput, but this
@@ -4537,7 +5235,19 @@ function workStreetOf(tr) {
   return btn ? (btn.dataset.street || '') : '';
 }
 function workContextOf(tr) {
-  const item = tr ? itemByLabel(tr.getAttribute('data-label')) : null;
+  const label = tr ? tr.getAttribute('data-label') : null;
+  // itemByLabel only ever searches manualItems/autoItems/resolvedItems — an
+  // early row's model is postSortItems' own throwaway shape and is never a
+  // member of any of those (issue #669 review finding 10), so this always
+  // returned '' for an early row and the bar's ISP/ZIP context silently
+  // dropped for exactly the rows Work mode most needs it on now that early
+  // rows are real `.manual-body` members (#662). itemByLabel itself is left
+  // untouched — openBarcodeDialog/printBarcodesFor deliberately do NOT reach
+  // postSortItems (barcode actions on early rows are out of scope, #661) —
+  // this fallback is scoped to this one caller's own narrower need
+  // (ispOf/zipOf only read item.address/item.postal, which postSortItems
+  // rows already carry, same as any other item).
+  const item = (label && (itemByLabel(label) || postSortItems.find(it => it.label === label))) || null;
   if (!item) return '';
   const bits = [];
   const isp = ispOf(item);
@@ -4610,7 +5320,22 @@ function commitWorkArea() {
   const tr = rows[workIndex];
   const input = document.getElementById('work-area');
   if (!tr || !input) return;
-  commitGoesTo(tr.getAttribute('data-label'), input.value);
+  // Issue #662: workRows() is every `.manual-body` row, and #post-sort-tbody
+  // is now one of those tbodies, so Work mode's cursor can land on an early
+  // row and this shared bar can commit for it. An early row must still write
+  // with EARLY provenance and never propagate (commitPostSortGoesTo), the
+  // exact same rule its own inline goesto-input already follows — using
+  // commitGoesTo here for an early row would silently write it as a plain
+  // hand-typed area and spread it to every row sharing its address.
+  // Issue #663: an early row can land in ANY of the three lanes' early groups
+  // now (Option B routes it by IbnoRules.manualLane, the same rule full-report
+  // rows follow), so this check reads EARLY_TBODY_IDS — derived from
+  // MANUAL_LANES — rather than the ground tbody alone.
+  if (tr.closest(EARLY_TBODY_IDS.map(id => '#' + id).join(', '))) {
+    commitPostSortGoesTo(tr.getAttribute('data-label'), input.value);
+  } else {
+    commitGoesTo(tr.getAttribute('data-label'), input.value);
+  }
 }
 
 // Collapse state as it was before Work mode expanded everything, so leaving the
@@ -4730,16 +5455,26 @@ document.addEventListener('keydown', e => {
 // and keyboard drive the same cursor instead of two competing ones.
 //
 // Work mode's cursor (workIndex / the shared #work-area bar input) is scoped
-// to workRows(), which is `.manual-body` rows ONLY. The Post Sort "early" lane
-// (issue #634) reuses this exact .street-copy button but its rows are NOT
-// `.manual-body` rows. Fixed (/code-review on #642, finding 3): without this
-// guard, clicking a Post Sort row's street while Work mode happened to be on
-// left workIndex pointed at whatever `.manual-body` row it already sat on,
-// then handed keyboard focus to the SHARED #work-area bar input anyway — so
-// typing a belt and pressing Enter would commit it onto a DIFFERENT package
-// than the one just clicked (a wrong record against a package nobody
-// touched). A row outside `.manual-body` must never drive the Work-mode
-// cursor or the work bar; it always gets its own goesto-input focused instead.
+// to workRows(), which is `.manual-body` rows ONLY. Originally added
+// (/code-review on #642, finding 3) because the OLD standalone Post Sort
+// "early" lane (issue #634) reused this exact .street-copy button but its
+// rows lived in a separate, non-`.manual-body` table — without this guard,
+// clicking one of ITS rows' streets while Work mode happened to be on left
+// workIndex pointed at whatever `.manual-body` row it already sat on, then
+// handed keyboard focus to the SHARED #work-area bar input anyway, so typing
+// a belt and pressing Enter committed it onto a DIFFERENT package than the
+// one just clicked.
+//
+// Issue #662 changed the premise this guard was written against: early rows
+// now render into #post-sort-tbody, which DOES carry class `.manual-body`
+// (a sibling tbody of #manual-tbody, same table), so `inWorkableLane` is true
+// for an early row too — clicking one's street now correctly drives the
+// Work-mode cursor onto it and hands focus to the shared bar, same as any
+// other manual-review row (commitWorkArea then routes that write to
+// commitPostSortGoesTo for EARLY provenance — see its own comment). The
+// guard itself is unchanged and still earns its keep for whatever ISN'T
+// `.manual-body` at all (auto-coded rows, manually-resolved rows) — a click
+// there still only focuses its own goesto-input, never the shared bar.
 document.addEventListener('click', e => {
   const btn = e.target.closest ? e.target.closest('.street-copy') : null;
   if (!btn) return;
@@ -4980,6 +5715,14 @@ function barcodeSelected(lane) {
 
 function buildManualRow(item, bucket) {
   const { label, category, ibWork, firm, reason, address, express, inboundDate, ibScanTime } = item;
+  // Issue #662: the Post Sort "early" lane's rows are built by THIS SAME
+  // function now, marked by item.provenance === 'early' (set by
+  // earlyReviewFields, never by the coding cascade -- a normal manual-review
+  // item never carries this field). Everything below that reads `isEarly`
+  // only ever ADDS or SWAPS behavior for that one case; every branch's ELSE
+  // is the exact code that ran before this ticket, so an ordinary manual
+  // review row (provenance !== 'early') renders identically to before.
+  const isEarly = item && item.provenance === 'early';
   const tr = document.createElement('tr');
   tr.className = 'expandable';
   tr.dataset.label    = label;
@@ -4988,7 +5731,7 @@ function buildManualRow(item, bucket) {
   // filed under and the code a bulk button may write onto it can never be
   // derived from two separate answers (#631).
   const plan = ReviewPlan.rowPlan(item);
-  tr.dataset.bucket   = bucket || plan.bucket;           // area | zip | other (#batch-code)
+  tr.dataset.bucket   = bucket || plan.bucket;           // area | zip | other | early (#batch-code, #662)
   // The bucket code this row may receive from a bulk apply. '' means the row is
   // grouped for visibility only (QA-Intercept / Invalid HazMat) and no bulk
   // button may write a code onto it.
@@ -4998,33 +5741,177 @@ function buildManualRow(item, bucket) {
   // visibility can never be swept" guarantee is actually enforced on screen.
   // The two agree today; reading bulkable means they still agree if the bucket
   // mapping is ever retuned.
-  tr.dataset.bulk     = plan.bulkable ? plan.code : '';
+  //
+  // FORCED EMPTY ON AN EARLY ROW (#664). Pre-#664 an early item's plan.code
+  // was always '' by construction (category '' and a canned reason that never
+  // matched offeredCode's "Work area:" pattern), so this attribute was empty
+  // for early rows for free. #664 gives an early row a real category/reason,
+  // so plan.bulkable can now be TRUE for one -- and the early lane's standing
+  // guarantee is that no bulk button ever writes a code onto a Post Sort row
+  // (its model object is earlyReviewFields' throwaway shape, never a member of
+  // manualItems, so a sweep would code a phantom). The bucket attribute above
+  // ('early') already keeps every sweep selector from matching, but that is
+  // one accident away from changing; this states the guarantee where the sweep
+  // actually reads it. The code #664 renders on these rows is DISPLAY ONLY.
+  tr.dataset.bulk     = (!isEarly && plan.bulkable) ? plan.code : '';
   tr.dataset.barcode  = item.scanBarcode || '';         // so "Copy selected" honors the copy-mode toggle per row
+  if (isEarly) tr.dataset.barcodeSource = item.barcodeSource || ''; // #649 tier marker, carried through for copySelectedPostSort
   const expressHtml = express
     ? '<span class="express-pill express-yes">Express</span>'
     : '<span class="express-pill express-no">Ground</span>';
   const recipHtml = recipientCellHtml(firm, address);
+  // The Category cell. An early row's category comes from the loaded main
+  // report or not at all (PLA_LOOKUP is genuinely absent from the Post Sort
+  // report -- see the lane's own header comment), so an empty category on an
+  // early row renders a chip rather than a blank cell that would read as a
+  // bug. A normal row with a real category is completely unaffected -- the
+  // early branches only fire when BOTH category is empty AND the row is early.
+  //
+  // THREE early states, not one (#664 + its review, finding 5):
+  //   - the main report classified it 'manual' -> `category` is set by
+  //     PostSortLane.applyEarlyCode and this reads as an ordinary row.
+  //   - the main report answered auto/skip -> `category` is deliberately left
+  //     empty (a category there would let ReviewPlan offer a code on a
+  //     package that is already done), but item.mainCategory holds what the
+  //     report saw. Render it as INERT TEXT: the row is folded out by
+  //     default and only appears under Show all, where a bare "early" chip
+  //     next to a "from main report" action chip said two contradictory
+  //     things about the same row and threw away the only classification the
+  //     tool had for 2,583 of 2,868 rows.
+  //   - nothing knows anything about it (the fresh tail) -> the "early" chip.
+  // A DISTINCT class from .bc-flag on purpose: .bc-flag already means
+  // "awaiting barcode" / "barcode conflict" (postSortBarcodeTagHtml, right
+  // next to the tracking number on this same row) \u2014 reusing it here would
+  // make `tr.querySelector('.bc-flag')` find the category chip instead of a
+  // genuine barcode-status tag, or vice versa, on the exact same row.
+  const mainOnlyCategory = (isEarly && !category && item.mainKnown) ? String(item.mainCategory || '') : '';
+  const categoryHtml = (!category && isEarly)
+    ? (mainOnlyCategory
+      ? '<span class="cat-from-main" title="What the loaded Inbound and Van Scans report classified this package as. Shown for reference only \u2014 that report also says it needs no work, so no code is offered here.">' +
+        ToolHelpers.escapeHtml(mainOnlyCategory) + '</span>'
+      : '<span class="early-category-chip" title="Pre-filled from the Post Sort report \u2014 no code offered until the full report arrives">early</span>')
+    : ToolHelpers.escapeHtml(category);
   tr.innerHTML =
-    '<td class="chk-cell"><input type="checkbox" class="manual-check" aria-label="select for batch coding"></td>' +
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) + barcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
-    '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
-    '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
-    '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '—') + '</td>' +
+    '<td class="chk-cell"><input type="checkbox" class="manual-check' + (isEarly ? ' postsort-check' : '') +
+      '" aria-label="select for ' + (isEarly ? 'copy' : 'batch coding') + '"></td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' +
+      (isEarly ? postSortBarcodeTagHtml(item) : '') +
+      // barcodeChip's dialog (openBarcodeDialog -> itemByLabel) only ever
+      // searches manualItems/autoItems/resolvedItems, never postSortItems —
+      // so on an early row the button would render (barcodeValueOf falls
+      // back to the tracking number) but silently do nothing on click
+      // (/code-review finding, #662). Suppressed for early rows; the
+      // barcode-status tag right above the label already covers this row's
+      // barcode state (awaiting / resolved / conflict) via #649/#635, and
+      // wiring the dialog itself to postSortItems is barcode-actions scope
+      // (#661, out of scope here).
+      '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) + (isEarly ? '' : barcodeChip(item)) + streetChip(item) + eopsChip(item) + '</span></td>' +
+    '<td class="cat-text">' + categoryHtml + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '\u2014') + '</td>' +
+    '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '\u2014') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork) + '</td>' +
     streetCell(item) +
-    goesToCell(item) +
+    // noPropagate: true for an early row -- commitPostSortGoesTo (below) never
+    // fills a sibling row at the same address, so goesToCell's default
+    // tooltip ("also fills any other review row at the SAME address") would
+    // be false here (/code-review on #642, finding 9).
+    (isEarly ? goesToCell(item, { noPropagate: true }) : goesToCell(item)) +
     '<td class="cat-text mono">' + ToolHelpers.escapeHtml(zipOf(item) || '\u2014') + '</td>' +
     ispCell(item) +
     '<td>' + reasonPills(reason) + '</td>' +
     '<td>' + recipHtml + '</td>' +
     '<td>' + expressHtml + '</td>';
-  tr.appendChild(buildActionCell(item, tr));
+  // buildActionCell's Apply/Done buttons both resolve through resolveItem(),
+  // which moves the row's model object into resolvedItems — a real coding
+  // decision. An early row's model object is earlyReviewFields' throwaway
+  // shape, never a member of manualItems, so resolveItem's
+  // IbnoSession.resolve() call would push that fabricated object into
+  // resolvedItems while leaving the REAL record in postSortItems completely
+  // untouched — the next renderEarlyLane() then renders the very same
+  // tracking number again as a live early row, duplicated against a phantom
+  // "resolved" entry (/code-review finding, #662).
+  //
+  // #634's core guarantee, restated precisely now that #664 puts a number on
+  // some of these rows: this lane never APPLIES a code and never offers one
+  // to apply. What it shows is what another report already decided (or, for
+  // a fresh-tail flagged row, what the Work Area rule alone suggests, marked
+  // 'no PLA'). An early row gets no working action cell at all, rather than
+  // one with the wrong wiring underneath it.
+  if (isEarly) {
+    const earlyActionTd = document.createElement('td');
+    earlyActionTd.className = 'action-cell';
+    // #664: still never interactive (no Apply/Done button, no code input) --
+    // resolveItem's IbnoSession.resolve() call would push a fabricated item
+    // into resolvedItems while leaving the real record in postSortItems
+    // untouched (#662's own finding, see the comment above this block). What
+    // #664 adds is DISPLAY only: when PostSortLane.applyEarlyCode resolved a
+    // code for this row (the main report's real classification, or the
+    // flagged-Work-Area fallback for the fresh tail), show it read-only,
+    // with the 'no PLA' marker right beside it whenever that code came from
+    // the fallback alone (item.plaArbitrated === false) -- the ONLY thing on
+    // screen distinguishing a fallback-coded row from a main-report-
+    // classified one (Tyler's 2026-08-13 decision keeps the fallback ON
+    // THE CONDITION that this marker is never silently droppable).
+    // plan.code, NOT a second suggestedManualCode(item) call: `plan` above is
+    // this row's ONE ReviewPlan answer, and #631 exists because a row that
+    // asks twice can be filed under one answer and coded by another. It also
+    // re-ran the whole cascade per row (~2,868 times per render in show-all).
+    const earlyCode = plan.code;
+    // plaArbitrated === true means the main report answered for this label at
+    // all; false/absent is the fresh tail it has never seen. The marker below
+    // keys off the FALSE case only, so a row rendered before applyEarlyCode
+    // has run (no flag at all, hence no code either) can never read as
+    // main-report-arbitrated.
+    const earlyArbitrated = item.plaArbitrated === true;
+    const earlyChips = [];
+    if (earlyCode) {
+      earlyChips.push('<span class="early-code-chip" title="' +
+        (earlyArbitrated
+          ? 'The code the loaded Inbound and Van Scans report&#39;s own classification calls for — shown here, applied from Needs Manual Review'
+          : 'Prefilled from the flagged Work Area rule alone') +
+        '">' + ToolHelpers.escapeHtml(earlyCode) + '</span>');
+      if (!earlyArbitrated) {
+        earlyChips.push('<span class="no-pla-marker" title="Prefilled from the flagged Work Area rule — the main report has not classified this package yet, so there is no PLA_LOOKUP behind this code">no PLA</span>');
+      }
+    }
+    // The trailing chip states WHY there is nothing to click here, and #664
+    // splits it in two: a row the main report has already classified is not
+    // "awaiting" anything (that wording would be plainly false on screen once
+    // the report is loaded), it simply gets coded from Needs Manual Review's
+    // own report-backed row rather than from this one.
+    earlyChips.push(earlyArbitrated
+      ? '<span class="early-category-chip" title="Classified by the loaded Inbound and Van Scans report — code it on that report&#39;s own Needs Manual Review row, never from this one">from main report</span>'
+      : '<span class="early-category-chip" title="No code to apply yet — this row resolves once the full report classifies it">awaiting full report</span>');
+    earlyActionTd.innerHTML = earlyChips.join(' ');
+    tr.appendChild(earlyActionTd);
+  } else {
+    tr.appendChild(buildActionCell(item, tr));
+  }
   attachLabelCopy(tr, label, item.scanBarcode);
-  // Checkbox: pick the row for the bucket's bulk apply. Never expands the row.
+  // Checkbox: pick the row for the bucket's bulk apply (ordinary rows) or for
+  // the Post Sort emit/copy loop (early rows, issue #635/#649). Never expands
+  // the row. An early row's checkbox ALSO keeps postSortChecked in step
+  // (onPostSortCheck) -- that Set, not the DOM, is the record of what is
+  // checked once rows can be folded out of the DOM (#658 review finding 2).
   const cb = tr.querySelector('.manual-check');
   cb.addEventListener('click', e => e.stopPropagation());
   cb.addEventListener('change', () => { tr.classList.toggle('row-checked', cb.checked); updateBulkButtons(); });
-  attachGoesToInput(tr, item);
+  if (isEarly) {
+    cb.checked = postSortChecked.has(label);
+    // Issue #669 review finding 9: setting .checked as a property (not a user
+    // click) fires no 'change' event, so the listener registered just above
+    // — the only thing that toggles .row-checked — never runs for a row that
+    // is ALREADY checked at render time (e.g. after a re-render, or a fold
+    // toggle bringing a previously-checked row back). The highlighted-row
+    // background (.manual-body tr.row-checked td) then silently drops for a
+    // row Tyler already confirmed, until he clicks something else on it.
+    // Sync the class directly here to match.
+    tr.classList.toggle('row-checked', cb.checked);
+    cb.addEventListener('change', () => onPostSortCheck(cb));
+    attachPostSortGoesToInput(tr, item);
+  } else {
+    attachGoesToInput(tr, item);
+  }
   tr.addEventListener('click', e => {
     if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy') || e.target.closest('.goesto-cell')) return;
     toggleDetailRow(tr, item, MANUAL_COLSPAN);
@@ -5144,11 +6031,28 @@ function resolveItem(item, tr) {
     const gh = laneTbody.querySelector('tr.manual-group-row[data-group="' + bucket + '"]');
     if (gh) gh.remove();
   }
-  if (laneTbody && !laneTbody.querySelector('tr[data-label]')) {
-    const isExp = laneTbody.id === 'express-manual-tbody';
-    const msg = isExp ? 'No express packages need review'
-                      : (manualItems.length === 0 ? 'All packages resolved ✓' : 'No packages need manual review');
-    laneTbody.innerHTML = '<tr><td colspan="10" class="empty-state">' + msg + '</td></tr>';
+  // The early tbodies (EARLY_TBODY_IDS — issue #662, one per lane since #663)
+  // get no MANUAL_LANES empty state below: they are the early groups, and
+  // renderEarlyLane() (called on the next Post Sort load, clear, or fold
+  // toggle) owns their empty/non-empty rendering. Painting a
+  // MANUAL_LANES-shaped message into one here would use the wrong colspan and
+  // the wrong wording for a group that has no bulk-code path to begin with.
+  //
+  // PR #673 review finding 4, three defects in the four lines this replaces:
+  //   - it checked only the lane's OWN tbody, so resolving the last full-report
+  //     row painted "No express packages need review" on top of the lane's
+  //     still-visible early group in the sibling tbody (earlyLaneItems below);
+  //   - colspan was hard-coded to 10 in a 14-column table (MANUAL_COLSPAN);
+  //   - the express/ground wording test was `id === 'express-manual-tbody'`, so
+  //     the Express-other lane got the GROUND message. All three lanes are
+  //     named by MANUAL_LANES and worded by manualLaneEmptyMessage now, which
+  //     renderManualSectionRows uses too — one message per lane, one source.
+  if (laneTbody && EARLY_TBODY_IDS.indexOf(laneTbody.id) === -1 && !laneTbody.querySelector('tr[data-label]')) {
+    const cfg = MANUAL_LANES.find(l => l.tbody === laneTbody.id);
+    if (cfg && !earlyLaneItems(cfg.key).length) {
+      laneTbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
+        manualLaneEmptyMessage(cfg.key) + '</td></tr>';
+    }
   }
   updateExpressSection();
   updateBulkButtons();
@@ -5238,20 +6142,7 @@ function copyResolvedTable() {
     .map(i => copyValueFor(i.label, i.scanBarcode) + '\t' + i.code);
   if (!lines.length) return;
   const text = lines.join('\n');
-  const doCopy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  };
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).catch(doCopy);
-  } else {
-    doCopy();
-  }
+  ToolHelpers.copyText(text).catch(() => {});
   const btn = document.getElementById('copy-resolved-btn');
   btn.textContent = '✓ Copied!';
   btn.className = 'btn btn-success';
@@ -5278,20 +6169,7 @@ function copyAutoTable(lane) {
   const lines = autoExportPairs(lane).map(p => copyValueFor(p[0], barcodeByLabel[p[0]]) + '\t' + p[1]);
   if (!lines.length) return;
   const text = lines.join('\n');
-  const doCopy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  };
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).catch(doCopy);
-  } else {
-    doCopy();
-  }
+  ToolHelpers.copyText(text).catch(() => {});
   const btn = document.getElementById(lane === 'express' ? 'express-copy-btn' : 'copy-btn');
   const orig = btn.textContent;
   btn.textContent = '✓ Copied!';
@@ -5499,12 +6377,51 @@ function resetApp() {
   document.getElementById('collapse-all-btn').textContent  = '✄ Collapse all';
   document.getElementById('clean-export-btn').style.display = 'none'; // #385
   document.querySelectorAll('.section').forEach(s => s.classList.remove('collapsed'));
-  document.getElementById('summary').style.display         = 'none';
+  // Issue #669 review finding 8: #summary is JS-revealed independent of the
+  // main report whenever the early lane has rows (renderEarlyLane), so
+  // hiding it unconditionally here would immediately undo that the moment
+  // Tyler clicks "Load New File" while an early pull is still active — the
+  // Total card would vanish even though postSortItems (and its count) are
+  // untouched by this reset. Only hide it when there is truly nothing left
+  // to report.
+  if (!postSortItems.length) {
+    document.getElementById('summary').style.display = 'none';
+  }
   document.getElementById('day-banner').style.display      = 'none';
   document.getElementById('auto-section').style.display    = 'none';
   document.getElementById('express-auto-section').style.display = 'none';
-  document.getElementById('express-manual-section').style.display = 'none';
-  document.getElementById('manual-section').style.display  = 'none';
+  // Issue #663 mirrors the #summary fix immediately above: both express
+  // sections are now ALSO JS-revealed independent of the main report whenever
+  // their lane holds an early row (renderEarlyLane), so hiding one
+  // unconditionally here would re-open the same finding-8 deadlock for that
+  // lane — "Load New File" would hide a real, still-loaded early row's whole
+  // section out from under it. Only hide when there is truly nothing left to
+  // report there.
+  //
+  // Issue #673 review finding 5: this used to test the UNFOLDED postSortItems
+  // (postSortItems.some(...)), while the rows actually on screen come from
+  // the fold-aware visibleItems renderEarlyLane() renders — so a disposition
+  // map that folds away every early Express row (all answered by the loaded
+  // Inbound and Van Scans report) left an empty ghost Express section visible
+  // here even though nothing early-Express was rendered. earlyLaneItems(key)
+  // is that same fold-aware population (see its own comment, above), so this
+  // now agrees with what renderEarlyLane() actually draws.
+  MANUAL_LANES.forEach(lane => {
+    if (!lane.section || earlyLaneItems(lane.key).length) return;
+    const sec = document.getElementById(lane.section);
+    if (sec) sec.style.display = 'none';
+  });
+  // #manual-section is permanently visible now (issue #669 review finding 1
+  // — see the CSS rule's own comment): the Post Sort lane's early strip and
+  // rows live inside it and are independent of the main report (issue #634's
+  // "supplement, not replacement"), and the whole point of that fix is that
+  // this section must never be hidden again by ANY code path, "Load New
+  // File" included — hiding it here at zero postSortItems would re-open the
+  // exact deadlock finding 1 fixed (nothing left to reveal the section again
+  // until a report drops onto a button that is once more unreachable). No
+  // JS hide call for it here any more; #manual-tbody's own stale markup is
+  // still cleared below so a fresh load never shows the previous report's
+  // rows underneath the early group.
   document.getElementById('resolved-section').style.display = 'none';
   document.getElementById('repeat-section').style.display  = 'none';
   document.getElementById('file-label').textContent = 'No file loaded';
@@ -5513,6 +6430,22 @@ function resetApp() {
   autoItems = [];
   manualItems = [];
   autoFilter = { codes: [], categories: [] };
+  // Issue #662/#669 + #673 review finding 1: a lane's section can stay
+  // visible through a "Load New File" reset — #manual-section always is (see
+  // its CSS rule's own comment), and #663 made both express sections
+  // independently JS-revealed whenever their lane holds an early row — so
+  // every lane's full-report tbody must be cleared EXPLICITLY here rather
+  // than left rendered (and workable) underneath the early group, with the
+  // badges still showing the discarded report's counts. This clears the
+  // full-report tbodies only; the early tbodies belong to postSortItems,
+  // which "Load New File" deliberately does NOT reset (see the comment
+  // above). updateExpressSection() at the end of this function then refreshes
+  // the badges/stat card off the now-empty manualItems plus the still-loaded
+  // early population, so nothing stale survives and nothing real is zeroed.
+  MANUAL_LANES.forEach(lane => {
+    const el = document.getElementById(lane.tbody);
+    if (el) el.innerHTML = '';
+  });
   resetViewControls();
   document.getElementById('auto-chips').style.display = 'none';
   document.getElementById('auto-chips').innerHTML = '';
@@ -5529,6 +6462,48 @@ function resetApp() {
   document.getElementById('resolved-badge').textContent = '0';
   document.getElementById('repeat-tbody').innerHTML = '';
   document.getElementById('repeat-badge').textContent = '0';
+  // Refresh EVERY lane's badge and stat card now that autoItems/manualItems are
+  // empty and every full-report tbody has just been cleared above, so nothing
+  // reads a stale count for a report "Load New File" just discarded.
+  // postSortItems is deliberately NOT reset here (see the #manual-section
+  // comment above), so each of these still counts the early population that is
+  // genuinely still loaded — nothing real is zeroed either.
+  //
+  // PR #673 review finding 6: this used to call updateExpressSection() ALONE,
+  // and claimed in its own comment that "nothing stale survives". Both Express
+  // badges refreshed; #manual-badge, #stat-manual, #stat-auto, #auto-badge and
+  // #stat-total kept the discarded report's numbers over lanes that had just
+  // been emptied. Symmetric now, all six.
+  const groundAuto = autoItems.filter(it => !itemIsExpress(it)).length;
+  document.getElementById('stat-auto').textContent = groundAuto;
+  document.getElementById('auto-badge').textContent = groundAuto;
+  updateManualBadge();          // #manual-badge + #stat-manual
+  updateExpressSection();       // both express badges + #stat-express + #stat-express-manual
+  updateStatTotal();            // #stat-total, off the still-loaded early population
+  // #664 review finding 1: "Load New File" discards the main report, so every
+  // early row's ATTRIBUTION to it has to go with it. postSortItems is
+  // deliberately kept (the Post Sort report is still loaded and is still
+  // Tyler's work), but rows carrying the discarded report's category, reason
+  // and code kept rendering a code chip and a "from main report" label backed
+  // by nothing — the exact claim the 'no PLA' marker exists to make
+  // trustworthy. Re-running the same join the load paths run, against the now
+  // empty map, demotes every one of them back to the fresh-tail treatment
+  // (marked, or no code at all). The fold answer merges by contract and is
+  // untouched, so nothing that was already answered pops back into the lane.
+  if (postSortItems.length) {
+    postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
+    postSortItems = PostSortLane.applyEarlyCode(postSortItems);
+    renderEarlyLane();
+  }
+  // PR #673 review finding 3: resetViewControls() emptied every search box by
+  // assigning .value = '', which fires no 'input' event, and nothing re-ran the
+  // filter — so every EARLY row a pre-reset search had hidden stayed
+  // display:none under a now-visibly-empty box, with no way back short of
+  // typing and deleting a character. (The full-report tbodies were cleared
+  // outright above, so only the early half showed the symptom, in all three
+  // lanes.) One pass restores them and rewrites each lane's "showing N of M"
+  // note off the reset state.
+  applyManualSearch();
 }
 
 // ─── COLLAPSIBLE SECTIONS (#166) ──────────────────────────────────────────────
