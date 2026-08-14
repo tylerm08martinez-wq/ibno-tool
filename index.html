@@ -26,6 +26,13 @@
        --brand-ink. */
     :root { --danger-ink: #c0392b; }
     html[data-theme="dark"] { --danger-ink: #f87171; }
+    /* The positive twin of --danger-ink, for the "done" tag on a row whose
+       barcode card has been ticked off (2026-08-14). Same reasoning and the
+       same two-value shape: a single green would fail contrast on one of the
+       two surfaces. A mid green goes muddy against the dark --surface, so the
+       dark value is lifted the same way --danger-ink's is. */
+    :root { --ok-ink: #157347; }
+    html[data-theme="dark"] { --ok-ink: #4ade80; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -864,6 +871,11 @@
       border: 1px solid var(--border-soft);
     }
     .bc-flag.conflict { color: var(--danger-ink); }
+    /* "Done" — ticked on the printed barcode sheet (2026-08-14). Theme tokens
+       only, same discipline as .bc-flag above, so both themes are correct with
+       no separate dark rule (theme.css cascade trap). --ok-ink is the token
+       already used for confirmed/positive state elsewhere in this file. */
+    .bc-flag.done { color: var(--ok-ink); border-color: var(--ok-ink); }
 
     /* The Category-cell chip on an early row with no category yet (issue
        #662) — same pill shape as .bc-flag, deliberately a DIFFERENT class so
@@ -1613,6 +1625,7 @@
 <script src="lib/report-detect.js"></script>
 <script src="lib/post-sort-scans.js"></script>
 <script src="lib/post-sort-lane.js"></script>
+<script src="lib/barcode-done.js"></script>
 <!-- ZIP -> ISP lookup, shared with Address Catcher and the printable CSP zip breakdown. -->
 <script src="lib/zip-isp-belt.js"></script>
 <!-- lib/ftrack.js: the one shared FTrack deep-link builder (issue 517),
@@ -2909,10 +2922,34 @@ function updateBulkButtons() {
     btn.disabled = total === 0;
     // The barcode sheet follows the same per-lane count: a printed sheet is
     // walked by one person working one lane.
+    //
+    // Issue #667: it counts BOTH halves of the lane, because barcodeSelected
+    // now prints both. This lane's "Copy selected" deliberately does NOT —
+    // the early group has its own separate copy control (#copy-selected-post-
+    // sort, the tracking-number-for-the-lookup loop), and merging the two
+    // copies would paste full-report rows into the barcode lookup. There is
+    // no such second control for printing: one sheet, one lane, both halves.
     const bc = document.getElementById(lane.barcodeBtn);
     if (bc) {
-      bc.innerHTML = '▌▍▌ Barcode selected (' + total + ')';
-      bc.disabled = total === 0;
+      // The number on the button is the number of CARDS the click produces,
+      // not the number of rows checked (#667 review, finding 2). Those differ
+      // exactly when a row is refused, and a button promising 6 over a 4-card
+      // sheet is the same "did I lose a page?" ambiguity the refusal message
+      // exists to remove. laneBarcodeCardPlan runs the identical gating
+      // barcodeSelected runs, so the two cannot drift.
+      const plan = laneBarcodeCardPlan(lane);
+      bc.innerHTML = '▌▍▌ Barcode selected (' + plan.cardCount + ')';
+      // Gated on the RAW checked count, NOT the card count — the same
+      // reasoning updatePostSortCopyButton already documents for its own
+      // button. A selection that is entirely unprintable must still be
+      // CLICKABLE so printBarcodesFor's refusal message can say why nothing
+      // came out, rather than a disabled button offering no explanation at
+      // all.
+      bc.disabled = plan.entries.length === 0;
+      bc.title = plan.cardCount === plan.entries.length
+        ? 'Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them'
+        : (plan.entries.length - plan.cardCount) + ' of the ' + plan.entries.length +
+          ' checked rows have no printable barcode and will print nothing — click to see why';
     }
   });
 }
@@ -3865,6 +3902,46 @@ function ispOf(item) {
 const ACTUAL_AREA_KEY = 'ibno_actual_area';
 let actualAreaStore = {};
 
+// ─── BARCODE SHEET TICK LIST (2026-08-14) ───────────────────────────────────
+// Which printed barcode cards Tyler has actually worked. Kept in its own
+// localStorage key, NOT folded into ACTUAL_AREA_KEY — see lib/barcode-done.js
+// for why a scratch checklist and a records-tier routing decision must not
+// share a key.
+const BARCODE_DONE_KEY = 'ibno_barcode_done';
+let barcodeDoneStore = {};
+
+function loadBarcodeDone() {
+  const raw = toolStorage.get(BARCODE_DONE_KEY, null);
+  barcodeDoneStore = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+}
+
+function persistBarcodeDone() {
+  toolStorage.set(BARCODE_DONE_KEY, barcodeDoneStore);
+}
+
+// markBarcodeDone(label, done) -> tick or untick one card.
+//
+// PUBLIC BY DESIGN: the printed sheet opens in its own window and calls this
+// through window.opener, so a tick on the sheet updates the lane behind it.
+// Guarded rather than trusting the caller — that window's script is written by
+// printBarcodesFor, but a stale sheet from an earlier print can still be open
+// and call in with a label the current report no longer has.
+function markBarcodeDone(label, done) {
+  const l = String(label == null ? '' : label).trim();
+  if (!l) return;
+  barcodeDoneStore = BarcodeDone.setDone(barcodeDoneStore, l, !!done);
+  persistBarcodeDone();
+  renderEarlyLane();   // the row's own done marker + the lane's "N of M done"
+}
+
+// barcodeDoneSummary() -> { done, total } over the rows CURRENTLY in the
+// flagged working set, so the count follows today's report rather than every
+// label ever ticked (lib/barcode-done.js's countDone scoping).
+function barcodeDoneSummary() {
+  const labels = postSortItems.filter(earlyIsMine).map(it => it.label);
+  return { done: BarcodeDone.countDone(barcodeDoneStore, labels), total: labels.length };
+}
+
 function loadActualAreas() {
   // Prune on load, on the same 30-day window as Repeat History: an area typed
   // for a package a month ago is not guidance for the package in hand today.
@@ -4343,6 +4420,11 @@ function loadPostSortAsMain(rows, fileName) {
 // loadPostSortAsMain's reset changes, not this.
 function ingestPostSortRecords(records, fileName) {
   postSortItems = PostSortLane.buildPostSortLane(records);
+  // Prune the tick list to THIS report's labels. Without it the list would
+  // accumulate every tracking number ever ticked, and yesterday's ticks would
+  // show against today's lane the moment a label repeated across reports.
+  barcodeDoneStore = BarcodeDone.prune(barcodeDoneStore, postSortItems.map(it => it.label));
+  persistBarcodeDone();
   postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
   postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
   postSortItems = PostSortLane.applyEarlyCode(postSortItems);
@@ -4359,15 +4441,34 @@ function ingestPostSortRecords(records, fileName) {
 // not survive the file parse), so a refusal points at the "Copy flagged-area
 // tracking #s" button rather than failing silently — the button is always
 // there as the one-click fallback.
+// flaggedBatchSelection() -> the NEXT paste batch for the Track IDs to Full
+// Barcode lookup, capped at PostSortLane.BARCODE_BATCH_SIZE (300) rows.
+//
+// Two rules compose here, and both matter:
+//   earlyIsMine ......... only Tyler's flagged work areas, the same population
+//                         the lane renders — the clipboard can never contain a
+//                         row he cannot see.
+//   selectBarcodeBatch .. 300 at a time, oldest inbound scan first, skipping
+//                         rows already resolved and rows in the terminal state
+//                         (conflicted, or asked and unanswered) so a stuck row
+//                         cannot ride in every batch forever.
+//
+// The cap is issue #666's: the lookup tool has a practical ceiling on one
+// paste, and a silently truncated paste is worse than an explicit "batch 1 of
+// 3" — it looks like the whole job went in.
+function flaggedBatchSelection() {
+  return PostSortLane.selectBarcodeBatch(postSortItems.filter(earlyIsMine));
+}
+
 function autoCopyFlaggedLookupBatch() {
-  const batch = PostSortLane.flaggedLookupBatch(postSortItems);
-  if (!batch.length) {
+  const sel = flaggedBatchSelection();
+  if (!sel.batch.length) {
     postSortBarcodeStatus('No rows in your flagged work areas need the barcode lookup.', false);
     return;
   }
-  ToolHelpers.copyText(batch.join('\n')).then(function () {
-    postSortBarcodeStatus('Copied ' + batch.length + ' flagged-area tracking number' + (batch.length === 1 ? '' : 's') +
-      ' — paste into the Track IDs to Full Barcode lookup, then drop its CSV into the same Load box.', false);
+  ToolHelpers.copyText(sel.batch.join('\n')).then(function () {
+    postSortBarcodeStatus(PostSortLane.describeBarcodeBatch(sel) +
+      ' Paste into the Track IDs to Full Barcode lookup, then drop its CSV into the same Load box.', false);
   }).catch(function () {
     postSortBarcodeStatus('Auto-copy was blocked by the browser — click "Copy flagged-area tracking #s" above, then paste into the Track IDs to Full Barcode lookup.', true);
   });
@@ -4772,13 +4873,13 @@ function copySelectedPostSort() {
 // tracking numbers, regardless of the Copy-as toggle — the toggle governs
 // "Copy selected"; this button exists solely to feed the lookup.
 function copyFlaggedLookupBatch() {
-  const batch = PostSortLane.flaggedLookupBatch(postSortItems);
-  if (!batch.length) return;
+  const sel = flaggedBatchSelection();
+  if (!sel.batch.length) return;
   // Same clipboard-failure discipline as copySelectedPostSort (#635 finding
   // 7): wait for the real outcome, never mark success before it.
-  ToolHelpers.copyText(batch.join('\n')).then(() => {
-    postSortStatus('Copied ' + batch.length + ' flagged-area tracking number' +
-      (batch.length === 1 ? '' : 's') + ' — paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.', false);
+  ToolHelpers.copyText(sel.batch.join('\n')).then(() => {
+    postSortStatus(PostSortLane.describeBarcodeBatch(sel) +
+      ' Paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.', false);
   }).catch(() => {
     postSortBarcodeStatus('Could not copy to the clipboard — try again.', true);
   });
@@ -4792,9 +4893,19 @@ function copyFlaggedLookupBatch() {
 function updateFlaggedCopyButton() {
   const btn = document.getElementById('copy-flagged-post-sort');
   if (!btn) return;
-  const n = PostSortLane.flaggedLookupBatch(postSortItems).length;
+  // The count is what ONE CLICK will actually copy, not the whole outstanding
+  // job — those differ once the job exceeds one 300-row batch, and a button
+  // promising 900 that copies 300 is the "did I lose a page?" ambiguity the
+  // batch wording exists to remove. The remainder is named in the title and
+  // again in the status line after the copy.
+  const sel = flaggedBatchSelection();
+  const n = sel.batch.length;
   btn.textContent = 'Copy flagged-area tracking #s (' + n + ')';
   btn.disabled = n === 0;
+  btn.title = sel.batchCount > 1
+    ? 'Batch ' + sel.batchIndex + ' of ' + sel.batchCount + ' — ' + sel.pendingCount +
+      ' rows still need the lookup. Copy this batch, run it, load the CSV back in, then click again for the next.'
+    : 'Copies the tracking numbers in your flagged work areas that still need a barcode.';
 }
 
 // postSortBarcodeTagHtml(item) -> the "awaiting barcode" / "barcode conflict"
@@ -4802,13 +4913,20 @@ function updateFlaggedCopyButton() {
 // wherever-the-row-is-seen visibility: this is state Tyler needs to notice
 // without hunting for it, not something tucked behind a hover or a click.
 function postSortBarcodeTagHtml(item) {
+  // A card ticked on the printed sheet shows as done on its row too
+  // (2026-08-14), so the lane and the paper never disagree about what is left.
+  // It leads the tag list because "already handled" outranks every other thing
+  // this cell says about the row.
+  const doneTag = BarcodeDone.isDone(barcodeDoneStore, item.label)
+    ? '<span class="bc-flag done" title="Ticked off on the printed barcode sheet. Click the card again on that sheet to un-tick it.">done</span>'
+    : '';
   if (item.barcodeConflict) {
-    return '<span class="bc-flag conflict" title="The Track IDs to Full Barcode lookup returned two different barcodes for this tracking number — resolve manually before scanning; barcode-mode copy will not guess">barcode conflict</span>';
+    return doneTag + '<span class="bc-flag conflict" title="The Track IDs to Full Barcode lookup returned two different barcodes for this tracking number — resolve manually before scanning; barcode-mode copy will not guess">barcode conflict</span>';
   }
   if (!item.barcode) {
-    return '<span class="bc-flag" title="No scannable barcode yet. Check this row, Copy selected (Copy as: Tracking #), paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.">awaiting barcode</span>';
+    return doneTag + '<span class="bc-flag" title="No scannable barcode yet. Check this row, Copy selected (Copy as: Tracking #), paste into the Track IDs to Full Barcode lookup, then load its result CSV back in above.">awaiting barcode</span>';
   }
-  return '';
+  return doneTag;
 }
 
 // earlyReviewFields(item) -> shapes ONE lib/post-sort-lane.js item into the
@@ -5142,6 +5260,14 @@ function renderEarlyLane() {
         .filter(it => IbnoRules.manualLane(it) !== 'express-other').length;
     }
   }
+  // Issue #667: "Select with area (N)" and "Barcode selected (N)" both count
+  // early rows now, and this function is the ONLY place early rows appear,
+  // disappear or change their checked state without a full renderResults()
+  // run. Without this the two buttons sat at (0) — disabled — through an
+  // entire Post Sort load, so the feature simply could not be reached before
+  // the main report arrived, which is the exact window the early lane exists
+  // for. (updateBulkButtons calls updateSelectAreaButtons itself.)
+  updateBulkButtons();
   // Early rows obey each lane's own search box.
   applyManualSearch();
 }
@@ -5156,25 +5282,43 @@ function renderPostSortFoldToggle(foldedCount, visibleCount) {
   // already in, and which then vanishes on click because this guard finally
   // matches. That happens whenever no main report is loaded, which is the
   // lane's own starting state.
-  if (!postSortItems.length || !foldedCount) {
+  // The done note (below) lives in this same host, and it has to survive the
+  // "nothing is folded" case — otherwise ticking cards off a lane where every
+  // row is in a flagged area would show no progress anywhere.
+  const doneNow = barcodeDoneSummary();
+  if (!postSortItems.length || (!foldedCount && !doneNow.done)) {
     host.style.display = 'none';
     return;
   }
   host.style.display = '';
+  if (!foldedCount) {
+    // Nothing folded: the toggle would offer the state already on screen (the
+    // #673 finding-4 bug), so the host carries the progress note alone.
+    host.innerHTML = '<strong>' + doneNow.done + ' of ' + doneNow.total + ' done.</strong>';
+    return;
+  }
   // The folded set now has TWO reasons in it (2026-08-14): rows outside the
   // flagged Work Areas, and rows the disposition fold already answered. The
   // building-wide Post Sort pull makes the first reason overwhelmingly the
   // common one (281 of 289 on the 2026-08-12 export), so it leads — but the
   // wording names both rather than crediting a main report that, under
   // one-at-a-time, is never loaded alongside this lane at all.
-  host.innerHTML = postSortShowAll
+  // Progress through the printed sheet, shown on the lane itself (2026-08-14)
+  // so Tyler can see how much is left without going back to the paper. Only
+  // once something has actually been ticked — a permanent "0 of 8 done" on a
+  // lane nobody has printed yet is noise.
+  const doneSummary = barcodeDoneSummary();
+  const doneNote = doneSummary.done
+    ? ' <strong>' + doneSummary.done + ' of ' + doneSummary.total + ' done.</strong>'
+    : '';
+  host.innerHTML = doneNote + (postSortShowAll
     ? 'Showing all ' + postSortItems.length + ' rows. ' +
       '<button type="button" class="linkish" onclick="togglePostSortFold()">Show only my ' +
       visibleCount + '</button>'
     : 'Showing the ' + visibleCount + ' in your flagged work areas. ' + foldedCount +
       ' hidden (outside your flagged work areas, or already answered). ' +
       '<button type="button" class="linkish" onclick="togglePostSortFold()">Show all ' +
-      postSortItems.length + '</button>';
+      postSortItems.length + '</button>');
 }
 
 function togglePostSortFold() {
@@ -5485,25 +5629,90 @@ function setWorkMode(on) {
   }
 }
 
+// laneRowsWithArea(cfg) -> every row in BOTH halves of one lane that already
+// carries a Goes To area, as [{ tr, early }] (issue #667).
+//
+// ONE definition, read by the button's count and by the button's action, so
+// "Select with area (6)" can never select a different set than the 6 it
+// promises — the drift class /code-review on #642 finding 8 already caught
+// once on this same pair.
+//
+// DOM-SCOPED, AND THAT IS THE DECISION, NOT AN OVERSIGHT (#667 review, finding
+// 3). It reads rendered rows, so a FOLDED early row — one the disposition fold
+// (#657) has taken off screen — is invisible to both this count and the
+// selection it drives. Kept that way on purpose:
+//
+//   - a folded row is a row the already-loaded main report says will never be
+//     worked ('skip'/'auto'). Printing a barcode card for a package nobody is
+//     going to work is outside what the fold means, and PostSortLane.needsWork
+//     resolves an UNKNOWN row toward showing it, so the fresh tail this lane
+//     exists for is never what gets hidden;
+//   - it matches every other selection control in this tool, all of which act
+//     on what is on screen (togglePostSortSelectAll's own #669 finding 3
+//     comment argues the same point from the other direction);
+//   - "Show all" is one click away, and unfolding brings a row back into both
+//     the count and the selection.
+//
+// The consequence to know about: a row checked and THEN folded out (by loading
+// a main report that dispositions it 'skip') leaves the DOM, so it contributes
+// no card AND no refusal — it never enters the print plan at all. That is
+// consistent with it no longer being part of the lane's working set. Its entry
+// does survive in postSortChecked (renderEarlyLane only drops labels
+// postSortItems no longer has), which is correct: unfolding restores the
+// selection rather than silently discarding it, and every early copy control
+// reads the DOM (earlyCheckedRows), so the retained entry never leaks into a
+// copy or a paste batch either.
+//
+// Deliberately NOT filtered by the lane's search box, unlike the early group's
+// own select-all (togglePostSortSelectAll, #669 finding 3). That guard exists
+// because "select all" means "everything", so it must not silently reach
+// behind a search. This button does not mean that: it selects a NAMED subset
+// whose size is printed on the button itself, and it has always behaved this
+// way for full-report rows. Making it search-aware would also make the
+// button's count stale the moment the search box changes, since nothing
+// re-renders on a keystroke.
+function laneRowsWithArea(cfg) {
+  const out = [];
+  [[cfg.tbody, false], [cfg.earlyTbody, true]].forEach(([tbodyId, early]) => {
+    const body = tbodyId ? document.getElementById(tbodyId) : null;
+    if (!body) return;
+    body.querySelectorAll('tr[data-label]').forEach(tr => {
+      if (!tr.querySelector('.manual-check')) return;
+      if (!ActualArea.get(actualAreaStore, tr.getAttribute('data-label'))) return;
+      out.push({ tr: tr, early: early });
+    });
+  });
+  return out;
+}
+
 // selectRowsWithArea(lane) -> check every row in that lane that already carries a
 // Goes To area, so "Barcode selected" covers exactly the packages that have a
 // destination. Selection only; it never codes or resolves anything.
+//
+// Issue #667: this reaches the lane's EARLY Post Sort rows too — they are the
+// rows a Goes To area is most often typed onto, since that is the whole point
+// of working the lane before the full report lands. An early row's selection
+// is ALSO recorded in postSortChecked, because that Set (not the checkbox) is
+// the record once rows can fold out of the DOM (#658 finding 2): a selection
+// only the DOM knows about is silently lost on the next re-render, which is
+// exactly when "Barcode selected" gets clicked.
 function selectRowsWithArea(lane) {
   const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
-  const body = document.getElementById(cfg.tbody);
-  if (!body) return;
-  let n = 0;
-  body.querySelectorAll('tr[data-label]').forEach(tr => {
+  const rows = laneRowsWithArea(cfg);
+  let touchedEarly = false;
+  rows.forEach(({ tr, early }) => {
     const cb = tr.querySelector('.manual-check');
-    if (!cb) return;
-    const has = !!ActualArea.get(actualAreaStore, tr.getAttribute('data-label'));
-    if (!has) return;
     cb.checked = true;
     tr.classList.add('row-checked');
-    n++;
+    if (early) {
+      postSortChecked.add(tr.getAttribute('data-label'));
+      touchedEarly = true;
+    }
   });
+  if (touchedEarly) updatePostSortCopyButton();
   updateBulkButtons();
   updateSelectAreaButtons();
+  const n = rows.length;
   if (!n) flashGoesToNote('No rows in this lane have a work area yet');
   else flashGoesToNote('Selected ' + n + ' row' + (n === 1 ? '' : 's') + ' with a work area');
 }
@@ -5512,12 +5721,8 @@ function selectRowsWithArea(lane) {
 function updateSelectAreaButtons() {
   MANUAL_LANES.forEach(lane => {
     const btn = document.getElementById('select-area-' + lane.key);
-    const body = document.getElementById(lane.tbody);
-    if (!btn || !body) return;
-    let n = 0;
-    body.querySelectorAll('tr[data-label]').forEach(tr => {
-      if (ActualArea.get(actualAreaStore, tr.getAttribute('data-label'))) n++;
-    });
+    if (!btn) return;
+    const n = laneRowsWithArea(lane).length;
     btn.innerHTML = '&#10003; Select with area (' + n + ')';
     btn.disabled = n === 0;
   });
@@ -5624,6 +5829,33 @@ function barcodeChip(item) {
     ToolHelpers.escapeHtml(item.label) + '" onclick="openBarcodeDialog(this.dataset.label)">&#9612;&#9613;&#9612;</button>';
 }
 
+// earlyBarcodeChip(item) -> the scan chip on an EARLY Post Sort row (Tyler,
+// 2026-08-14: "got to put that chip that lets me scan the barcode").
+//
+// A SEPARATE builder from barcodeChip, deliberately, because the two answer
+// "what barcode?" from different fields and only one of them is safe here:
+//   barcodeChip ...... barcodeValueOf, which FALLS BACK to the tracking number
+//                      when the row has no scanBarcode. On a full-report row
+//                      that fallback is long-standing behaviour. On an early
+//                      row it would put a Code128 of the tracking number on
+//                      screen for someone to scan — the exact card that does
+//                      not scan, and the reason #667's gating exists.
+//   this one ......... PostSortLane.barcodePrintDecision, the SAME gate
+//                      "Barcode selected" prints through. No barcode, or a
+//                      lookup conflict, means NO chip — never a guess.
+//
+// So the chip appears precisely when the lookup round-trip has paid off, which
+// is also the moment it becomes useful. Rows still waiting show the
+// "awaiting barcode" / "barcode conflict" tag next to the label instead
+// (postSortBarcodeTagHtml), so a missing chip is never an unexplained absence.
+function earlyBarcodeChip(item) {
+  const decision = PostSortLane.barcodePrintDecision(item);
+  if (!decision.printable) return '';
+  return ' <button type="button" class="barcode-chip" data-label="' + ToolHelpers.escapeHtml(item.label) +
+    '" title="Show a scannable barcode (from the Track IDs to Full Barcode lookup)" aria-label="Barcode for ' +
+    ToolHelpers.escapeHtml(item.label) + '" onclick="openEarlyBarcodeDialog(this.dataset.label)">&#9612;&#9613;&#9612;</button>';
+}
+
 // itemByLabel(label) -> the package model from whichever list holds it, so the
 // barcode dialog works from an auto-coded, manual or resolved row alike.
 function itemByLabel(label) {
@@ -5696,6 +5928,68 @@ function openBarcodeDialog(label) {
   input.focus();
 }
 
+// openEarlyBarcodeDialog(label) -> the same scannable-barcode dialog for an
+// EARLY Post Sort row (Tyler, 2026-08-14). Deliberately its own function
+// rather than a branch inside openBarcodeDialog, because three things differ
+// and each one is the kind of difference that goes wrong quietly:
+//
+//   WHERE THE ITEM COMES FROM: postSortItemByLabel, not itemByLabel — the
+//   latter searches manualItems/autoItems/resolvedItems and would return null
+//   here, which is why the chip was suppressed on this lane until now.
+//
+//   WHAT IT ENCODES: PostSortLane.barcodePrintDecision's barcode, and nothing
+//   else. openBarcodeDialog falls back to the tracking number when a row has
+//   no scanBarcode; doing that here would render a Code128 that does not scan
+//   and hand it to someone to scan (#667). If the decision is not printable
+//   the dialog does not open at all — and the chip that calls this is built
+//   from the same decision, so the two can never disagree.
+//
+//   WHERE THE TYPED AREA GOES: commitPostSortGoesTo, so the write carries
+//   EARLY provenance exactly like the row's own Goes To field. Routing it
+//   through commitGoesTo would record a hand-typed value against a package the
+//   main report has never classified.
+function openEarlyBarcodeDialog(label) {
+  const item = postSortItemByLabel(label);
+  if (!item) return;
+  const decision = PostSortLane.barcodePrintDecision(item);
+  if (!decision.printable) return; // never guess a barcode on this lane
+  barcodeDialogLabel = String(label);
+  const value = decision.barcode;
+  const host = document.getElementById('barcode-dialog-body');
+  let svg;
+  try {
+    svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 96, showText: false });
+  } catch (e) {
+    svg = '<div class="barcode-error">This value can\'t be encoded as Code 128: ' +
+      ToolHelpers.escapeHtml(e.message) + '</div>';
+  }
+  host.innerHTML =
+    '<div class="barcode-stage">' + svg + '</div>' +
+    '<div class="barcode-value mono">' + ToolHelpers.escapeHtml(value) + '</div>' +
+    '<label class="barcode-area-label">Goes to' +
+      '<input type="text" id="barcode-area-input" class="goesto-input big" maxlength="' + ActualArea.MAX_LEN + '"' +
+      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
+    '</label>' +
+    '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
+
+  const input = document.getElementById('barcode-area-input');
+  const dialogLabel = barcodeDialogLabel;
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.value = actualAreaOf(item);
+      input.blur();
+      closeBarcodeDialog();
+    }
+  });
+  input.addEventListener('blur', () => commitPostSortGoesTo(dialogLabel, input.value));
+
+  document.getElementById('barcode-dialog').style.display = 'flex';
+  input.focus();
+}
+
 // Keep the dialog's own field in step when a commit (possibly from the row
 // behind it) changes the area for the package it is showing.
 function syncBarcodeDialogArea(label) {
@@ -5716,48 +6010,130 @@ function printBarcodeDialog() {
   printBarcodesFor([barcodeDialogLabel]);
 }
 
-// printBarcodesFor(labels) -> a standalone print window, one card per package:
-// barcode, the encoded value, the "Goes to" area in large type, and the address.
+// barcodeCardHtml(label, value, item) -> ONE card on the print sheet: the
+// barcode, the encoded value, the "Goes to" area in large type, and the
+// address. Split out of printBarcodesFor by issue #667 so the full-report path
+// and the early path render an IDENTICAL card — the only thing #667 changes is
+// WHICH value is encoded and whether the card is emitted at all, never how a
+// card looks. Two copies of this markup would be two sheets that could drift.
+function barcodeCardHtml(label, value, item) {
+  let svg;
+  try {
+    svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 80, showText: false });
+  } catch (e) {
+    return '<div class="card"><div class="err">Cannot encode ' +
+      ToolHelpers.escapeHtml(value) + '</div></div>';
+  }
+  const area = ActualArea.get(actualAreaStore, label);
+  // Mark an EARLY area on the physical card itself (/code-review on #642,
+  // finding 2): a Post Sort pre-fill (issue #634) has never been confirmed
+  // against a scan on this report. A bulk "Select with area" + "Barcode
+  // selected" pass is provenance-blind by design (see selectRowsWithArea),
+  // so without a mark ON THE CARD an unconfirmed guess is physically
+  // indistinguishable from a confirmed area on the sheet Tyler hands to a
+  // package handler. Deliberately NOT blocked from selection/printing —
+  // see the reasoning in the PR discussion: over-blocking would stop Tyler
+  // printing a card for a package whose only area info is an early guess
+  // he has already visually reviewed and is satisfied with, for a benefit
+  // this on-card mark already delivers (one more visible check before the
+  // label reaches a package). That reasoning is about the AREA. It does not
+  // extend to the BARCODE: an unresolved or conflicting barcode is not a
+  // guess a human can eyeball, so #667 refuses those cards outright rather
+  // than marking them (see printBarcodesFor).
+  const early = area && ActualArea.isEarly(actualAreaStore, label);
+  // The tick box (2026-08-14). ONE control serving both ways of working the
+  // sheet, which is why it is a real <input type="checkbox"> rather than a
+  // drawn square or a JS-only widget:
+  //   ON PAPER  it prints as an empty box to tick with a pen (the print CSS
+  //             gives it a visible border and strips the UI affordances).
+  //   ON SCREEN it is clickable, greys the card out, and reports back to the
+  //             tool through window.opener so the lane agrees with the sheet.
+  // Pre-checked from the store, so re-printing a sheet does not lose the ticks
+  // already made on the previous one.
+  const done = BarcodeDone.isDone(barcodeDoneStore, label);
+  return '<div class="card' + (done ? ' done' : '') + '" data-label="' + ToolHelpers.escapeHtml(label) + '">' +
+    '<label class="tick"><input type="checkbox" class="done-box"' + (done ? ' checked' : '') +
+      ' data-label="' + ToolHelpers.escapeHtml(label) + '" aria-label="Mark ' +
+      ToolHelpers.escapeHtml(label) + ' done"><span class="tick-text">Done</span></label>' +
+    '<div class="area">' + (area ? ToolHelpers.escapeHtml(area) : '&mdash;') + '</div>' +
+    (early ? '<div class="unconfirmed">UNCONFIRMED &mdash; Post Sort early guess, not yet scanned</div>' : '') +
+    '<div class="bars">' + svg + '</div>' +
+    '<div class="val">' + ToolHelpers.escapeHtml(value) + '</div>' +
+    '<div class="addr">' + ToolHelpers.escapeHtml((item && item.address) || '') + '</div>' +
+    '</div>';
+}
+
+// printBarcodesFor(entries) -> a standalone print window, one card per package.
 //
 // It is written as its own document rather than a print stylesheet over this
 // page because the sheet must be pure black-on-white regardless of the tool's
 // theme — a dark-mode barcode does not scan and wastes toner.
-function printBarcodesFor(labels) {
-  const cards = labels.map(label => {
-    const item = itemByLabel(label);
-    if (!item) return '';
-    const value = barcodeValueOf(item);
-    let svg;
-    try {
-      svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 80, showText: false });
-    } catch (e) {
-      return '<div class="card"><div class="err">Cannot encode ' +
-        ToolHelpers.escapeHtml(value) + '</div></div>';
-    }
-    const area = ActualArea.get(actualAreaStore, label);
-    // Mark an EARLY area on the physical card itself (/code-review on #642,
-    // finding 2): a Post Sort pre-fill (issue #634) has never been confirmed
-    // against a scan on this report. A bulk "Select with area" + "Barcode
-    // selected" pass is provenance-blind by design (see selectRowsWithArea),
-    // so without a mark ON THE CARD an unconfirmed guess is physically
-    // indistinguishable from a confirmed area on the sheet Tyler hands to a
-    // package handler. Deliberately NOT blocked from selection/printing —
-    // see the reasoning in the PR discussion: over-blocking would stop Tyler
-    // printing a card for a package whose only area info is an early guess
-    // he has already visually reviewed and is satisfied with, for a benefit
-    // this on-card mark already delivers (one more visible check before the
-    // label reaches a package).
-    const early = area && ActualArea.isEarly(actualAreaStore, label);
-    return '<div class="card">' +
-      '<div class="area">' + (area ? ToolHelpers.escapeHtml(area) : '&mdash;') + '</div>' +
-      (early ? '<div class="unconfirmed">UNCONFIRMED &mdash; Post Sort early guess, not yet scanned</div>' : '') +
-      '<div class="bars">' + svg + '</div>' +
-      '<div class="val">' + ToolHelpers.escapeHtml(value) + '</div>' +
-      '<div class="addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>' +
-      '</div>';
-  }).filter(Boolean).join('');
+//
+// ISSUE #667 — TWO KINDS OF ENTRY, and the signature is deliberately backward
+// compatible:
+//   'TRACKINGNUMBER'          a FULL-REPORT row. Unchanged in every respect:
+//                             resolved through itemByLabel, encoded from
+//                             barcodeValueOf, which falls back to the tracking
+//                             number when the report carried no barcode column
+//                             (lib/ibno-rules.js's own reasoning). Every
+//                             pre-#667 caller passes these — the barcode
+//                             dialog, and printBarcodeDialog.
+//   { label, early: true }    an EARLY Post Sort row. GATED: its barcode comes
+//                             from postSortItems (barcode/barcodeConflict, the
+//                             #649/#635 tiers), and a row with no resolved
+//                             barcode or with conflicting lookup barcodes
+//                             emits NOTHING AT ALL — no card, not even a
+//                             tracking-number fallback, because a
+//                             PKG_LABEL_XREF-shaped value does not scan and a
+//                             coin-flip between two barcodes misroutes a
+//                             package. The decision itself is
+//                             PostSortLane.barcodePrintDecision's, not this
+//                             function's.
+//
+// Every refusal is ANNOUNCED (PostSortLane.describeBarcodePrint) rather than
+// left to be noticed: a sheet short by two cards looks exactly like a sheet
+// that printed everything.
+//
+// Returns the plan (or null when no early rows were involved), so a caller can
+// react to a refusal; the DOM tests read it too.
+function printBarcodesFor(entries) {
+  const list = (Array.isArray(entries) ? entries : []).map(e => (
+    (e && typeof e === 'object')
+      ? { label: String(e.label || ''), early: !!e.early }
+      : { label: String(e == null ? '' : e), early: false }
+  ));
+  const earlyEntries = list.filter(e => e.early);
+  const plan = earlyEntries.length
+    ? PostSortLane.planBarcodePrint(earlyEntries.map(e => ({ label: e.label, item: postSortItemByLabel(e.label) })))
+    : null;
+  // Keyed by label so the card loop below stays in the caller's own row order
+  // rather than printing every early row after every full-report one.
+  const printableEarly = new Map((plan ? plan.printable : []).map(p => [p.label, p]));
 
-  if (!cards) return;
+  const cards = list.map(entry => {
+    if (entry.early) {
+      const ok = printableEarly.get(entry.label);
+      if (!ok) return '';   // REFUSED — nothing reaches the paper
+      return barcodeCardHtml(entry.label, ok.barcode, ok.item);
+    }
+    const item = itemByLabel(entry.label);
+    if (!item) return '';
+    return barcodeCardHtml(entry.label, barcodeValueOf(item), item);
+  }).filter(Boolean);
+
+  if (plan) {
+    const msg = PostSortLane.describeBarcodePrint(plan);
+    postSortBarcodeStatus(msg, plan.refusedCount > 0);
+    flashGoesToNote(msg);
+  }
+
+  if (!cards.length) return plan;
+  const cardHtml = cards.join('');
+  // How many of THIS sheet's cards are already ticked, so a re-print of a
+  // part-worked batch opens showing the progress rather than "0 of N".
+  const doneOnSheet = BarcodeDone.countDone(
+    barcodeDoneStore,
+    list.map(e => e.label).filter(l => cardHtml.indexOf('data-label="' + l + '"') !== -1));
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
     // Same opt-out as the on-screen stage: a print window on a dark-mode machine
     // must not be auto-darkened before it reaches the printer.
@@ -5781,29 +6157,207 @@ function printBarcodesFor(labels) {
     '.val{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:0.02em}' +
     '.addr{font-size:11px;margin-top:3px}' +
     '.err{font-size:12px;font-weight:700}' +
-    '@media print{body{margin:0}h1{display:none}}' +
+    // ─── the tick box, screen and paper ───────────────────────────────────
+    // Screen: a real control, sized for a thumb on the phone Tyler carries on
+    // the floor, sitting top-right of its card.
+    '.card{position:relative}' +
+    '.tick{position:absolute;top:8px;right:10px;display:flex;align-items:center;gap:6px;' +
+      'font-size:11px;font-weight:700;cursor:pointer;user-select:none}' +
+    '.done-box{width:22px;height:22px;cursor:pointer;accent-color:black;margin:0}' +
+    // A ticked card stays fully readable — greyed, never hidden. The sheet is
+    // a record of the whole batch, so a finished card must still be findable
+    // if a package comes back.
+    '.card.done{opacity:0.45}' +
+    '.card.done .area{text-decoration:line-through}' +
+    '#done-count{font-weight:800}' +
+    '@media print{' +
+      'body{margin:0}h1{display:none}' +
+      // On paper the checkbox has to be an EMPTY BOX to tick with a pen, so
+      // the browser's own rendering (which prints a filled/ticked control, or
+      // nothing at all) is replaced with a drawn square. The label text goes:
+      // the box speaks for itself and the space is better spent on the card.
+      '.tick-text{display:none}' +
+      '.done-box{appearance:none;-webkit-appearance:none;width:26px;height:26px;' +
+        'border:2px solid black;border-radius:3px;background:white}' +
+      // A card already ticked on screen prints as ticked, so a re-print of a
+      // part-worked batch carries its progress onto the new sheet.
+      '.done-box:checked{background:white}' +
+      '.done-box:checked::after{content:"\\2713";display:block;font-size:20px;' +
+        'line-height:24px;text-align:center;font-weight:900}' +
+      // Never fade a card on paper: toner-light grey is exactly what does not
+      // photocopy or read under dock lighting.
+      '.card.done{opacity:1}' +
+    '}' +
     '</style></head><body><h1>IBNO barcodes — ' + ToolHelpers.escapeHtml(ToolHelpers.isoDate()) +
-    ' (' + labels.length + ')</h1>' + cards + '</body></html>';
+    // The count is the number of cards ACTUALLY on the sheet, never the number
+    // of rows asked for (issue #667): with a refusal in the selection those
+    // two differ, and a header promising 6 over a 4-card sheet is the exact
+    // "did I lose a page?" ambiguity the refusal message exists to remove.
+    ' (' + cards.length + ') — <span id="done-count">' + doneOnSheet + '</span> of ' +
+    cards.length + ' done</h1>' + cardHtml +
+    // ─── the sheet's own tick handling (2026-08-14) ───────────────────────
+    // Inline, in the sheet's document, because this window is written by
+    // document.write and has no other script of its own.
+    //
+    // ONE delegated listener rather than one per card: a sheet can carry
+    // hundreds of cards, and this also survives nothing being re-rendered here.
+    //
+    // The opener call is wrapped: the tool's window may be closed, navigated,
+    // or (on a re-print) a DIFFERENT tool window from the one that wrote this
+    // sheet. A sheet that cannot reach its opener must still tick on screen and
+    // still print correctly — losing the sync is an inconvenience, losing the
+    // sheet mid-shift is not acceptable.
+    '<script>(function(){' +
+    'document.addEventListener("change",function(e){' +
+      'var box=e.target;' +
+      'if(!box||!box.classList||!box.classList.contains("done-box"))return;' +
+      'var card=box.closest(".card");' +
+      'if(card)card.classList.toggle("done",box.checked);' +
+      'var n=document.querySelectorAll(".done-box:checked").length;' +
+      'var out=document.getElementById("done-count");' +
+      'if(out)out.textContent=n;' +
+      'try{if(window.opener&&!window.opener.closed&&window.opener.markBarcodeDone){' +
+        'window.opener.markBarcodeDone(box.dataset.label,box.checked);}}catch(err){}' +
+    '});' +
+    '})();<\/script>' +
+    '</body></html>';
 
   const w = window.open('', '_blank');
-  if (!w) { flashGoesToNote('Allow pop-ups to print barcodes'); return; }
+  if (!w) { flashGoesToNote('Allow pop-ups to print barcodes'); return plan; }
   w.document.write(doc);
   w.document.close();
   w.focus();
   w.print();
+  return plan;
 }
 
 // barcodeSelected(lane) -> print sheet for the checked rows of ONE lane, the
 // same single-lane rule "Copy selected" follows.
+//
+// Issue #667: "one lane" now means BOTH of that lane's tbodies — its
+// full-report rows and its early Post Sort group, which live in sibling
+// tbodies of the same table (MANUAL_LANES' `tbody` / `earlyTbody`). Before
+// this, an early row could be checked and the sheet came out empty with no
+// explanation, because this only ever read `tbody`. Each row carries its
+// PROVENANCE into printBarcodesFor rather than being looked up by label there:
+// a tracking number can legitimately exist in BOTH reports at once (see
+// earlyWorkingItems' own comment), and the two halves resolve their barcode
+// from different places under different rules, so "which tbody was it checked
+// in" is the only honest answer to which rule applies.
 function barcodeSelected(lane) {
   const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
-  const body = document.getElementById(cfg.tbody);
-  const labels = Array.from(body ? body.querySelectorAll('tr[data-label] .manual-check:checked') : [])
-    .map(cb => cb.closest('tr[data-label]'))
-    .filter(Boolean)
-    .map(tr => tr.dataset.label);
-  if (!labels.length) return;
-  printBarcodesFor(labels);
+  printBarcodesFor(laneBarcodeEntries(cfg));
+}
+
+// laneBarcodeCardPlan(cfg) -> { entries, plan, cardCount } — how many cards a
+// click on this lane's "Barcode selected" would ACTUALLY produce (#667 review,
+// finding 2).
+//
+// It runs the same two steps printBarcodesFor runs, in the same order, with no
+// side effects: laneBarcodeEntries for the deduped selection, then
+// PostSortLane.planBarcodePrint for the early half's gating. A full-report
+// entry contributes a card whenever itemByLabel can still find it, which is
+// exactly printBarcodesFor's own condition for emitting one.
+//
+// Kept out of printBarcodesFor rather than folded into it because the button
+// has to answer this question on every checkbox change, and printBarcodesFor
+// writes a status line and opens a window.
+function laneBarcodeCardPlan(cfg) {
+  const entries = laneBarcodeEntries(cfg);
+  const earlyEntries = entries.filter(e => e.early);
+  const plan = earlyEntries.length
+    ? PostSortLane.planBarcodePrint(earlyEntries.map(e => ({ label: e.label, item: postSortItemByLabel(e.label) })))
+    : null;
+  const fullCards = entries.filter(e => !e.early && itemByLabel(e.label)).length;
+  return {
+    entries: entries,
+    plan: plan,
+    cardCount: fullCards + (plan ? plan.printableCount : 0),
+  };
+}
+
+// laneBarcodeEntries(cfg) -> [{ label, early }] for every CHECKED row in both
+// halves of one lane, ONE entry per package (issue #667).
+//
+// DEDUPED BY LABEL. A tracking number can be checked in BOTH halves at once —
+// the early lane deliberately keeps a row the main report also calls 'manual'
+// (see earlyWorkingItems), so this is the normal state a few minutes after the
+// full report lands, not an edge case. Two cards for one package is paper a
+// handler has to reconcile.
+//
+// WHICH HALF WINS IS DECIDED BY WHICH ONE ACTUALLY KNOWS THE BARCODE, never by
+// collection order (#667 review, CRITICAL). "Full report always wins" is
+// wrong, and wrong in the one direction this whole ticket exists to prevent:
+//
+//   - the full-report card encodes barcodeValueOf -> item.scanBarcode, and
+//     lib/ibno-rules.js fills that from [SCAN_BARCODE, VAN_SCAN_BARCODE,
+//     trackingId] — it FALLS BACK TO THE TRACKING NUMBER when the report
+//     carried no barcode column, deliberately, so a barcode-mode copy of a
+//     full-report row is never empty;
+//   - lib/ibno-rules.js's mainReportScanBarcodeMap maps only REAL
+//     SCAN_BARCODE values, so for that same label the early item keeps the
+//     good barcode the Track IDs to Full Barcode lookup resolved.
+//
+// So an unconditional full-report win would throw away a resolved barcode and
+// print a Code128 card encoding a 12-digit tracking number — the exact
+// unscannable card, in one click of "Select with area" + "Barcode selected".
+//
+// The tie-break: the early half wins whenever the full-report half's value is
+// a FALLBACK (barcodeIsFallback — scanBarcode === the tracking number) or the
+// full-report item cannot be found at all. The early half is then subject to
+// #667's gating like any other early row, so the outcomes are "print the
+// resolved lookup barcode" or "print nothing and say why" — never "encode a
+// tracking number". When the main report has a real SCAN_BARCODE it still
+// wins, which is the #649 tier order holding, and applyBarcodeLookup has
+// already given the early item that same value anyway.
+function laneBarcodeEntries(cfg) {
+  const entries = [];
+  const byLabel = new Map();
+  [[cfg.tbody, false], [cfg.earlyTbody, true]].forEach(([tbodyId, early]) => {
+    const body = tbodyId ? document.getElementById(tbodyId) : null;
+    if (!body) return;
+    Array.from(body.querySelectorAll('tr[data-label] .manual-check:checked'))
+      .map(cb => cb.closest('tr[data-label]'))
+      .filter(Boolean)
+      .forEach(tr => {
+        const label = tr.dataset.label;
+        if (!label) return;
+        const prev = byLabel.get(label);
+        if (!prev) {
+          const entry = { label: label, early: early };
+          byLabel.set(label, entry);
+          entries.push(entry);
+          return;
+        }
+        // The overlap. `prev` is always the full-report half (collected
+        // first); mutate it in place so the row keeps its position on the
+        // sheet and the caller still sees exactly one entry per package.
+        if (early && !prev.early && fullReportBarcodeIsUnusable(label)) prev.early = true;
+      });
+  });
+  return entries;
+}
+
+// fullReportBarcodeIsUnusable(label) -> would the FULL-REPORT card for this
+// label encode a tracking number rather than a real barcode? (#667 review,
+// CRITICAL — see laneBarcodeEntries.)
+//
+// Deliberately expressed as "is the full-report value unusable", not "does the
+// early item have something better": the question being asked is whether the
+// pre-existing full-report path is safe to take for an overlapping package,
+// and if it is not, the answer is to hand the package to the gated early path
+// — which refuses rather than guesses. A doubly-unresolved package therefore
+// prints nothing and says why, instead of printing an unscannable card.
+//
+// NOTE the one benign false positive: a package whose REAL SCAN_BARCODE
+// happens to equal its own tracking number (measured — one real 16-digit case)
+// reads as a fallback here. It is handed to the early half, which holds that
+// same value via mainReportScanBarcodeMap and prints the identical card. No
+// length test is involved either way.
+function fullReportBarcodeIsUnusable(label) {
+  const item = itemByLabel(label);
+  if (!item) return true;
+  return barcodeIsFallback(item);
 }
 
 function buildManualRow(item, bucket) {
@@ -5889,16 +6443,19 @@ function buildManualRow(item, bucket) {
       '" aria-label="select for ' + (isEarly ? 'copy' : 'batch coding') + '"></td>' +
     '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' +
       (isEarly ? postSortBarcodeTagHtml(item) : '') +
-      // barcodeChip's dialog (openBarcodeDialog -> itemByLabel) only ever
-      // searches manualItems/autoItems/resolvedItems, never postSortItems —
-      // so on an early row the button would render (barcodeValueOf falls
-      // back to the tracking number) but silently do nothing on click
-      // (/code-review finding, #662). Suppressed for early rows; the
-      // barcode-status tag right above the label already covers this row's
-      // barcode state (awaiting / resolved / conflict) via #649/#635, and
-      // wiring the dialog itself to postSortItems is barcode-actions scope
-      // (#661, out of scope here).
-      '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) + (isEarly ? '' : barcodeChip(item)) + streetChip(item) + eopsChip(item) + '</span></td>' +
+      // Early rows get their OWN chip builder (2026-08-14). They used to get
+      // none at all: barcodeChip's dialog resolves through itemByLabel, which
+      // never searches postSortItems, so the button rendered but did nothing
+      // on click (/code-review finding, #662) — and worse, barcodeValueOf
+      // would have fallen back to the tracking number. earlyBarcodeChip ->
+      // openEarlyBarcodeDialog fixes both: it resolves through
+      // postSortItemByLabel and encodes only a barcode
+      // PostSortLane.barcodePrintDecision calls printable, the same gate
+      // "Barcode selected" prints through. A row still awaiting the lookup, or
+      // holding a conflict, shows no chip — and its state is already named by
+      // the tag next to the label (postSortBarcodeTagHtml).
+      '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) +
+        (isEarly ? earlyBarcodeChip(item) : barcodeChip(item)) + streetChip(item) + eopsChip(item) + '</span></td>' +
     '<td class="cat-text">' + categoryHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '\u2014') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '\u2014') + '</td>' +
@@ -6677,6 +7234,7 @@ syncCopyModeControl();
 // Typed "Goes To" areas, pruned to the 30-day window. Loaded BEFORE any restore
 // renders rows, so a restored session's inputs come up already filled.
 loadActualAreas();
+loadBarcodeDone();
 // Work mode is remembered across a reload, but only takes effect once there
 // are rows to work — restoring it onto an empty page would show a bar with
 // nothing in it.
