@@ -1610,6 +1610,7 @@
      global (window.BarcodeLookup) is present when post-sort-lane.js resolves
      it. -->
 <script src="lib/barcode-lookup.js"></script>
+<script src="lib/report-detect.js"></script>
 <script src="lib/post-sort-scans.js"></script>
 <script src="lib/post-sort-lane.js"></script>
 <!-- ZIP -> ISP lookup, shared with Address Catcher and the printable CSP zip breakdown. -->
@@ -1666,10 +1667,14 @@ function saveSettings() {
   FLAGGED_WORK_AREAS = raw.split(/[\n,]+/).map(v => v.trim()).filter(v => v.length > 0);
   IbnoRules.setFlaggedWorkAreas(FLAGGED_WORK_AREAS);
   toolStorage.set('ibno_flagged_areas', FLAGGED_WORK_AREAS);
-  // The early lane's "Copy flagged-area tracking #s" count filters on this
-  // same list (PostSortLane.flaggedLookupBatch -> IbnoRules.isWorkAreaFlagged),
-  // so a settings save must refresh it without waiting for a lane re-render.
-  updateFlaggedCopyButton();
+  // A full lane re-render, not just the copy button: since 2026-08-14 the rows
+  // THEMSELVES are filtered by this list (earlyIsMine), not only the copy
+  // batch, and the lane split is memoized on postSortItems identity + fold
+  // state — neither of which changes here. renderEarlyLane() invalidates that
+  // cache and refreshes the button (it calls updateFlaggedCopyButton itself),
+  // so editing the list updates rows, badges, stat cards and the count in one
+  // pass instead of leaving rows on screen that no longer match the setting.
+  renderEarlyLane();
   const status = document.getElementById('settings-status');
   status.textContent = '✓ Saved';
   status.classList.add('show');
@@ -1679,7 +1684,7 @@ function saveSettings() {
 function resetSettings() {
   FLAGGED_WORK_AREAS = IbnoRules.setFlaggedWorkAreas(DEFAULT_FLAGGED_WORK_AREAS);
   toolStorage.remove('ibno_flagged_areas');
-  updateFlaggedCopyButton(); // same staleness as saveSettings — the count filters on this list
+  renderEarlyLane(); // same staleness as saveSettings — the ROWS filter on this list too
   document.getElementById('flagged-areas-input').value = FLAGGED_WORK_AREAS.join('\n');
   const status = document.getElementById('settings-status');
   status.textContent = '↺ Reset';
@@ -4041,13 +4046,17 @@ function cssAttrEscape(s) {
 
 // ─── POST SORT "EARLY" LANE (issue #634, third slice of #622) ──────────────
 //
-// Entirely independent of the report above: its own state (postSortItems),
-// its own file input, its own render. Never touches manualItems, never calls
-// lib/ibno-rules.js's decideCode, and never calls lib/ibno-review-plan.js —
-// this lane offers no QA Scan Code, ever. PLA_LOOKUP is genuinely absent from
-// the Post Sort report (lib/post-sort-scans.js TRAP 2), so the classifier
-// that decides ground/express lane, bucket and code cannot run on it; a
-// guessed code here would be this repo's worst bug class (#602/#618).
+// Its own state (postSortItems) and its own render, but NO LONGER independent
+// of the report above: since 2026-08-14 the two reports are one-at-a-time —
+// a Post Sort load (either file input) runs a full resetApp() first, and a
+// main report load calls clearPostSortLane(). Never touches manualItems,
+// never calls lib/ibno-rules.js's decideCode. PLA_LOOKUP is genuinely absent
+// from the Post Sort report (lib/post-sort-scans.js TRAP 2), so the
+// classifier that decides bucket and code cannot run on it; a guessed code
+// here would be this repo's worst bug class (#602/#618). What a row SHOWS is
+// resolved by PostSortLane.applyEarlyCode (#664): the flagged-Work-Area
+// fallback carries a 'no PLA' marker so a guessed-at code is always
+// distinguishable from a main-report-confirmed one.
 //
 // Reuses goesToCell/streetCell/zipOf/ispCell/actualAreaOf/repaintGoesTo as-is
 // (all generic over `item.label`/`item.address`/`item.postal`) rather than
@@ -4175,8 +4184,36 @@ function postSortBarcodeStatus(msg, isError) {
 // screen, so it stays a product decision for him, not a side effect of a
 // routing change. Nothing here is blocked on it: the lane badges are already
 // correct either way (updateExpressSection counts per lane).
+// earlyIsMine(item) -> THE one predicate deciding whether an early row is part
+// of Tyler's queue, shared by the stat cards (earlyWorkingItems) and by what
+// actually renders (earlyVisibleItems). One predicate, two readers, so a count
+// on a card can never disagree with the rows on screen.
+//
+// Two conditions, the second added 2026-08-14 (Tyler, on the first real Post
+// Sort run through the one-at-a-time workflow: "its still showing all not just
+// my flagged work areas"):
+//   needsWork ............... the disposition fold (#657), unchanged.
+//   isWorkAreaFlagged ....... NEW. The Post Sort report is a building-wide
+//                             pull; on the 2026-08-12 export that is 289 rows
+//                             across 110 Work Areas, of which 8 sit in the
+//                             areas Tyler actually works. The other 281 are
+//                             someone else's queue and were burying his.
+//
+// FOLDED, NOT REMOVED — the same constraint the disposition fold obeys
+// (constraint 1 on map #608: nothing this tool does disappears). The hidden
+// rows stay one click away behind the SAME "Show all" toggle, which always
+// states its own count. This reuses the existing fold rather than adding a
+// second, competing hiding mechanism.
+//
+// Reads the SAME configured list as the Flagged Work Areas settings box and as
+// PostSortLane.flaggedLookupBatch, via IbnoRules.isWorkAreaFlagged — so what is
+// on screen and what the Copy button puts on the clipboard can never diverge.
+function earlyIsMine(it) {
+  return PostSortLane.needsWork(it) && IbnoRules.isWorkAreaFlagged(it && it.ibWork);
+}
+
 function earlyWorkingItems() {
-  return postSortItems.filter(PostSortLane.needsWork);
+  return postSortItems.filter(earlyIsMine);
 }
 
 // updateStatTotal(auto, manual) -> the Total Flagged stat card, now the ONE
@@ -4256,61 +4293,84 @@ function handlePostSortFile(file) {
     if (seq !== postSortSeq) return; // superseded by a newer drop or a clear before this fired
     SpreadsheetLib.readSpreadsheet(reader.result).then(function (rows) {
       if (seq !== postSortSeq) return;
-      const parsed = PostSortScans.parsePostSortRows(rows);
-      if (seq !== postSortSeq) return;
-      postSortItems = PostSortLane.buildPostSortLane(parsed.records);
-      // Tier 1 (#649): resolve against the main report's SCAN_BARCODE
-      // immediately, before any lookup file is ever dropped — no lookupResult
-      // yet (null), just the already-loaded main report's answers.
-      postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
-      // Disposition fold (#651 follow-up), applied on the same trigger as
-      // tier 1 and for the same reason: both answer "what does the already
-      // loaded main report already know about this row".
-      postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
-      // Early-code decision (issue #664), same call as the main-report-reload
-      // path above: resolves category/reason/plaArbitrated per row.
-      postSortItems = PostSortLane.applyEarlyCode(postSortItems);
-      const mainResolvedCount = postSortItems.filter(it => it.barcodeSource === 'main').length;
-      const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
-      // #649 code review finding 4: a note only ever appearing when the count
-      // is above zero makes a TOTAL cross-report join failure (e.g. the map-
-      // building regression this same PR shipped and fixed) indistinguishable
-      // from legitimate zero coverage — nothing looked wrong on screen either
-      // way. When a main report IS loaded, always say something, including an
-      // explicit "0 of N" when nothing joined.
-      const hasMainReport = Array.isArray(lastRows) && lastRows.length > 0;
-      let mainNote = '';
-      if (hasMainReport) {
-        mainNote = mainResolvedCount
-          ? ' ' + mainResolvedCount + ' already resolved from the loaded Inbound and Van Scans report,' +
-            ' and ' + needWorkCount + ' of ' + postSortItems.length + ' still need work.'
-          : ' 0 of ' + postSortItems.length + ' matched the loaded Inbound and Van Scans report — every row awaits the lookup.';
-      } else {
-        // The no-report-at-all case, which #649's finding-4 hardening left
-        // SILENT: it only ever spoke when a main report WAS loaded. Silence
-        // here reads exactly like "there was nothing for tier 1 to do", when
-        // in fact tier 1 never ran and the ENTIRE lane is now headed for the
-        // lookup. Measured on a real mid-sort pull (2026-08-13, issue #651):
-        // the main report resolves 2,700 of 2,868 rows, so the difference
-        // between loading it first and not is a 2,868-row paste versus a
-        // 168-row one. That is far too large a consequence to leave implied.
-        mainNote = ' No Inbound and Van Scans report is loaded, so every row awaits the lookup.' +
-          ' Load that report first and most rows resolve without a lookup round-trip.';
-      }
-      postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
-        ' loaded from ' + file.name + '.' + mainNote, false);
-      renderEarlyLane();
+      // One report at a time (2026-08-14): the strip button and the main
+      // file input run the SAME path — a full reset, then the ingest.
+      loadPostSortAsMain(rows, file.name);
     }).catch(function (err) {
       if (seq !== postSortSeq) return;
-      // Reset to the empty state on ANY read/parse failure — including the
-      // loud TRAP 1 / TRAP 2 refusals from lib/post-sort-scans.js — so a bad
-      // drop never leaves a previously-rendered lane on screen.
-      postSortItems = [];
-      renderEarlyLane();
+      // A read failure leaves the current state untouched — the same rule as
+      // loadPostSortAsMain's parse-before-reset. Report it, change nothing.
       postSortStatus('Error reading Post Sort report: ' + (err && err.message ? err.message : err), true);
     });
   };
   reader.readAsArrayBuffer(file);
+}
+
+// loadPostSortAsMain(rows, fileName) -> the Post Sort report takes the MAIN
+// slot. ONE report at a time (Tyler, 2026-08-14: "i dont want both to be
+// loaded at the same time like it currently does"): a full resetApp() first,
+// then the ingest, then the toolbar chrome set the way any load sets it —
+// MINUS the main-report-only buttons (Rerun/Merge/Clean export read lastRows,
+// which this dialect deliberately never sets: lastRows drives the main-only
+// cross-report joins and ReportClean's hard-coded 'inbound-van-scans' recipe).
+//
+// PARSE BEFORE RESET: lib/post-sort-scans.js's loud refusals (TRAP 1/2) are
+// thrown BEFORE resetApp() runs, so a bad drop — the mangled-CSV drop is the
+// common one — leaves whatever report is currently loaded UNTOUCHED instead
+// of wiping a good state for a file that never loaded.
+function loadPostSortAsMain(rows, fileName) {
+  let parsed;
+  try {
+    parsed = PostSortScans.parsePostSortRows(rows);
+  } catch (err) {
+    postSortStatus('Error reading Post Sort report: ' + (err && err.message ? err.message : err), true);
+    return;
+  }
+  resetApp();
+  document.getElementById('file-label').textContent = fileName;
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('reset-btn').style.display = 'inline-flex';
+  ingestPostSortRecords(parsed.records, fileName);
+}
+
+// ingestPostSortRecords(records, fileName) -> build, render, and auto-copy
+// the flagged-area lookup batch. Shared by every Post Sort load path.
+//
+// The three join calls below now ALWAYS run against an empty main report
+// (loadPostSortAsMain reset it): they no-op into the fresh-tail treatment.
+// They stay so this chain is identical to the pre-one-at-a-time load path
+// the lib tests pin — the day the two-reports-at-once workflow returns, only
+// loadPostSortAsMain's reset changes, not this.
+function ingestPostSortRecords(records, fileName) {
+  postSortItems = PostSortLane.buildPostSortLane(records);
+  postSortItems = PostSortLane.applyBarcodeLookup(postSortItems, null, mainReportBarcodeMap());
+  postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
+  postSortItems = PostSortLane.applyEarlyCode(postSortItems);
+  postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
+    ' loaded from ' + fileName + '.', false);
+  renderEarlyLane();
+  autoCopyFlaggedLookupBatch();
+}
+
+// autoCopyFlaggedLookupBatch() -> the workflow's whole point: the moment a
+// Post Sort report loads, the flagged-area tracking numbers are ALREADY on
+// the clipboard, ready to paste into the Track IDs to Full Barcode lookup.
+// The browser can refuse an async clipboard write (transient activation may
+// not survive the file parse), so a refusal points at the "Copy flagged-area
+// tracking #s" button rather than failing silently — the button is always
+// there as the one-click fallback.
+function autoCopyFlaggedLookupBatch() {
+  const batch = PostSortLane.flaggedLookupBatch(postSortItems);
+  if (!batch.length) {
+    postSortBarcodeStatus('No rows in your flagged work areas need the barcode lookup.', false);
+    return;
+  }
+  ToolHelpers.copyText(batch.join('\n')).then(function () {
+    postSortBarcodeStatus('Copied ' + batch.length + ' flagged-area tracking number' + (batch.length === 1 ? '' : 's') +
+      ' — paste into the Track IDs to Full Barcode lookup, then drop its CSV into the same Load box.', false);
+  }).catch(function () {
+    postSortBarcodeStatus('Auto-copy was blocked by the browser — click "Copy flagged-area tracking #s" above, then paste into the Track IDs to Full Barcode lookup.', true);
+  });
 }
 
 function clearPostSortLane() {
@@ -4383,7 +4443,22 @@ function handlePostSortBarcodeFile(file) {
   };
   reader.onload = function () {
     if (seq !== postSortBarcodeSeq) return;
-    const text = typeof reader.result === 'string' ? reader.result : '';
+    ingestBarcodeLookupText(typeof reader.result === 'string' ? reader.result : '', file.name);
+  };
+  reader.readAsText(file);
+}
+
+// ingestBarcodeLookupText(text, fileName) -> the shared core of BOTH
+// barcode-lookup load paths: the early strip's own input and the main file
+// input (lib/report-detect.js routes a TRKID/PKG_BARCODE drop here). Joins
+// the lookup result onto postSortItems by tracking number and re-renders.
+function ingestBarcodeLookupText(text, fileName) {
+  if (!postSortItems.length) {
+    // Guard anyway — a stale drop event or a programmatic click could still
+    // reach here with nothing to join onto.
+    postSortBarcodeStatus('Load the Post Sort report first — nothing to join the barcode lookup against.', true);
+    return;
+  }
 
     // TWO-PASS PARSE — fixes code review CONFIRMED 1 (blocking) and
     // CONFIRMED 2 on issue #635's own PR.
@@ -4424,7 +4499,7 @@ function handlePostSortBarcodeFile(file) {
     const requested = fileTrkids.filter(id => laneLabels.has(id));
 
     if (!requested.length) {
-      postSortBarcodeStatus('None of the tracking numbers in ' + file.name + ' match a row in the currently loaded Post Sort report.', true);
+      postSortBarcodeStatus('None of the tracking numbers in ' + fileName + ' match a row in the currently loaded Post Sort report.', true);
       return;
     }
 
@@ -4456,7 +4531,7 @@ function handlePostSortBarcodeFile(file) {
     });
     const matched = requested.length - stillUnresolved.length;
     let msg = matched + ' of ' + requested.length + ' tracking number' + (requested.length === 1 ? '' : 's') +
-      ' in this batch matched a barcode from ' + file.name + '.';
+      ' in this batch matched a barcode from ' + fileName + '.';
     if (stillConflicted.length) {
       const n = stillConflicted.length;
       msg += ' ' + n + ' TRKID' + (n === 1 ? '' : 's') + ' had conflicting barcodes in the lookup file and ' +
@@ -4471,8 +4546,6 @@ function handlePostSortBarcodeFile(file) {
     // — a perfect targeted lookup (the common, intended case) reads as an
     // ordinary status line, not a red near-total-failure message.
     postSortBarcodeStatus(msg, matched < requested.length);
-  };
-  reader.readAsText(file);
 }
 
 function postSortItemByLabel(label) {
@@ -4803,7 +4876,7 @@ function earlyLaneOf(item) {
 // the SAME fold-aware population that is actually on screen, rather than
 // re-deriving it and silently drifting from what renderEarlyLane() renders.
 function earlyVisibleItems() {
-  return postSortShowAll ? postSortItems : postSortItems.filter(PostSortLane.needsWork);
+  return postSortShowAll ? postSortItems : postSortItems.filter(earlyIsMine);
 }
 
 // PR #673 review finding 9: the three-way lane split is computed ONCE per data
@@ -4944,7 +5017,10 @@ function renderEarlyLane() {
   // rendered rows there would make the toggle offer to "show only the 2,868
   // that need work". The two numbers coincide in one state and diverge in the
   // other, which is exactly the kind of thing that ships looking fine.
-  const needWorkCount = postSortItems.filter(PostSortLane.needsWork).length;
+  // Counted through earlyIsMine, the SAME predicate earlyVisibleItems filters
+  // by, so the badge and the fold toggle can never claim a number the lane is
+  // not actually showing.
+  const needWorkCount = postSortItems.filter(earlyIsMine).length;
   const foldedCount = postSortItems.length - needWorkCount;
   // compareBySort's default 'report' sort key reads item._ord, which
   // autoItems/manualItems get assigned in renderResults but a raw
@@ -5055,6 +5131,17 @@ function renderEarlyLane() {
   // renderResults() re-run — no caller of this function called
   // updateExpressSection() before now, so nothing else keeps it in step.
   updateExpressSection();
+  // Post-Sort-as-main mode (one report at a time, 2026-08-14): with no main
+  // report loaded, updateManualBadge's #stat-manual would read 0 over full
+  // lanes. Count the early working set instead — flagged lanes only, the
+  // same notOurs rule updateStatTotal applies.
+  if (!(Array.isArray(lastRows) && lastRows.length)) {
+    const statManual = document.getElementById('stat-manual');
+    if (statManual) {
+      statManual.textContent = earlyWorkingItems()
+        .filter(it => IbnoRules.manualLane(it) !== 'express-other').length;
+    }
+  }
   // Early rows obey each lane's own search box.
   applyManualSearch();
 }
@@ -5074,12 +5161,18 @@ function renderPostSortFoldToggle(foldedCount, visibleCount) {
     return;
   }
   host.style.display = '';
+  // The folded set now has TWO reasons in it (2026-08-14): rows outside the
+  // flagged Work Areas, and rows the disposition fold already answered. The
+  // building-wide Post Sort pull makes the first reason overwhelmingly the
+  // common one (281 of 289 on the 2026-08-12 export), so it leads — but the
+  // wording names both rather than crediting a main report that, under
+  // one-at-a-time, is never loaded alongside this lane at all.
   host.innerHTML = postSortShowAll
     ? 'Showing all ' + postSortItems.length + ' rows. ' +
-      '<button type="button" class="linkish" onclick="togglePostSortFold()">Show only the ' +
-      visibleCount + ' that need work</button>'
-    : 'Showing the ' + visibleCount + ' that need work. ' + foldedCount +
-      ' already answered by the loaded Inbound and Van Scans report. ' +
+      '<button type="button" class="linkish" onclick="togglePostSortFold()">Show only my ' +
+      visibleCount + '</button>'
+    : 'Showing the ' + visibleCount + ' in your flagged work areas. ' + foldedCount +
+      ' hidden (outside your flagged work areas, or already answered). ' +
       '<button type="button" class="linkish" onclick="togglePostSortFold()">Show all ' +
       postSortItems.length + '</button>';
 }
@@ -6246,12 +6339,28 @@ function rerunRules() {
 function handleFile(file) {
   if (!file) return;
   mergeSeq++; // a new primary load supersedes any in-flight merge read (#459 review F2)
+  // Re-arm immediately, so re-dropping the SAME file after a refusal or a
+  // re-pull (the Post Sort report and the lookup CSV both recur through a
+  // shift, often under an identical filename) still fires 'change'.
+  document.getElementById('file-input').value = '';
   document.getElementById('file-label').textContent = file.name;
   const reader = new FileReader();
   reader.onload = e => {
     // One reader for every format: read raw bytes, let SpreadsheetLib sniff CSV
     // vs .xlsx/.xls and hand back rows in parseCSV shape (#321, same as DSW).
     SpreadsheetLib.readSpreadsheet(e.target.result).then(rows => {
+      // ONE input, three dialects (lib/report-detect.js): the main Inbound
+      // and Van Scans report, the Post Sort report, and the Track IDs to
+      // Full Barcode lookup result. And ONE report at a time (Tyler,
+      // 2026-08-14): a main report load clears the Post Sort lane, and a
+      // Post Sort load is a full reset plus ingest (loadPostSortAsMain).
+      const kind = ReportDetect.detectReportKind(rows);
+      if (kind === 'post-sort') { loadPostSortAsMain(rows, file.name); return; }
+      if (kind === 'barcode-lookup') {
+        ingestBarcodeLookupText(new TextDecoder('utf-8').decode(e.target.result), file.name);
+        return;
+      }
+      clearPostSortLane(); // the main report wins the slot
       // Code + detect recurring on the parsed rows (lib/ibno-session.js); the
       // page keeps the side effects (persist history, schedule sync, render).
       const snap = applySnapshot(rows, { collapse: true }); // fresh file load -> start collapsed (#375)
@@ -6364,6 +6473,11 @@ function handleMergeFile(file) {
 }
 
 function resetApp() {
+  // One report at a time (2026-08-14): a full reset clears the Post Sort
+  // report too. This runs FIRST, while the early rows still exist, so the
+  // early-aware guards below (which read postSortItems/earlyLaneItems) all
+  // evaluate to "nothing left" afterwards.
+  clearPostSortLane();
   document.getElementById('drop-zone').style.display       = 'block';
   document.getElementById('reset-btn').style.display       = 'none';
   document.getElementById('rerun-btn').style.display       = 'none';
@@ -6377,51 +6491,36 @@ function resetApp() {
   document.getElementById('collapse-all-btn').textContent  = '✄ Collapse all';
   document.getElementById('clean-export-btn').style.display = 'none'; // #385
   document.querySelectorAll('.section').forEach(s => s.classList.remove('collapsed'));
-  // Issue #669 review finding 8: #summary is JS-revealed independent of the
-  // main report whenever the early lane has rows (renderEarlyLane), so
-  // hiding it unconditionally here would immediately undo that the moment
-  // Tyler clicks "Load New File" while an early pull is still active — the
-  // Total card would vanish even though postSortItems (and its count) are
-  // untouched by this reset. Only hide it when there is truly nothing left
-  // to report.
+  // #summary is JS-revealed by renderEarlyLane whenever early rows exist, but
+  // clearPostSortLane() above has already emptied them by this point, so the
+  // guard below always holds — it stays as a belt-and-braces "only hide when
+  // there is truly nothing left to report".
   if (!postSortItems.length) {
     document.getElementById('summary').style.display = 'none';
   }
   document.getElementById('day-banner').style.display      = 'none';
   document.getElementById('auto-section').style.display    = 'none';
   document.getElementById('express-auto-section').style.display = 'none';
-  // Issue #663 mirrors the #summary fix immediately above: both express
-  // sections are now ALSO JS-revealed independent of the main report whenever
-  // their lane holds an early row (renderEarlyLane), so hiding one
-  // unconditionally here would re-open the same finding-8 deadlock for that
-  // lane — "Load New File" would hide a real, still-loaded early row's whole
-  // section out from under it. Only hide when there is truly nothing left to
-  // report there.
-  //
-  // Issue #673 review finding 5: this used to test the UNFOLDED postSortItems
-  // (postSortItems.some(...)), while the rows actually on screen come from
-  // the fold-aware visibleItems renderEarlyLane() renders — so a disposition
-  // map that folds away every early Express row (all answered by the loaded
-  // Inbound and Van Scans report) left an empty ghost Express section visible
-  // here even though nothing early-Express was rendered. earlyLaneItems(key)
-  // is that same fold-aware population (see its own comment, above), so this
-  // now agrees with what renderEarlyLane() actually draws.
+  // Both express sections are JS-revealed by renderEarlyLane whenever their
+  // lane holds an early row (issue #663), so hiding one must be gated on the
+  // fold-aware early population (earlyLaneItems — PR #673 review finding 5:
+  // testing the UNFOLDED postSortItems left an empty ghost section visible).
+  // With one report at a time, clearPostSortLane() above has already emptied
+  // that population, so every lane section hides here — the guard stays so
+  // the invariant is local, not dependent on call order.
   MANUAL_LANES.forEach(lane => {
     if (!lane.section || earlyLaneItems(lane.key).length) return;
     const sec = document.getElementById(lane.section);
     if (sec) sec.style.display = 'none';
   });
-  // #manual-section is permanently visible now (issue #669 review finding 1
-  // — see the CSS rule's own comment): the Post Sort lane's early strip and
-  // rows live inside it and are independent of the main report (issue #634's
-  // "supplement, not replacement"), and the whole point of that fix is that
-  // this section must never be hidden again by ANY code path, "Load New
-  // File" included — hiding it here at zero postSortItems would re-open the
-  // exact deadlock finding 1 fixed (nothing left to reveal the section again
-  // until a report drops onto a button that is once more unreachable). No
-  // JS hide call for it here any more; #manual-tbody's own stale markup is
-  // still cleared below so a fresh load never shows the previous report's
-  // rows underneath the early group.
+  // #manual-section is permanently visible (issue #669 review finding 1 —
+  // see the CSS rule's own comment): the Post Sort lane's early strip and
+  // rows live inside it, and the whole point of that fix is that this
+  // section must never be hidden again by ANY code path, "Load New File"
+  // included — hiding it would re-open the exact deadlock finding 1 fixed
+  // (nothing left to reveal the section again until a report drops onto a
+  // button that is once more unreachable). No JS hide call for it here;
+  // #manual-tbody's own stale markup is still cleared below.
   document.getElementById('resolved-section').style.display = 'none';
   document.getElementById('repeat-section').style.display  = 'none';
   document.getElementById('file-label').textContent = 'No file loaded';
@@ -6432,16 +6531,11 @@ function resetApp() {
   autoFilter = { codes: [], categories: [] };
   // Issue #662/#669 + #673 review finding 1: a lane's section can stay
   // visible through a "Load New File" reset — #manual-section always is (see
-  // its CSS rule's own comment), and #663 made both express sections
-  // independently JS-revealed whenever their lane holds an early row — so
-  // every lane's full-report tbody must be cleared EXPLICITLY here rather
-  // than left rendered (and workable) underneath the early group, with the
-  // badges still showing the discarded report's counts. This clears the
-  // full-report tbodies only; the early tbodies belong to postSortItems,
-  // which "Load New File" deliberately does NOT reset (see the comment
-  // above). updateExpressSection() at the end of this function then refreshes
-  // the badges/stat card off the now-empty manualItems plus the still-loaded
-  // early population, so nothing stale survives and nothing real is zeroed.
+  // its CSS rule's own comment) — so every lane's full-report tbody must be
+  // cleared EXPLICITLY here rather than left rendered (and workable) with
+  // the badges still showing the discarded report's counts. The early
+  // tbodies were already emptied by clearPostSortLane() at the top — with
+  // one report at a time, "Load New File" discards the Post Sort report too.
   MANUAL_LANES.forEach(lane => {
     const el = document.getElementById(lane.tbody);
     if (el) el.innerHTML = '';
@@ -6462,12 +6556,10 @@ function resetApp() {
   document.getElementById('resolved-badge').textContent = '0';
   document.getElementById('repeat-tbody').innerHTML = '';
   document.getElementById('repeat-badge').textContent = '0';
-  // Refresh EVERY lane's badge and stat card now that autoItems/manualItems are
-  // empty and every full-report tbody has just been cleared above, so nothing
-  // reads a stale count for a report "Load New File" just discarded.
-  // postSortItems is deliberately NOT reset here (see the #manual-section
-  // comment above), so each of these still counts the early population that is
-  // genuinely still loaded — nothing real is zeroed either.
+  // Refresh EVERY lane's badge and stat card now that autoItems/manualItems
+  // AND postSortItems are empty and every tbody has just been cleared above,
+  // so nothing reads a stale count for a report "Load New File" just
+  // discarded.
   //
   // PR #673 review finding 6: this used to call updateExpressSection() ALONE,
   // and claimed in its own comment that "nothing stale survives". Both Express
@@ -6479,22 +6571,7 @@ function resetApp() {
   document.getElementById('auto-badge').textContent = groundAuto;
   updateManualBadge();          // #manual-badge + #stat-manual
   updateExpressSection();       // both express badges + #stat-express + #stat-express-manual
-  updateStatTotal();            // #stat-total, off the still-loaded early population
-  // #664 review finding 1: "Load New File" discards the main report, so every
-  // early row's ATTRIBUTION to it has to go with it. postSortItems is
-  // deliberately kept (the Post Sort report is still loaded and is still
-  // Tyler's work), but rows carrying the discarded report's category, reason
-  // and code kept rendering a code chip and a "from main report" label backed
-  // by nothing — the exact claim the 'no PLA' marker exists to make
-  // trustworthy. Re-running the same join the load paths run, against the now
-  // empty map, demotes every one of them back to the fresh-tail treatment
-  // (marked, or no code at all). The fold answer merges by contract and is
-  // untouched, so nothing that was already answered pops back into the lane.
-  if (postSortItems.length) {
-    postSortItems = PostSortLane.applyDisposition(postSortItems, mainReportDispositionMap());
-    postSortItems = PostSortLane.applyEarlyCode(postSortItems);
-    renderEarlyLane();
-  }
+  updateStatTotal();            // #stat-total
   // PR #673 review finding 3: resetViewControls() emptied every search box by
   // assigning .value = '', which fires no 'input' event, and nothing re-ran the
   // filter — so every EARLY row a pre-reset search had hidden stayed
