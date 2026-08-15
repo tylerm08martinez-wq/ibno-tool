@@ -432,11 +432,11 @@
 
     /* ── Ready-to-Enter filter chips (view-only) ─────────────────────────────── */
     .filter-note { font-size: 12px; color: var(--text-faint); }
-    /* Scope line on the two express review headers: the sections are otherwise
-       identical, so the header has to say WHICH express review list it is.
-       Scoped to .section.express so it can never paint a band into another
-       tool's header (an unscoped class rule here leaked once already). */
-    .section.express .lane-scope {
+    /* Scope line on the Other work areas header ("not yours to work"). It moved
+       from the deleted express review headers with #696 and is scoped to the
+       section that carries it, never left as a bare class rule: an unscoped
+       class rule here leaked into another tool's header once already. */
+    .section.other-areas .lane-scope {
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
       color: var(--text-faint); text-transform: uppercase;
     }
@@ -578,21 +578,16 @@
     .express-yes  { background: #dbeafe; color: #1e40af; }
     .express-no   { background: #f3f4f6; color: #6b7280; }
 
-    /* ── EXPRESS LANE (#express-section) ────────────────────────────────────────
+    /* ── EXPRESS (#696) ─────────────────────────────────────────────────────────
        Station 849 is a 2.0 station, so Express runs a separate process from
-       Ground and carries more visibility. Express rows lift OUT of Ready to
-       Enter / Needs Manual Review into this one bordered section, which holds
-       the same two states and the same row controls. Each lane owns its own
-       Copy All, so the ground Copy All can never pick up an express package.
+       Ground. It used to have its own bordered sections; #696 merges those
+       away, and express survives as a live-counted chip on each merged section
+       plus the Service pill above. The `.section.express` rules that styled
+       the deleted sections are gone with them, here and in theme.css: a dark
+       rule targeting a dead id is how both express headers once shipped light
+       on a dark page.
        Dark values live in theme.css, never here (theme.css loads after this
        block and its generic dark selectors would win — the PR #504 trap). */
-    /* Express mirrors ground: two real sections, each independently
-       collapsible and sortable, rather than one box holding two sub-tables.
-       Same shape as their ground counterparts, blue identity. */
-    .section.express { border: 1px solid #3b82f6; }
-    .section.express > .section-header { background: #eff6ff; border-bottom-color: #3b82f6; }
-    .section.express > .section-header h2 { color: #1e40af; }
-    .section.express.collapsed > .section-header { border-bottom: none; }
     /* eOps package-inquiry chip, express rows only, sits beside the FTrack chip.
        Layout only: it is rendered with .express-yes as well, so it borrows the
        Express pill's palette, which already has a light rule here and a dark
@@ -1155,15 +1150,12 @@
     <div class="label">Needs Review</div>
     <div class="value" id="stat-manual">0</div>
   </div>
-  <div class="stat-card blue" data-target="express-auto-section">
-    <div class="label">Express ready</div>
-    <div class="value" id="stat-express">0</div>
-  </div>
-  <div class="stat-card blue" data-target="express-manual-section">
-    <div class="label">Express review</div>
-    <div class="value" id="stat-express-manual">0</div>
-  </div>
-  <div class="stat-card purple">
+  <!-- Six cards became four (#696). The two express cards are gone as CARDS,
+       not as numbers: express is a chip with a live count on each merged
+       section now, which is where the slice it names can actually be taken.
+       Total Flagged carries no data-target on purpose and says so to a screen
+       reader: it is a statement about the day, not a jump. -->
+  <div class="stat-card purple" aria-disabled="true" title="The whole flagged population. Not a jump — the two count cards beside it are.">
     <div class="label">Total Flagged</div>
     <div class="value" id="stat-total">0</div>
   </div>
@@ -1211,112 +1203,23 @@
      row builder every other manual review row uses, one group heading at the
      top of the lane. See renderEarlyLane() / buildEarlyGroupHeaderRow(). -->
 
-<!-- SECTIONS 0a/0b: EXPRESS ─────────────────────────────────────────────────
-     849 is a 2.0 station, so Express runs a separate process from Ground and
-     carries more visibility. Express packages lift out of the two ground
-     sections into these TWO, which MIRROR their ground counterparts one for
-     one: each is an independently collapsible, independently sortable section
-     with its own badge, toolbar and (for review) search. They reuse the SAME
-     row builders as ground, so every control behaves identically here.
-     Both start collapsed like Ready to Enter — the header still carries the
-     count, so express stays announced without occupying the page.
-     The tbodies keep .auto-body / .manual-body so cross-lane queries span both
-     lanes in document order; per-lane actions query by tbody id. -->
-<div class="section express" id="express-auto-section">
-  <div class="section-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <h2>&#9992; Express Ready to Enter</h2>
-      <span class="badge" id="express-auto-badge">0</span>
-      <span class="filter-note" id="express-auto-note"></span>
-    </div>
-    <div class="right">
-      <select class="sort-select" id="express-auto-sort" aria-label="Sort express Ready to Enter">
-        <option value="time-asc">Oldest scan first</option>
-        <option value="report">Report order</option>
-        <option value="time">Newest scan first</option>
-        <option value="address">Address (group destination)</option>
-      </select>
-      <button class="btn btn-purple" id="express-copy-btn" onclick="copyAutoTable('express')" title="Copy ONLY the express Ready-to-Enter rows">Copy All express</button>
-      <button class="btn btn-purple" onclick="downloadAutoTable('express')">&#8595; TSV</button>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th class="sortable" data-table="express-auto" data-sort="report">Tracking #</th>
-        <th class="sortable" data-table="express-auto" data-sort="code">Code</th>
-        <th class="sortable" data-table="express-auto" data-sort="category">Category</th>
-        <th class="sortable" data-table="express-auto" data-sort="time">Inbound Date</th>
-        <th class="sortable" data-table="express-auto" data-sort="time">Scan Time</th>
-        <th class="sortable" data-table="express-auto" data-sort="address">Recipient / Address</th>
-        <th>Service</th>
-        <th style="width:54px"></th>
-      </tr>
-    </thead>
-    <tbody id="express-auto-tbody" class="auto-body"></tbody>
-  </table>
-</div>
+<!-- MERGED SECTIONS (#696, spec #690) ────────────────────────────────────────
+     The seven service-split sections are gone. Two merged sections hold the
+     work — Needs Manual Review and Ready to Enter — and each is sliced by
+     CHIPS with live counts rather than by having its own section per service.
+     849 is a 2.0 station and express still matters, but a service is a SLICE
+     of a list, not a list of its own: splitting by it is what let an express
+     intercept sit under a heading that said "not mine to work" (#616).
 
-<div class="section express" id="express-manual-section">
-  <div class="section-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <h2>&#9992; Express Needs Manual Review</h2>
-      <span class="badge" id="express-manual-badge">0</span>
-      <span class="lane-scope">my flagged areas + unassigned zips</span>
-      <span class="filter-note" id="express-manual-note"></span>
-    </div>
-    <div class="right">
-      <button class="btn btn-gray" id="copy-selected-express" onclick="copySelectedManual('express')" disabled title="Copy the checked express rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
-      <button class="btn btn-gray" id="select-area-express" onclick="selectRowsWithArea('express')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
-      <button class="btn btn-gray" id="barcode-selected-express" onclick="barcodeSelected('express')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
-      <input type="text" class="manual-search" id="express-manual-search" placeholder="Search firm or address..." aria-label="Search express manual review">
-      <select class="sort-select" id="express-manual-sort" aria-label="Sort express Needs Manual Review">
-        <option value="report">Report order</option>
-        <option value="time">Newest scan first</option>
-        <option value="time-asc">Oldest scan first</option>
-        <option value="address">Address (group destination)</option>
-        <option value="reason">Reason</option>
-        <option value="wa">Work area</option>
-        <option value="zip">ZIP code</option>
-        <option value="isp">Service provider (groups same address)</option>
-        <option value="goesto">Goes to (work area)</option>
-      </select>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:28px"></th>
-        <th class="sortable" data-table="express-manual" data-sort="report">Tracking #</th>
-        <th class="sortable" data-table="express-manual" data-sort="category">Category</th>
-        <th class="sortable" data-table="express-manual" data-sort="time">Inbound Date</th>
-        <th class="sortable" data-table="express-manual" data-sort="time">Scan Time</th>
-        <th class="sortable" data-table="express-manual" data-sort="wa">IB_WORK_AREA</th>
-        <th class="sortable street-col" data-table="express-manual" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
-        <th class="sortable goesto-col" data-table="express-manual" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
-        <th class="sortable" data-table="express-manual" data-sort="zip">ZIP</th>
-        <th class="sortable" data-table="express-manual" data-sort="isp">Service Provider</th>
-        <th class="sortable" data-table="express-manual" data-sort="reason">Reason</th>
-        <th class="sortable" data-table="express-manual" data-sort="address">Recipient / Address</th>
-        <th>Service</th>
-        <th style="width:180px">Resolve</th>
-      </tr>
-    </thead>
-    <!-- Issue #663: early Express rows (Post Sort report, before the main
-         report arrives) render into their own "early" group here, the SAME
-         relationship #post-sort-tbody already has with #manual-tbody in the
-         ground lane's table below — a sibling `.manual-body` tbody in the
-         SAME table, populated by renderEarlyLane().
-         Option B (Tyler, 2026-08-13): only the early rows whose WORK AREA is
-         flagged reach this lane, decided by the same IbnoRules.manualLane()
-         call that routes full-report rows; the rest go to
-         #post-sort-express-other-tbody. -->
-    <tbody id="post-sort-express-tbody" class="manual-body"></tbody>
-    <tbody id="express-manual-tbody" class="manual-body"></tbody>
-  </table>
-</div>
+     The view model behind every chip, count and note lives in
+     lib/ibno-merged-view.js. It was BORN there (#614 mandate 1), never inline,
+     so the population rule and the count math are Node-testable from day one.
 
-<!-- SECTION 1: AUTO-CODED -->
+     Express is now visible in three places instead of a section: the Service
+     column pill on every row, the Express chip with its own count on each
+     merged section, and the express half of the merged badge. -->
+
+<!-- SECTION 1: READY TO ENTER (merged) -->
 <div class="section" id="auto-section">
   <div class="section-header">
     <div style="display:flex;align-items:center;gap:10px">
@@ -1324,20 +1227,32 @@
       <span class="badge" id="auto-badge">0</span>
       <span class="filter-note" id="auto-ground-note"></span>
       <span class="filter-note" id="auto-filter-note"></span>
+      <!-- "showing X of Y" whenever a chip filter is active on this section.
+           Filtered-out rows are announced before they can be missed. -->
+      <span class="filter-note showing-note" id="ready-showing"></span>
     </div>
     <div class="right">
+      <!-- ONE sort dropdown and ONE TSV copy for the merged section (spec #690,
+           user story 31: end-of-day OPS2 entry is unchanged). The dropdown
+           drives BOTH lanes' sort state, so one order governs one section. -->
       <select class="sort-select" id="auto-sort" aria-label="Sort Ready to Enter">
         <option value="report">Report order</option>
         <option value="time">Newest scan first</option>
         <option value="time-asc">Oldest scan first</option>
         <option value="address">Address (group destination)</option>
       </select>
+      <!-- Both labels are rewritten by updateReadyExportLabels() on every filter
+           pass, so the screen and the clipboard can never disagree about scope. -->
       <button class="btn btn-purple" id="copy-btn" onclick="copyAutoTable()">Copy All</button>
-      <button class="btn btn-purple" onclick="downloadAutoTable()">&#8595; TSV</button>
+      <button class="btn btn-purple" id="download-btn" onclick="downloadAutoTable()">&#8595; TSV</button>
     </div>
   </div>
-  <!-- Filter chips (#filter-ready-to-enter): slice the VIEW by code/category.
-       View-only — Copy All / TSV still export the full model. -->
+  <!-- The merged service axis: All / Express / Ground, each with a live count.
+       Built by renderMergedChips() from lib/ibno-merged-view.js. -->
+  <div class="chips merged-chips" id="ready-chips" style="display:none"></div>
+  <!-- Filter chips (#filter-ready-to-enter): slice the view by code/category.
+       Copy All / TSV export exactly what these and the service chips leave on
+       screen (autoExportPairs), and the button labels say which scope that is. -->
   <div class="chips" id="auto-chips" style="display:none"></div>
   <table>
     <thead>
@@ -1352,7 +1267,11 @@
         <th style="width:54px"></th>
       </tr>
     </thead>
+    <!-- Both lanes render into ONE table now. The tbodies stay separate so each
+         keeps its own sort pass and its own empty state; the section header,
+         the toolbar and the chips above are shared. -->
     <tbody id="auto-tbody" class="auto-body"></tbody>
+    <tbody id="express-auto-tbody" class="auto-body"></tbody>
   </table>
 </div>
 
@@ -1363,6 +1282,7 @@
       <h2>&#9888; Needs Manual Review</h2>
       <span class="badge" id="manual-badge">0</span>
       <span class="filter-note" id="manual-search-note"></span>
+      <span class="filter-note showing-note" id="manual-showing"></span>
     </div>
     <div class="right">
       <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
@@ -1371,8 +1291,8 @@
       <button class="btn btn-gray" id="copy-selected-manual" onclick="copySelectedManual()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
       <!-- Print a barcode sheet for the checked rows: full scan barcode + the
            typed Goes To area on each card. Read-only, never codes a row. -->
-      <button class="btn btn-gray" id="select-area-ground" onclick="selectRowsWithArea('ground')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
-      <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('ground')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+      <button class="btn btn-gray" id="select-area-mine" onclick="selectRowsWithArea('mine')" title="Check every row in this section that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
+      <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('mine')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
       <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
       <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
         <option value="report">Report order</option>
@@ -1398,6 +1318,12 @@
        behaviour (issue #657, PR #658's four code-review fixes) still finds the
        exact same controls by the exact same selectors — only their on-screen
        location moved. -->
+  <!-- The merged section's chip row: All (shortcut A), Express / Ground, the
+       need-based buckets, then Out of area / Multi-stop / Hide no-address.
+       Every chip carries a live count over the working list with parked and
+       503 rows excluded. Buckets are keyed on what a row NEEDS and never on
+       its service. -->
+  <div class="chips merged-chips" id="manual-chips" style="display:none"></div>
   <div class="early-strip" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--border);font-size:13px;">
     <span style="font-weight:600">&#9201; Post Sort (early)</span>
     <span class="badge" id="post-sort-badge">0</span>
@@ -1512,70 +1438,82 @@
   </table>
 </div>
 
-<!-- SECTION 5: EXPRESS REVIEW, OUTSIDE THE FLAGGED WORK AREAS ────────────────
-     Express rows that need review but did NOT land in a flagged work area.
-     They used to sit in Express Needs Manual Review at the top, which made that
-     section read as a longer list of Tyler's own work than it really was. Same
-     rows, same columns, same coding controls — only the position changed, and
-     the position is the point: last on the page, below Repeat Packages, worked
-     after the flagged areas are clear. The lane rule is IbnoRules.manualLane.
-     (Tyler, 2026-08-06) -->
-<div class="section express" id="express-other-section">
-  <div class="section-header">
+<!-- SECTION 5: OTHER WORK AREAS (the quiet counted line, #696) ───────────────
+     The remainder of the population rule. Needs Manual Review above holds only
+     flagged areas, QA categories, and blank or 999 areas; everything else lands
+     here. This replaces the old "Express Review — Other Work Areas" section,
+     which was keyed on SERVICE and so held an express intercept Tyler works
+     under a heading that said "not mine to work" (#616). The rule is now keyed
+     on need, so a QA category stays upstairs whatever its service is.
+
+     Constraint 1 of map #608 holds: nothing disappears. This is ONE counted
+     line at the bottom of the page. It opens on click, it carries no toolbar
+     until it is opened, and it is not on screen at all when it is empty. It is
+     deliberately NOT behind the header's collapse toggle — a counted line is a
+     trace, a hidden section is an absence.
+
+     GATE (#616): Tyler eyeballs an express intercept landing in Needs Manual
+     Review on a live sort before this demotion ships. -->
+<div class="section other-areas" id="other-areas-section" style="display:none">
+  <div class="section-header other-areas-line" id="other-areas-line"
+       role="button" tabindex="0" aria-expanded="false" aria-controls="other-areas-body"
+       onclick="toggleOtherAreas()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleOtherAreas()}">
     <div style="display:flex;align-items:center;gap:10px">
-      <h2>&#9992; Express Review &mdash; Other Work Areas</h2>
-      <span class="badge" id="express-other-badge">0</span>
-      <span class="lane-scope">not mine to work</span>
-      <span class="filter-note" id="express-other-note"></span>
-    </div>
-    <div class="right">
-      <button class="btn btn-gray" id="copy-selected-express-other" onclick="copySelectedManual('express-other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
-      <button class="btn btn-gray" id="select-area-express-other" onclick="selectRowsWithArea('express-other')" title="Check every row in this lane that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
-      <button class="btn btn-gray" id="barcode-selected-express-other" onclick="barcodeSelected('express-other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
-      <input type="text" class="manual-search" id="express-other-search" placeholder="Search firm or address..." aria-label="Search express review outside flagged work areas">
-      <select class="sort-select" id="express-other-sort" aria-label="Sort express review outside flagged work areas">
-        <option value="report">Report order</option>
-        <option value="time">Newest scan first</option>
-        <option value="time-asc">Oldest scan first</option>
-        <option value="address">Address (group destination)</option>
-        <option value="reason">Reason</option>
-        <option value="wa">Work area</option>
-        <option value="zip">ZIP code</option>
-        <option value="isp">Service provider (groups same address)</option>
-        <option value="goesto">Goes to (work area)</option>
-      </select>
+      <span class="g-chevron" id="other-areas-chevron">&#9656;</span>
+      <h2>&#10067; Other work areas</h2>
+      <span class="badge" id="other-areas-badge">0</span>
+      <span class="lane-scope">not yours to work</span>
+      <span class="filter-note" id="other-areas-note"></span>
     </div>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:28px"></th>
-        <th class="sortable" data-table="express-other" data-sort="report">Tracking #</th>
-        <th class="sortable" data-table="express-other" data-sort="category">Category</th>
-        <th class="sortable" data-table="express-other" data-sort="time">Inbound Date</th>
-        <th class="sortable" data-table="express-other" data-sort="time">Scan Time</th>
-        <th class="sortable" data-table="express-other" data-sort="wa">IB_WORK_AREA</th>
-        <th class="sortable street-col" data-table="express-other" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
-        <th class="sortable goesto-col" data-table="express-other" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
-        <th class="sortable" data-table="express-other" data-sort="zip">ZIP</th>
-        <th class="sortable" data-table="express-other" data-sort="isp">Service Provider</th>
-        <th class="sortable" data-table="express-other" data-sort="reason">Reason</th>
-        <th class="sortable" data-table="express-other" data-sort="address">Recipient / Address</th>
-        <th>Service</th>
-        <th style="width:180px">Resolve</th>
-      </tr>
-    </thead>
-    <!-- Issue #663 (Option B, Tyler 2026-08-13): early Express rows are routed
-         by the SAME IbnoRules.manualLane() rule that routes full-report rows,
-         so an early Express row OUTSIDE the flagged work areas belongs here,
-         not in Tyler's own Express queue. On a real pull that is 72 of 73
-         Express rows — routing them by the Express label alone would have made
-         this lane's whole reason for existing (2026-08-06: his queue must not
-         read longer than it is) fail for early rows. Same sibling-tbody
-         relationship #post-sort-tbody has with #manual-tbody. -->
-    <tbody id="post-sort-express-other-tbody" class="manual-body"></tbody>
-    <tbody id="express-other-tbody" class="manual-body"></tbody>
-  </table>
+  <div id="other-areas-body" style="display:none">
+    <div class="section-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="filter-note">same rows, same columns, same coding controls</span>
+      </div>
+      <div class="right">
+        <button class="btn btn-gray" id="copy-selected-other-areas" onclick="copySelectedManual('other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+        <button class="btn btn-gray" id="select-area-other" onclick="selectRowsWithArea('other')" title="Check every row here that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
+        <button class="btn btn-gray" id="barcode-selected-other-areas" onclick="barcodeSelected('other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+        <input type="text" class="manual-search" id="other-areas-search" placeholder="Search firm or address..." aria-label="Search other work areas">
+        <select class="sort-select" id="other-areas-sort" aria-label="Sort other work areas">
+          <option value="report">Report order</option>
+          <option value="time">Newest scan first</option>
+          <option value="time-asc">Oldest scan first</option>
+          <option value="address">Address (group destination)</option>
+          <option value="reason">Reason</option>
+          <option value="wa">Work area</option>
+          <option value="zip">ZIP code</option>
+          <option value="isp">Service provider (groups same address)</option>
+          <option value="goesto">Goes to (work area)</option>
+        </select>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px"></th>
+          <th class="sortable" data-table="other-areas" data-sort="report">Tracking #</th>
+          <th class="sortable" data-table="other-areas" data-sort="category">Category</th>
+          <th class="sortable" data-table="other-areas" data-sort="time">Inbound Date</th>
+          <th class="sortable" data-table="other-areas" data-sort="time">Scan Time</th>
+          <th class="sortable" data-table="other-areas" data-sort="wa">IB_WORK_AREA</th>
+          <th class="sortable street-col" data-table="other-areas" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+          <th class="sortable goesto-col" data-table="other-areas" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+          <th class="sortable" data-table="other-areas" data-sort="zip">ZIP</th>
+          <th class="sortable" data-table="other-areas" data-sort="isp">Service Provider</th>
+          <th class="sortable" data-table="other-areas" data-sort="reason">Reason</th>
+          <th class="sortable" data-table="other-areas" data-sort="address">Recipient / Address</th>
+          <th>Service</th>
+          <th style="width:180px">Resolve</th>
+        </tr>
+      </thead>
+      <!-- Post Sort early rows demoted by the same population rule land in the
+           sibling tbody, exactly as they do in the merged section above. -->
+      <tbody id="post-sort-other-areas-tbody" class="manual-body"></tbody>
+      <tbody id="other-areas-tbody" class="manual-body"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- Options populated from lib/scan-codes.js at init (single source, #158/#200). -->
@@ -1638,8 +1576,21 @@
      disagree about whether two packages go to the same place. -->
 <script src="lib/address-normalize.js"></script>
 <script src="lib/actual-area.js"></script>
+<script src="lib/sort-day.js"></script>
 <!-- Street-only copy: house number + street name, no unit, city, state or ZIP. -->
 <script src="lib/street-address.js"></script>
+<!-- The sort model: date/clock/address/firm/cluster keys and the comparator
+     behind every sortable table here (#692). Loaded after actual-area and
+     street-address because the page injects THEIR accessors into it — the
+     module itself is pure and reads no globals. The ordering it produces is
+     frozen behavior (#611): the provider and street sorts tiebreak on the
+     building-level address key so one stop is one contiguous run, which is
+     what makes the list dock-flexable. -->
+<script src="lib/ibno-sort.js"></script>
+<!-- The merged-section view model (#696): population rule, chip counts, the All
+     toggle, "showing X of Y". Loaded after ibno-rules / ibno-review-plan /
+     actual-area / street-address, whose readers the page injects into it. -->
+<script src="lib/ibno-merged-view.js"></script>
 <!-- Code 128 encoder: the scannable rendering of a package's FULL scan barcode.
      Offline-first, so it is a local lib and never a CDN. -->
 <script src="lib/barcode-128.js"></script>
@@ -2136,7 +2087,7 @@ async function renderSearch() {
   const hits = await ArchiveStore.search(q, 200);
   countEl.textContent = hits.length + ' match(es)';
   host.innerHTML = hits.length
-    ? hits.map(buildSearchRecord).join('')
+    ? hits.map(rec => IbnoArchive.buildSearchRecord(rec)).join('')
     : '<div class="empty-state">No row matches “' + ToolHelpers.escapeHtml(q) + '”.</div>';
 }
 
@@ -2188,47 +2139,20 @@ function renderCodeLookup() {
   }).join('');
 }
 
-function buildSearchRecord(rec) {
-  const esc = ToolHelpers.escapeHtml;
-  const addr = [rec.LABEL_ADDRESS1, rec.LABEL_CITY, rec.LABEL_STATE, rec.POSTAL_CODE].filter(Boolean).join(' ');
-  const fields = Object.keys(rec).filter(function (k) { return String(rec[k]) !== ''; })
-    .map(function (k) {
-      return '<div class="srec-field"><span class="k">' + esc(k) + '</span>' +
-             '<span class="v">' + esc(rec[k]) + '</span></div>';
-    }).join('');
-  // High-value fields surfaced inline on the collapsed header so the most-used
-  // columns (date, work area, status) are readable without expanding "all
-  // fields" (#310). The full column list still lives in the expand.
-  const meta = [
-    ['DATE', rec.INBOUND_DATE],
-    ['AREA', rec.IB_WORK_AREA],
-    ['STATUS', rec.STATUS_CODES1],
-  ].filter(function (p) { return String(p[1] == null ? '' : p[1]).trim() !== ''; })
-    .map(function (p) {
-      return '<span class="srec-pill"><span class="k">' + esc(p[0]) + '</span>' +
-             '<span class="v">' + esc(p[1]) + '</span></span>';
-    }).join('');
-  return '<div class="search-rec">' +
-    '<div class="search-rec-head" onclick="this.parentNode.classList.toggle(\'open\')">' +
-      '<span class="mono">' + esc(rec.PKG_LABEL_XREF || '—') + '</span>' +
-      '<span onclick="event.stopPropagation()">' + FTrack.ftrackLink(rec.PKG_LABEL_XREF) + '</span>' +
-      '<span class="srec-addr">' + esc(rec.LABEL_FIRM_NAME ? rec.LABEL_FIRM_NAME + ' · ' : '') + esc(addr) + '</span>' +
-      (meta ? '<span class="srec-meta">' + meta + '</span>' : '') +
-      '<span class="srec-toggle">all fields</span>' +
-    '</div>' +
-    '<div class="search-rec-fields">' + fields + '</div>' +
-  '</div>';
-}
+// buildSearchRecord and the search-record markup now live in
+// lib/ibno-archive.js (#694) — that module already owns this record shape, and
+// a Node test can reach it there. renderSearch above calls it directly; nothing
+// about the panel's markup changed.
 
 // Tracking numbers surfaced from the report loaded right now — used to tag
 // history rows whose package is also in today's work.
+//
+// The union rule moved to IbnoArchive.todaysLabelSet (#694); the page keeps the
+// state, and this is the call site that decides WHICH populations count as
+// today's work. Drop one of these three lists and a repeat row silently loses
+// its "in today" tag, which is what tests/ibno-lib-extraction-dom.test.js pins.
 function todaysLabelSet() {
-  const s = new Set();
-  autoItems.forEach(i => { if (i && i.label) s.add(i.label); });
-  manualItems.forEach(i => { if (i && i.label) s.add(i.label); });
-  resolvedItems.forEach(i => { if (i && i.label) s.add(i.label); });
-  Object.keys(currentRecurringMap || {}).forEach(l => s.add(l));
-  return s;
+  return IbnoArchive.todaysLabelSet([autoItems, manualItems, resolvedItems], currentRecurringMap);
 }
 
 // #306: which Repeat Hotspot area the history list is filtered to (null = all).
@@ -2468,8 +2392,9 @@ const defaultSorts = {
   // so the longest-sitting open express package is the one most at risk and
   // belongs at the top. Ground keeps report order.
   'express-auto':   { key: 'time', dir: 'asc' },
-  'express-manual': { key: 'report', dir: 'asc' },
-  'express-other':  { key: 'report', dir: 'asc' },
+  // The demoted remainder keeps its own sort state: it is its own list at the
+  // page bottom, opened on its own terms.
+  'other-areas':  { key: 'report', dir: 'asc' },
   manual:   { key: 'report', dir: 'asc' },
   resolved: { key: 'resolve', dir: 'asc' },
   repeat:   { key: 'count', dir: 'desc' },
@@ -2478,127 +2403,56 @@ let sortState = JSON.parse(JSON.stringify(defaultSorts));
 
 function resetViewControls() {
   sortState = JSON.parse(JSON.stringify(defaultSorts));
-  ['auto', 'express-auto', 'manual', 'express-manual', 'express-other', 'resolved', 'repeat'].forEach(syncSortSelect);
+  ['auto', 'express-auto', 'manual', 'other-areas', 'resolved', 'repeat'].forEach(syncSortSelect);
   updateSortHeaders();
-  ['manual-search', 'express-manual-search', 'express-other-search'].forEach(id => {
+  ['manual-search', 'other-areas-search'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  ['manual-search-note', 'express-manual-note', 'express-other-note'].forEach(id => {
+  ['manual-search-note', 'other-areas-note'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = '';
   });
+  // Chip filters are TRANSIENT (#613 round 11, and Tyler's reversal of the
+  // sticky-filters decision stays reversed): every load and every fresh pull
+  // starts at defaults, so a stale slice from the last report can never hide a
+  // row on this one. resetViewControls() is the one funnel every load runs
+  // through, which is why they reset HERE rather than at each call site.
+  mergedFilters = IbnoMergedView.defaultFilters();
   manualCollapsed.area = manualCollapsed.zip = manualCollapsed.other = true;  // fresh report → all collapsed
 }
 
-function parseDateKey(raw) {
-  const s = String(raw || '').trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]);
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (m) {
-    let y = Number(m[3]);
-    if (y < 100) y += 2000;
-    return y * 10000 + Number(m[1]) * 100 + Number(m[2]);
-  }
-  return 0;
-}
+// ─── SORTING ────────────────────────────────────────────────────────────────
+//
+// The sort model itself lives in lib/ibno-sort.js (#692). It was inline here
+// until the reorganization in #690 came to rebuild the DOM around it, and the
+// ordering it produces is frozen behavior (#611) that no Node test could reach
+// while it sat in this file.
+//
+// What stays HERE is the state and the field accessors it sorts on, because
+// that is what is genuinely page-bound: sortState is reassigned wholesale on
+// reset, actualAreaOf reads the typed-area store, ispOf/zipOf read the loaded
+// ZIP list. Those are handed to the module; the module reads no globals.
+//
+// sortState is injected as a GETTER, not as the object. resetViewControls()
+// replaces the object (`sortState = JSON.parse(...)`), so a comparator holding
+// the old reference would keep sorting by a state the page no longer has.
+const sortComparator = IbnoSort.createComparator({
+  sortState: () => sortState,
+  defaultSorts: defaultSorts,
+  zipOf: (item) => zipOf(item),
+  ispOf: (item) => ispOf(item),
+  streetOf: (item) => streetOf(item),
+  actualAreaOf: (item) => actualAreaOf(item),
+  clusterKey: (address) => ActualArea.clusterKey(address),
+});
 
-function parseClockKey(raw) {
-  const s = String(raw || '').trim().toUpperCase();
-  const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/);
-  if (!m) return 0;
-  let h = Number(m[1]);
-  const min = Number(m[2]);
-  const sec = Number(m[3] || 0);
-  if (m[4] === 'PM' && h < 12) h += 12;
-  if (m[4] === 'AM' && h === 12) h = 0;
-  return h * 3600 + min * 60 + sec;
-}
-
-function itemTimeKey(item) {
-  return parseDateKey(item && item.inboundDate) * 100000 + parseClockKey(item && item.ibScanTime);
-}
-
-function latestRepeatDateKey(entry) {
-  return Math.max.apply(null, (entry.inboundDates || []).map(parseDateKey).concat([0]));
-}
-
-function addressKey(item) {
-  return String((item && item.address) || '').trim().toLowerCase();
-}
-
-function firmKey(item) {
-  return String((item && item.firm) || '').trim().toLowerCase();
-}
-
-// clusterKeyOf(item) -> the building-level address key two packages share when
-// they are the same stop. Canonicalized through lib/address-normalize.js, so
-// "1234 N Main St" and "1234 NORTH MAIN STREET APT 5" cluster together despite
-// having no string in common. Blank for a row with no usable address, which
-// cmpBlankLast then sorts to the end rather than to the front.
-function clusterKeyOf(item) {
-  return ActualArea.clusterKey((item && item.address) || '');
-}
-
-function cmpText(a, b) {
-  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
-}
-
-// Text compare that always ranks a blank after a non-blank, so "no ZIP on this
-// row" and "no ISP for this ZIP" never sort as if they were an empty string.
-function cmpBlankLast(a, b) {
-  const x = String(a || ''), y = String(b || '');
-  if (!x && !y) return 0;
-  if (!x) return 1;
-  if (!y) return -1;
-  return cmpText(x, y);
-}
-
-// waSortKey(item) -> numeric work-area for sorting; blank/non-numeric sort last.
-function waSortKey(item) {
-  const n = parseInt(String((item && item.ibWork) || '').trim(), 10);
-  return isNaN(n) ? Number.POSITIVE_INFINITY : n;
-}
-
+// compareBySort(a, b, table) -> the page's one comparator, kept as a named
+// function because every .sort() call site in this file reads through it. The
+// ordering rules, the key functions, and the reasoning about why each sort
+// tiebreaks the way it does all live in lib/ibno-sort.js.
 function compareBySort(a, b, table) {
-  const st = sortState[table] || defaultSorts[table];
-  let n = 0;
-  if (st.key === 'report') n = ((a && a._ord) || 0) - ((b && b._ord) || 0);
-  else if (st.key === 'resolve') n = ((a && a._resolvedOrd) || 0) - ((b && b._resolvedOrd) || 0);
-  else if (st.key === 'time') n = itemTimeKey(a) - itemTimeKey(b);
-  else if (st.key === 'address') n = cmpText(addressKey(a), addressKey(b)) || cmpText(firmKey(a), firmKey(b)) || cmpText(a && a.label, b && b.label);
-  else if (st.key === 'category') n = cmpText(a && a.category, b && b.category) || cmpText(a && a.label, b && b.label);
-  else if (st.key === 'reason') n = cmpText(a && a.reason, b && b.reason) || cmpText(a && a.label, b && b.label);
-  else if (st.key === 'wa') n = (waSortKey(a) - waSortKey(b)) || cmpText(String((a && a.ibWork) || ''), String((b && b.ibWork) || '')) || cmpText(a && a.label, b && b.label);
-  // ZIP sorts as text, not as a number: it is an identifier, and a leading zero
-  // is part of it. Rows with no ZIP sort after every real ZIP ascending (and so
-  // lead descending) instead of sorting as if they were '00000'.
-  else if (st.key === 'zip') n = cmpBlankLast(zipOf(a), zipOf(b)) || cmpText(a && a.label, b && b.label);
-  // Service provider groups the list by who runs the zip; unknown zips sort last.
-  //
-  // Within one provider the tiebreak is the BUILDING-level address key, so every
-  // package for one address lands in a contiguous run instead of being scattered
-  // by tracking number. That is what makes the list dock-flexable: decide the
-  // destination once for the run rather than re-deciding it per package. The
-  // cluster key drops unit numbers (lib/actual-area.js), so APT 2 and APT 5 sit
-  // together here — sorting groups a building, while PROPAGATION of a typed area
-  // still refuses to cross a unit. ZIP remains the tiebreak below the address so
-  // ordering is stable for rows with no usable address.
-  else if (st.key === 'isp') n = cmpBlankLast(ispOf(a), ispOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpBlankLast(zipOf(a), zipOf(b)) || cmpText(a && a.label, b && b.label);
-  // Street: the copy-paste text itself. Rows with no street (an empty
-  // LABEL_ADDRESS1 composes down to a bare ZIP) sort last ascending, so the
-  // packages you can actually paste are the head of the list. The building-level
-  // key is the tiebreak so one address stays a contiguous run, same as ISP.
-  else if (st.key === 'street') n = cmpBlankLast(streetOf(a), streetOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpText(a && a.label, b && b.label);
-  // Goes To: the typed actual work area. Blank rows sort last ascending, so the
-  // not-yet-decided packages are the tail of the list, not the head.
-  else if (st.key === 'goesto') n = cmpBlankLast(actualAreaOf(a), actualAreaOf(b)) || cmpBlankLast(clusterKeyOf(a), clusterKeyOf(b)) || cmpText(a && a.label, b && b.label);
-  else if (st.key === 'code') n = cmpText(String((a && a.code) || ''), String((b && b.code) || '')) || cmpText(a && a.label, b && b.label);
-  else if (st.key === 'count') n = ((a && a.timesSeen) || 0) - ((b && b.timesSeen) || 0);
-  else if (st.key === 'date') n = latestRepeatDateKey(a || {}) - latestRepeatDateKey(b || {});
-  if (n === 0) n = cmpText(a && a.label, b && b.label);
-  return st.dir === 'desc' ? -n : n;
+  return sortComparator(a, b, table);
 }
 
 function sortSelectValue(table) {
@@ -2625,8 +2479,12 @@ function setSort(table, key, dir) {
   sortState[table] = { key, dir };
   syncSortSelect(table);
   updateSortHeaders();
+  // ONE dropdown governs the merged Ready to Enter section, so picking an order
+  // there orders BOTH of its lanes. Without this mirror the express half kept
+  // whatever order it was last given and one section showed two orderings.
+  if (table === 'auto') sortState['express-auto'] = { key: key, dir: dir };
   if (table === 'auto' || table === 'express-auto') renderAutoSectionRows();
-  else if (table === 'manual' || table === 'express-manual' || table === 'express-other') {
+  else if (table === 'manual' || table === 'other-areas') {
     renderManualSectionRows();
     // Issue #673 review finding 3: every early tbody is a SIBLING of its
     // lane's own tbody, not a set of rows inside it, so
@@ -2657,7 +2515,7 @@ function onSortSelect(table, value) {
 }
 
 function initSortControls() {
-  ['auto', 'express-auto', 'manual', 'express-manual', 'express-other', 'resolved', 'repeat'].forEach(table => {
+  ['auto', 'express-auto', 'manual', 'other-areas', 'resolved', 'repeat'].forEach(table => {
     const sel = document.getElementById(table + '-sort');
     if (sel) sel.addEventListener('change', () => onSortSelect(table, sel.value));
   });
@@ -2669,7 +2527,7 @@ function initSortControls() {
     const dir = cur && cur.key === key ? (cur.dir === 'asc' ? 'desc' : 'asc') : firstDir;
     setSort(table, key, dir);
   }));
-  ['manual-search', 'express-manual-search', 'express-other-search'].forEach(id => {
+  ['manual-search', 'other-areas-search'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', applyManualSearch);
   });
@@ -2742,6 +2600,7 @@ function renderAutoSectionRows() {
       appendLaneRow(lane.tbody, buildAutoRow(r.item, r.idx), r.item, open, 8);
     });
   });
+  renderMergedChips('ready');
   applyAutoFilter();
   updateExpressSection();
 }
@@ -2781,29 +2640,82 @@ function updateExpressSection() {
     earlyLaneItems(key).forEach(it => labels.add(it.label));
     return labels.size;
   };
-  const expMan   = laneUniquePackages('express');
-  const expOther = laneUniquePackages('express-other');
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  set('express-auto-badge', expAuto);
-  set('express-manual-badge', expMan);
-  set('express-other-badge', expOther);
-  set('stat-express', expAuto);
-  set('stat-express-manual', expMan);
-  // Absence is stated, never inferred: on a service this closely watched, "no
-  // express today" and "the express column failed to parse" must not look the
-  // same. Each section says so in its own header, which stays readable while
-  // the section is collapsed.
-  // The Ready-to-Enter note is ours; the review note belongs to applyManualSearch,
-  // which also has to express "showing N of M" while a search is active.
-  set('express-auto-note', expAuto === 0 ? 'none in this report' : '');
+  // #696: the two express SECTIONS and their two stat cards are gone. The
+  // number they carried is not: express is a live-counted chip on each merged
+  // section now (renderMergedChips), which is where the slice it names can
+  // actually be taken. Absence is still STATED rather than inferred — on a
+  // service this closely watched, "no express today" and "the express column
+  // failed to parse" must not look the same — so the note below says so on the
+  // section header, which stays readable while the section is collapsed.
   const gndNote = document.getElementById('auto-ground-note');
-  if (gndNote) gndNote.textContent = expAuto ? 'ground only \u00b7 ' + expAuto + ' express above' : '';
+  if (gndNote) gndNote.textContent = expAuto ? expAuto + ' express in this section' : 'no express in this report';
+  // Same live-count rule on the Ready to Enter chips: this function is called
+  // from every path that moves an auto row without rebuilding the section.
+  renderMergedChips('ready');
+}
+
+// updateOtherAreasLine() -> the quiet counted line at the page bottom.
+//
+// Three rules, all from #696, and each one is the difference between a trace
+// and an absence:
+//   - ONE line, carrying its own count, always.
+//   - GONE when empty. Not an empty section, not a zero: off the page.
+//   - No toolbar until it is opened.
+// Counted by UNIQUE LABEL across both reports, the same rule every other count
+// on this page uses, so the line and the cards never disagree by the size of
+// the overlap.
+function updateOtherAreasLine() {
+  const labels = new Set();
+  manualLaneItems('other').forEach(it => labels.add(it.label));
+  earlyLaneItems('other').forEach(it => labels.add(it.label));
+  const n = labels.size;
+  const badge = document.getElementById('other-areas-badge');
+  if (badge) badge.textContent = n;
+  const section = document.getElementById('other-areas-section');
+  if (section) section.style.display = n ? 'block' : 'none';
+  if (!n) collapseOtherAreas();
+}
+
+// The line opens on click and closes again; the toolbar and the table below it
+// do not exist on screen until it is opened.
+function setOtherAreasOpen(open) {
+  const body = document.getElementById('other-areas-body');
+  const chevron = document.getElementById('other-areas-chevron');
+  const line = document.getElementById('other-areas-line');
+  if (body) body.style.display = open ? 'block' : 'none';
+  if (chevron) chevron.innerHTML = open ? '&#9662;' : '&#9656;';
+  if (line) line.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function collapseOtherAreas() { setOtherAreasOpen(false); }
+function toggleOtherAreas() {
+  const body = document.getElementById('other-areas-body');
+  setOtherAreasOpen(!!body && body.style.display === 'none');
 }
 
 function updateManualBadge() {
-  // The badge and stat card describe the GROUND review lane, matching the
-  // section they sit on; express review is counted by updateExpressSection.
-  const remaining = manualLaneItems('ground').length;
+  // The badge and the Needs Review card describe the MERGED section: the whole
+  // working list, both services. The demoted remainder is counted by its own
+  // line at the page bottom (updateOtherAreasLine).
+  //
+  // EARLY ROWS COUNT. This was #663's acceptance criterion for the express
+  // badges ("the badge count includes its early rows"), and the merged section
+  // inherits it from them: on a Post Sort-only load every row on screen is an
+  // early row, so a badge that counted full-report rows alone would read 0 over
+  // a list of 8. Counted by UNIQUE LABEL across both reports, the same rule
+  // updateOtherAreasLine and updateStatTotal already use, because a package
+  // holding a row in both reports is one package, not two.
+  const labels = new Set();
+  manualLaneItems('mine').forEach(it => labels.add(it.label));
+  earlyLaneItems('mine').forEach(it => labels.add(it.label));
+  const remaining = labels.size;
+  // The chips carry LIVE counts, so they are repainted wherever the counts
+  // move. resolveItem() and undoResolve() change the population WITHOUT a full
+  // renderManualSectionRows() rebuild (a rebuild there would freeze a bulkApply
+  // loop over many checked rows), and the chip row is the only place the
+  // service split is now stated — a stale "Express 1" on an empty lane is the
+  // same defect the per-lane badges were written to prevent.
+  renderMergedChips('manual');
   const manualBadge = document.getElementById('manual-badge');
   manualBadge.textContent = remaining;
   document.getElementById('stat-manual').textContent = remaining;
@@ -3019,18 +2931,48 @@ function bulkApply(bucket, code, body) {
 // IbnoRules.manualLane() call a full-report row is (see earlyLaneOf).
 // #manual-section has no `section` entry on purpose: it is permanently
 // visible (see its CSS rule's own comment) and no JS may set its display.
+//
+// #696 REPLACES THE SERVICE SPLIT. The three lanes were 'ground' / 'express' /
+// 'express-other' — keyed on SERVICE, which is what let an express intercept
+// Tyler works sit under a heading that said "not mine to work" (#616). There
+// are now TWO, keyed on NEED:
+//
+//   mine .... the working list: flagged areas, QA categories, blank or 999
+//   other ... everything else, behind the quiet counted line at the page bottom
+//
+// Everything downstream of this list — the per-lane search, the copy and
+// barcode buttons, the bulk-apply scoping, the early-row split — was already
+// derived from it rather than respelled, so it all follows the new keys.
 const MANUAL_LANES = [
-  { key: 'ground',        tbody: 'manual-tbody',         table: 'manual',
-    search: 'manual-search',        note: 'manual-search-note', copyBtn: 'copy-selected-manual',       barcodeBtn: 'barcode-selected-manual',        absent: '',
-    earlyTbody: 'post-sort-tbody',                    earlySelectAll: 'post-sort-select-all',              section: '' },
-  { key: 'express',       tbody: 'express-manual-tbody', table: 'express-manual',
-    search: 'express-manual-search', note: 'express-manual-note', copyBtn: 'copy-selected-express',     barcodeBtn: 'barcode-selected-express',       absent: 'none in this report',
-    earlyTbody: 'post-sort-express-tbody',            earlySelectAll: 'post-sort-select-all-express',      section: 'express-manual-section' },
-  { key: 'express-other', tbody: 'express-other-tbody',  table: 'express-other',
-    search: 'express-other-search',  note: 'express-other-note',  copyBtn: 'copy-selected-express-other', barcodeBtn: 'barcode-selected-express-other', absent: 'none in this report',
-    earlyTbody: 'post-sort-express-other-tbody',      earlySelectAll: 'post-sort-select-all-express-other', section: 'express-other-section' },
+  { key: 'mine',  tbody: 'manual-tbody',      table: 'manual',
+    search: 'manual-search',     note: 'manual-search-note', copyBtn: 'copy-selected-manual',       barcodeBtn: 'barcode-selected-manual',        absent: '',
+    earlyTbody: 'post-sort-tbody',              earlySelectAll: 'post-sort-select-all',            section: '' },
+  { key: 'other', tbody: 'other-areas-tbody', table: 'other-areas',
+    search: 'other-areas-search', note: 'other-areas-note',  copyBtn: 'copy-selected-other-areas', barcodeBtn: 'barcode-selected-other-areas', absent: 'none in this report',
+    earlyTbody: 'post-sort-other-areas-tbody',  earlySelectAll: 'post-sort-select-all-other-areas', section: 'other-areas-section' },
 ];
-function manualLaneOf(item) { return IbnoRules.manualLane(item); }
+
+// The readers lib/ibno-merged-view.js sorts, buckets and counts on. Handed in
+// rather than read off the window, so the rules themselves stay pure and Node
+// testable. isSetAside answers "parked or filed 503" — neither exists yet as a
+// store (they land with the set-aside tabs later in this build), so it answers
+// false today and the chip counts already exclude what it will report.
+const MERGED_VIEW_CTX = {
+  isExpress: (item) => itemIsExpress(item),
+  bucketOf: (item) => manualBucket(item),
+  isWorkAreaFlagged: (ibWork) => IbnoRules.isWorkAreaFlagged(ibWork),
+  clusterKey: (address) => ActualArea.clusterKey(address),
+  streetOf: (item) => streetOf(item),
+  ispOf: (item) => ispOf(item),
+  stateOf: (item) => stateOf(item),
+  isSetAside: () => false,
+};
+
+// The population rule, one call, one place. Both the full-report split and the
+// early-row split read it, so a row cannot be Tyler's on one report and not on
+// the other.
+function isMineToWork(item) { return IbnoMergedView.inWorkingPopulation(item, MERGED_VIEW_CTX); }
+function manualLaneOf(item) { return isMineToWork(item) ? 'mine' : 'other'; }
 function manualLaneItems(key) { return manualItems.filter(it => manualLaneOf(it) === key); }
 
 // Issue #673 review finding 2: every Needs Manual Review lane has an early-row
@@ -3065,19 +3007,16 @@ function rowMatchesQuery(tr, q) {
 
 // manualLaneEmptyMessage(laneKey) -> the "this lane has nothing in it" line,
 // single-sourced (PR #673 review finding 4). renderManualSectionRows() and
-// resolveItem() both paint it, and the copy in resolveItem had drifted: it
-// tested only `id === 'express-manual-tbody'`, so the Express-other lane —
-// which #663 Option B fills with 72 of a real pull's 73 early Express rows —
-// got the GROUND lane's wording.
+// resolveItem() both paint it, and a hand-copy in resolveItem had drifted once
+// already, which is why there is one function.
+//
+// Each line says WHAT the lane holds, not just that it is empty: "no rows" and
+// "the column failed to parse" must never read the same.
 function manualLaneEmptyMessage(laneKey) {
-  if (laneKey === 'ground') {
+  if (laneKey === 'mine') {
     return resolvedItems.length ? 'All packages resolved ✓' : 'No packages need manual review';
   }
-  // The flagged-area lane says WHAT it holds, not just that it is empty: on a
-  // 2.0 station most Express review is the OTHER lane's, so "no express
-  // packages need review" alone read as "no express today" and was wrong.
-  return laneKey === 'express' ? 'No express packages in your flagged areas or unassigned zips need review'
-                               : 'No other express packages need review';
+  return 'No packages in other work areas';
 }
 
 function renderManualSectionRows() {
@@ -3118,7 +3057,8 @@ function renderManualSectionRows() {
   updateManualBadge();
   updateBulkButtons();
   updateExpressSection();
-  applyManualSearch();   // apply current collapse (and any search) to the fresh rows
+  renderMergedChips('manual');   // live counts before the rows are filtered by them
+  applyManualSearch();   // apply current collapse, search and chip slice to the fresh rows
 }
 
 const SESSION_KEY = 'ibno_session';
@@ -3134,22 +3074,21 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   resetViewControls();
 
   // Stats
-  // Every card counts the lane of the section it scrolls to: Ready to Enter and
-  // Needs Review are the GROUND lanes, Express review is the FLAGGED-AREA lane
-  // only. Express review outside the flagged areas has no card — it is counted
-  // by its own section badge at the bottom of the page — so the cards no longer
-  // sum to Total Flagged, which still counts every row including resolved ones.
-  document.getElementById('stat-auto').textContent   = auto.filter(it => !itemIsExpress(it)).length;
-  document.getElementById('stat-manual').textContent = manual.filter(it => IbnoRules.manualLane(it) === 'ground').length;
-  // Total Flagged counts the work that is OURS: express rows outside the flagged
-  // areas are surfaced for visibility but are not Tyler's queue, so they must not
-  // inflate the day's number (Tyler, 2026-08-06). Applied to resolved rows too,
-  // or coding one would quietly raise the total it was excluded from.
+  // Four cards (#696). Each count card counts the whole MERGED section it jumps
+  // to, both services: the express split is a chip on that section now, not a
+  // card of its own. Total Flagged is the day's number and jumps nowhere.
+  document.getElementById('stat-auto').textContent   = auto.length;
+  document.getElementById('stat-manual').textContent = manual.filter(isMineToWork).length;
+  // Total Flagged counts the work that is OURS: the rows the population rule
+  // demotes to Other work areas are surfaced for visibility but are not Tyler's
+  // queue, so they must not inflate the day's number (Tyler, 2026-08-06;
+  // re-keyed from service to need by #696). Applied to resolved rows too, or
+  // coding one would quietly raise the total it was excluded from.
   //
-  // Ready to Enter is NOT filtered: manualLane classifies REVIEW rows, and an
-  // auto-coded express package is Tyler's work wherever it sorted. Only the
-  // review lanes (open, and the ones he has since resolved) are filtered.
-  const notOurs = (it) => IbnoRules.manualLane(it) === 'express-other';
+  // Ready to Enter is NOT filtered: the population rule classifies REVIEW rows,
+  // and an auto-coded package is Tyler's work wherever it sorted. Only the
+  // review rows (open, and the ones he has since resolved) are filtered.
+  const notOurs = (it) => !isMineToWork(it);
   // Issue #662: Total counts early rows too — updateStatTotal() (below) is the
   // single owner of #stat-total now, so both this fresh render AND a Post Sort
   // load/clear that happens with no report change (handlePostSortFile,
@@ -3176,16 +3115,13 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   banner.style.display = 'block';
 
   // Auto table
-  document.getElementById('auto-badge').textContent = auto.filter(it => !itemIsExpress(it)).length;
+  document.getElementById('auto-badge').textContent = auto.length;
   renderAutoSectionRows();
   // Fresh render starts unfiltered; rebuild chips from this report's facets.
   autoFilter = { codes: [], categories: [] };
   renderAutoChips();
   applyAutoFilter();
   document.getElementById('auto-section').style.display = 'block';
-  document.getElementById('express-auto-section').style.display = 'block';
-  document.getElementById('express-manual-section').style.display = 'block';
-  document.getElementById('express-other-section').style.display = 'block';
 
   // Manual table
   renderManualSectionRows();
@@ -3300,6 +3236,11 @@ function showStorageWarning(show) {
 function restoreSession() {
   const s = IbnoSession.restore(toolStorage.get(SESSION_KEY, null));
   if (!s) return false;
+  // F5. The restored ITEMS carry their own INBOUND_DATE, so the sort day comes
+  // back with them and a same-sort-day refresh keeps every typed Goes To area
+  // (#695). The raw report is not persisted, which is exactly why the day is
+  // read off the items rather than off a file.
+  applySortDayFrom(s.auto.concat(s.manual, s.resolved));
   // Set resolved first so renderResults computes the right total and shows the
   // resolved section. Restore renders from the persisted models — it never
   // re-runs detectRecurring, so the 30-day history is not re-touched.
@@ -3609,19 +3550,50 @@ function updateRowCode(sel) {
 // (autoItems.length) and the note shows "showing N of M", so nothing is silently lost
 // — clearing the filter restores every row. applyAutoFilter relabels the Copy button
 // to "Copy shown" whenever any filter is active.
-// lane: 'express' exports ONLY express rows; anything else exports ONLY ground.
-// This is the guarantee behind the split — Ready to Enter's Copy All reads the
-// ground lane, so it is structurally incapable of carrying an express package
-// into ITQA, and the express Copy All is likewise ground-free. The chip filter
-// is a GROUND-lane control, so it narrows only the ground export.
+// lane (#696): OMITTED means "whatever Ready to Enter is currently showing".
+// 'express' and 'ground' still export exactly their own lane, unchanged,
+// because the split is a real guarantee some caller may still want: an
+// express-only export is structurally incapable of carrying a ground package
+// into ITQA, and the reverse. The two toolbar buttons make the UNARGUMENTED
+// call, so the chips govern them and nothing else.
+//
+// THE INVARIANT (#696 review, Tyler's decision): WHAT THE EXPORT PRODUCES
+// EQUALS WHAT IS VISIBLE, under any combination of the two chip axes.
+//
+//   codeOk .... the code/category chips, a ground-facet axis that slices the
+//               GROUND half only
+//   passes .... the service axis (All / Express / Ground), which slices both
+//
+// That is the SAME conjunction applyMergedReadyFilter computes for display,
+// evaluated fresh over the same rows, which is what makes screen and clipboard
+// agree by construction rather than by coincidence.
+//
+// The service chips used to be a reading aid that did NOT narrow the export.
+// With a Ground chip lit the button still read "Copy All" and still put express
+// rows on the clipboard: on the real July export, 31 lines carrying 6 express
+// beside 25 ground while the screen showed 25. A control that puts something
+// different on the clipboard than what is displayed is a records-tier defect on
+// its own terms, because it pastes rows into OPS2 Tyler cannot see. The
+// narrowing is never silent either: updateReadyExportLabels() writes the scope
+// and the live count onto both buttons.
 function autoExportPairs(lane) {
+  const laneNamed = lane === 'express' || lane === 'ground';
   const isExp = lane === 'express';
   const exportFilter = { codes: autoFilter.codes, categories: autoFilter.categories };
   const active = exportFilter.codes.length + exportFilter.categories.length > 0;
   return autoItems
     .filter(item => item && item.label && item.code)
-    .filter(item => itemIsExpress(item) === isExp)
-    .filter(item => isExp || !active || IbnoRules.autoItemMatchesFilter(item, exportFilter))
+    .filter(item => !laneNamed || itemIsExpress(item) === isExp)
+    // The code/category chips are built from the GROUND rows' facets and
+    // applyAutoFilter only hides ground rows, so the filter narrows only the
+    // ground half here too. Applying it to express would export fewer rows than
+    // are on screen, which is a package missing from OPS2.
+    .filter(item => itemIsExpress(item) || !active || IbnoRules.autoItemMatchesFilter(item, exportFilter))
+    // The service axis. An explicitly named lane already IS a service slice, so
+    // it wins over the chips and stays the structural guarantee it has always
+    // been: autoExportPairs('express') cannot carry a ground package whatever
+    // the chips say.
+    .filter(item => laneNamed || IbnoMergedView.passes(item, mergedFilters.ready, MERGED_VIEW_CTX, null))
     .map(item => [item.label, item.code]);
 }
 
@@ -3709,16 +3681,257 @@ function applyAutoFilter() {
   });
   const clear = document.getElementById('auto-chip-clear');
   if (clear) clear.style.display = viewActive ? '' : 'none';
-  // Copy All exports the full set; while ANY filter (code/category) is active
-  // it exports only the shown rows, so relabel the button to "Copy shown".
-  const copyBtn = document.getElementById('copy-btn');
-  if (copyBtn) copyBtn.textContent = exportActive ? 'Copy shown' : 'Copy All';
+  // The button labels are NOT written here. This pass has applied one of the
+  // two axes, so it cannot yet state what the export will carry; the label is
+  // written at the end of applyMergedReadyFilter, once both axes are in.
+  // The merged section's service chips run LAST and re-compute display for
+  // BOTH tbodies from the conjunction of both filters, so neither filter can
+  // strand a row the other hid (see applyMergedReadyFilter's own comment).
+  applyMergedReadyFilter();
 }
 
 // Manual review search is view-only. Detail rows inherit their parent row's
 // visibility; the unresolved model remains intact for resolve/undo/session state.
 // Search spans BOTH review lanes, so a tracking number is found wherever it
 // sits. Each lane keeps its own group headers and its own empty state.
+// ─── MERGED-SECTION CHIPS (#696) ────────────────────────────────────────────
+//
+// Two merged sections, each owning its OWN filter state: a Ground chip on the
+// work list must never silently filter Ready to Enter. All of the RULES —
+// which rows are in the population, what each chip counts, what passes, what
+// the note says, what the All chip remembers — live in
+// lib/ibno-merged-view.js. What lives here is DOM wiring and screen
+// vocabulary, which is the split #614 mandated for this build.
+//
+// TRANSIENT by design: mergedFilters is reset in resetViewControls(), which
+// every load and every fresh pull runs through.
+let mergedFilters = IbnoMergedView.defaultFilters();
+
+// mergedManualRows() -> the working list, by unique package. A package can hold
+// a full-report row and an early row at once; both are one PACKAGE, and every
+// other count on this page dedups the same way, so a chip must too.
+function mergedManualRows() {
+  const seen = new Set();
+  const out = [];
+  manualLaneItems('mine').concat(earlyLaneItems('mine')).forEach(it => {
+    if (!it || !it.label || seen.has(it.label)) return;
+    seen.add(it.label);
+    out.push(it);
+  });
+  return out;
+}
+
+function mergedSectionRows(section) {
+  return section === 'ready' ? autoItems.slice() : mergedManualRows();
+}
+
+// The bucket headings come from MANUAL_GROUPS, the tool's own screen vocabulary
+// for them, so a chip and the group header it names can never drift apart.
+function mergedBucketLabel(key) {
+  const g = MANUAL_GROUPS.find(x => x.key === key);
+  return g ? g.title : key;
+}
+
+const MERGED_LANE_LABELS = { express: '✈ Express', ground: '\u{1F69B} Ground' };
+
+// renderMergedChips(section) -> paint one chip row. Every chip carries a LIVE
+// count over the working list with parked and 503 rows excluded, because the
+// point of a count on a chip you have NOT picked is to say what you are not
+// looking at.
+//
+// Ready to Enter gets the service axis only: its rows carry no review bucket,
+// and its code/category chips (#filter-ready-to-enter) already slice it by what
+// it is. Needs Manual Review gets both axes plus the three flag chips.
+function renderMergedChips(section) {
+  const host = document.getElementById(section === 'ready' ? 'ready-chips' : 'manual-chips');
+  if (!host) return;
+  const rows = mergedSectionRows(section);
+  if (!rows.length) { host.style.display = 'none'; host.innerHTML = ''; return; }
+  const f = mergedFilters[section];
+  const counts = IbnoMergedView.chipCounts(rows, MERGED_VIEW_CTX);
+  const esc = (v) => ToolHelpers.escapeHtml(String(v));
+  const chip = (kind, val, label, count, on, title) =>
+    '<button class="chip merged-chip' + (on ? ' active' : '') + '"' +
+    ' data-merged="' + section + '" data-kind="' + kind + '" data-val="' + esc(val) + '"' +
+    (title ? ' title="' + esc(title) + '"' : '') +
+    ' aria-pressed="' + (on ? 'true' : 'false') + '">' +
+    label + ' <span class="n">' + count + '</span></button>';
+
+  // The All chip IS the toggle (shortcut A). It reads as active when nothing is
+  // filtered, because "everything" is the state it puts you in.
+  let html = '<span class="grp-label">Filter</span>' +
+    chip('all', 'all', 'All', counts.all, !IbnoMergedView.filterActive(f),
+      'Flip between everything and your last slice. Shortcut: A');
+  html += '<span class="chip-divider"></span>';
+  IbnoMergedView.LANE_KEYS.forEach(k => {
+    html += chip('lane', k, MERGED_LANE_LABELS[k], counts.lanes[k], f.lanes.indexOf(k) !== -1);
+  });
+  if (section === 'manual') {
+    html += '<span class="chip-divider"></span>';
+    IbnoMergedView.BUCKET_KEYS.forEach(k => {
+      if (!counts.buckets[k]) return;
+      html += chip('bucket', k, esc(mergedBucketLabel(k)), counts.buckets[k], f.buckets.indexOf(k) !== -1);
+    });
+    html += '<span class="chip-divider"></span>';
+    if (counts.oob) {
+      html += chip('flag', 'oob', '⚑ Out of area', counts.oob, f.oob,
+        'ZIP not in the station zip list, or an address outside Arizona');
+    }
+    if (counts.multi) {
+      html += chip('flag', 'multi', '◈ Multi-stop', counts.multi, f.multi,
+        'Same building, unit differences ignored: one FRO lookup covers the group. Dock flex propagation itself stays unit-exact.');
+    }
+    if (counts.noaddr) {
+      html += chip('flag', 'noaddr', '\u{1F6AB} Hide no-address', counts.noaddr, f.noaddr,
+        'Rows with no house number and street need an FTrack look. Hide them and work the real addresses first.');
+    }
+  }
+  host.innerHTML = html;
+  host.style.display = 'flex';
+  host.querySelectorAll('.merged-chip').forEach(c => c.addEventListener('click', () => {
+    onMergedChip(section, c.dataset.kind, c.dataset.val);
+  }));
+}
+
+function onMergedChip(section, kind, val) {
+  const f = mergedFilters[section];
+  if (kind === 'all') {
+    const r = IbnoMergedView.toggleAll(f);
+    mergedFilters[section] = r.filter;
+  } else if (kind === 'lane') IbnoMergedView.toggleLane(f, val);
+  else if (kind === 'bucket') IbnoMergedView.toggleBucket(f, val);
+  else if (kind === 'flag') IbnoMergedView.toggleFlag(f, val);
+  applyMergedFilters(section);
+}
+
+function applyMergedFilters(section) {
+  if (section === 'ready') { renderMergedChips('ready'); applyAutoFilter(); return; }
+  renderMergedChips('manual');
+  applyManualSearch();
+}
+
+// The A shortcut. `A` is the ONLY new key this design claims — C, B and W are
+// taken (#613's landmine list) and are not touched here. It never fires while a
+// text field or a select has focus, so typing a Goes To area or a search term
+// can never flip the view out from under the keystroke.
+function initMergedShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key !== 'a' && e.key !== 'A') return;
+    const t = e.target;
+    const tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    e.preventDefault();
+    onMergedChip('manual', 'all', 'all');
+  });
+}
+
+// The merged row predicate for the working list, built ONCE per pass so the
+// cluster index the Multi-stop chip counted is the same index the rows are
+// tested against. A chip that promises 4 and shows 2 is this index going stale.
+function mergedManualPredicate() {
+  const f = mergedFilters.manual;
+  if (!IbnoMergedView.filterActive(f)) return null;
+  const rows = mergedManualRows();
+  const index = IbnoMergedView.clusterIndex(IbnoMergedView.countedRows(rows, MERGED_VIEW_CTX), MERGED_VIEW_CTX);
+  const byLabel = {};
+  rows.forEach(it => { byLabel[it.label] = it; });
+  return (label) => {
+    const item = byLabel[label];
+    return !item || IbnoMergedView.passes(item, f, MERGED_VIEW_CTX, index);
+  };
+}
+
+// applyMergedReadyFilter() -> the service-axis slice on Ready to Enter, applied
+// over the SAME rows the code/category filter slices.
+//
+// DISPLAY IS COMPUTED FROM THE PREDICATES ON EVERY PASS, NEVER ACCUMULATED.
+// This function used to read `tr.style.display === 'none'` and bail on an
+// already-hidden row, on the theory that two filters over one list must not
+// resurrect each other's hidden rows. That made it a one-way ratchet: it could
+// only ever hide. applyAutoFilter re-computes display for #auto-tbody on every
+// pass and so recovered, but it walks the GROUND tbody alone — nothing ever
+// re-computed #express-auto-tbody, so lighting the Ground chip hid every
+// express row permanently. Turning the chip off did not bring them back, and
+// neither did the All chip. On the real July export that is 6 express packages
+// silently absent from the list Tyler pastes into OPS2, with #ready-showing
+// blank because no filter is active any more: a records-tier loss with no
+// counted trace, which is exactly what the reorg forbids.
+//
+// The rule now is the conjunction of both predicates, evaluated fresh:
+//   codeOk .... the code/category chips, which slice the GROUND half only
+//               (applyAutoFilter's own documented scope: express is a short
+//               list that exists to make express impossible to miss, so a
+//               ground-facet filter must never narrow it)
+//   passes .... the service axis, which slices both halves
+// applyManualSearch on the other section already worked this way, which is why
+// the identical round trip there was correct.
+function applyMergedReadyFilter() {
+  const f = mergedFilters.ready;
+  const note = document.getElementById('ready-showing');
+  const active = IbnoMergedView.filterActive(f);
+  const codeActive = autoFilter.codes.length + autoFilter.categories.length > 0;
+  let shown = 0;
+  let total = 0;
+  ['auto-tbody', 'express-auto-tbody'].forEach(id => {
+    const tbody = document.getElementById(id);
+    if (!tbody) return;
+    let lastVisible = true;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
+      if (tr.dataset.idx === undefined) return;   // empty-state rows state their own absence
+      const item = autoItems[tr.dataset.idx];
+      total++;
+      const codeOk = itemIsExpress(item) || !codeActive
+        || IbnoRules.autoItemMatchesFilter(item, autoFilter);
+      const visible = codeOk && IbnoMergedView.passes(item, f, MERGED_VIEW_CTX, null);
+      tr.style.display = visible ? '' : 'none';
+      lastVisible = visible;
+      if (visible) shown++;
+    });
+  });
+  if (note) note.textContent = active ? IbnoMergedView.showingText(shown, total) : '';
+  // Say on the buttons exactly what they will export. This runs LAST, after
+  // both axes have been applied, because the scope is a fact about their
+  // conjunction and neither axis alone can state it.
+  updateReadyExportLabels();
+}
+
+// readyExportScope() -> { lane, word, count } for the Ready-to-Enter toolbar.
+//
+// `lane` is the service the export is scoped to, or '' for both. It is a lane
+// only when EXACTLY one service chip is lit: with both lit the slice is
+// everything, which is not a lane. `count` always comes from autoExportPairs(),
+// so the number on the button is literally the number of rows the button will
+// produce, never a parallel count free to drift from it.
+function readyExportScope() {
+  const lanes = mergedFilters.ready.lanes || [];
+  const lane = lanes.length === 1 ? lanes[0] : '';
+  const codeActive = autoFilter.codes.length + autoFilter.categories.length > 0;
+  let word = 'All';
+  // The ground-facet axis keeps the page's existing idiom ("shown"), and it
+  // wins when both axes are lit because no single word names that slice.
+  if (codeActive) word = 'shown';
+  else if (lane === 'express') word = 'Express';
+  else if (lane === 'ground') word = 'Ground';
+  return { lane: lane, word: word, count: autoExportPairs().length };
+}
+
+// The ONE place the toolbar's two labels are written, so they cannot drift from
+// each other or from the export. Kept short: the toolbar sits beside a sort
+// dropdown and must not reflow.
+function updateReadyExportLabels() {
+  const scope = readyExportScope();
+  const copyBtn = document.getElementById('copy-btn');
+  // Never overwrite the "Copied!" flash mid-flight; its own timer re-derives
+  // the label when it ends.
+  if (copyBtn && copyBtn.className.indexOf('btn-success') === -1) {
+    copyBtn.textContent = 'Copy ' + scope.word + ' ' + scope.count;
+  }
+  const dlBtn = document.getElementById('download-btn');
+  if (dlBtn) dlBtn.textContent = '\u2193 TSV' + (scope.word === 'All' ? '' : ' ' + scope.word);
+}
+
 function applyManualSearch() {
   // PASS 1 — the EARLY tbodies (issue #662 acceptance criterion, extended to
   // all three lanes by #663). Each `earlyTbody` is a sibling of its lane's own
@@ -3737,6 +3950,14 @@ function applyManualSearch() {
   //
   // Pass 1 runs FIRST for exactly that reason: the count has to exist before
   // pass 2 can report it.
+  // The chip slice for the working list, built once for BOTH passes so the
+  // early rows and the full-report rows of the same lane are tested against the
+  // same filter and the same cluster index (#696). Null when no chip is active,
+  // which is the common case and costs nothing.
+  const chipPass = mergedManualPredicate();
+  const passesChips = (lane, tr) =>
+    lane.key !== 'mine' || !chipPass || chipPass(tr.dataset.label);
+
   const earlyShownByLane = {};
   MANUAL_LANES.forEach(lane => {
     earlyShownByLane[lane.key] = 0;
@@ -3760,7 +3981,7 @@ function applyManualSearch() {
       if (tr.classList.contains('detail-row')) { tr.style.display = eLastVisible ? '' : 'none'; return; }
       if (tr.classList.contains('manual-group-row')) { return; } // resolved after the pass, below
       if (!tr.dataset.label) { tr.style.display = ''; eLastVisible = true; return; }
-      const visible = rowMatchesQuery(tr, eq);
+      const visible = rowMatchesQuery(tr, eq) && passesChips(lane, tr);
       tr.style.display = visible ? '' : 'none';
       eLastVisible = visible;
       if (visible) eShown++;
@@ -3792,7 +4013,7 @@ function applyManualSearch() {
       if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
       if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
       if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
-      const match = rowMatchesQuery(tr, q);
+      const match = rowMatchesQuery(tr, q) && passesChips(lane, tr);
       // A row shows if it matches the search and its bucket isn't collapsed. An
       // ACTIVE search overrides collapse, so searching always reveals its hits even
       // when every group starts collapsed; clearing the search re-collapses them.
@@ -3838,7 +4059,21 @@ function applyManualSearch() {
     // it states absence, so "none today" never reads as a parse failure.
     if (note) note.textContent = active ? ('showing ' + shownWithEarly + ' of ' + total)
                                         : (total === 0 ? lane.absent : '');
+
+    // "showing X of Y" for the CHIPS, on the merged section's own header, kept
+    // separate from the search note above so the two never overwrite each
+    // other's number. Present whenever a chip filter is active, and only then
+    // (#696 acceptance criterion).
+    if (lane.key === 'mine') {
+      const showing = document.getElementById('manual-showing');
+      if (showing) {
+        showing.textContent = chipPass
+          ? IbnoMergedView.showingText(shownWithEarly, total)
+          : '';
+      }
+    }
   });
+  updateOtherAreasLine();
 }
 
 // ─── ZIP → SERVICE PROVIDER (ISP) ───────────────────────────────────────────
@@ -3883,6 +4118,16 @@ function ispOf(item) {
   return row ? row.isp : '';
 }
 
+// stateOf(item) -> the two-letter state off the composed address, or ''.
+// The report carries no state column; the state sits between the city and the
+// ZIP in LABEL_ADDRESS. Read for the Out of area chip only (#696), where an
+// unreadable address answers '' and so is never called out of area on state
+// alone — a missing provider is the other half of that test and catches it.
+function stateOf(item) {
+  const m = String((item && item.address) || '').match(/,\s*([A-Za-z]{2})\s+\d{5}/);
+  return m ? m[1].toUpperCase() : '';
+}
+
 // ─── ACTUAL WORK AREA ("Goes To") + BARCODES ────────────────────────────────
 //
 // Two features that only pay off together. The barcode is the scannable form of
@@ -3901,6 +4146,124 @@ function ispOf(item) {
 
 const ACTUAL_AREA_KEY = 'ibno_actual_area';
 let actualAreaStore = {};
+
+// ─── THE SORT-DAY CLOCK (#695, decision record #621) ────────────────────────
+//
+// Which sort day the loaded report belongs to, read from ITS OWN INBOUND_DATE
+// (lib/sort-day.js) and never from the device clock. The sort starts around
+// 1:30 AM, so a device date changes in the middle of one shift's work and is
+// the same across two different sorts either side of a midnight. A Goes To
+// area survives a same-day re-drop and an F5, and resets on a NEW SORT DAY,
+// which is a thing only the report can tell us.
+//
+// THE CLOCK IS MONOTONIC AND IS NEVER CLEARED for the page's lifetime. It only
+// ever moves forward, and nothing (not Load New File, not a Post Sort load's
+// internal reset) is allowed to set it back to ''. Clearing it looks harmless
+// and is not: isLaterSortDay(anyReadableDay, '') is TRUE, so a cleared clock
+// makes an EARLIER-dated report read as a new sort day and roll every area off.
+// The sequence that costs a shift's work: work the 8/12 Post Sort report (areas
+// stamp 8/12), press Load New File (the only way back to the main report, since
+// a Post Sort load hides the drop zone), drop the 1:30 AM main pull dated 8/11,
+// and with a cleared clock 8/11 reads as later than nothing.
+//
+// It starts '' only because nothing has been loaded yet, and the first readable
+// report moves it forward for good.
+let currentSortDay = '';
+
+// The sort day of the report CURRENTLY on the page, as opposed to the day the
+// work is stamped with. '' means no report is loaded, or a loaded report whose
+// dates would not parse.
+//
+// This is the one that Load New File resets, and it exists so the refusal in
+// canPersistArea has something safe to read: the clock itself must never dip,
+// and "is a dateable report on screen right now" is a different question from
+// "what day is the shift on". An earlier-dated report sets this to its own day
+// (writes are allowed, stamped with the later clock); an undateable report sets
+// it to '' (writes are refused out loud).
+let loadedReportDay = '';
+
+// The dated notes an area leaves behind when the sort day moves on (#621's
+// "was 165 on 30 Jun"). DATA ONLY here. The rules (most recent only, a count,
+// 30-day retention) live in lib/sort-day.js and the display of the note is a
+// later ticket in spec #690. Recorded now so the history exists by the time
+// that ticket renders it, rather than starting empty on the day it ships.
+const AREA_NOTES_KEY = 'ibno_area_notes';
+let areaNoteStore = {};
+
+function loadAreaNotes() {
+  areaNoteStore = SortDay.restoreNotes(toolStorage.get(AREA_NOTES_KEY, null));
+}
+
+function saveAreaNotes() {
+  toolStorage.set(AREA_NOTES_KEY, areaNoteStore);
+}
+
+// applySortDayFrom(rows) -> re-key the day-scoped stores to the sort day of the
+// rows just loaded. Called from every path that puts rows on the page: a fresh
+// report drop, a session restore on F5, and a Post Sort load.
+//
+// THE CLOCK ONLY EVER MOVES FORWARD. "A different day" is not the same
+// question as "a new sort day", and treating them as one deletes real work:
+// during the 1:30 AM sort the only main pull available is often YESTERDAY's
+// report, worked alongside a Post Sort report uniformly dated today. Typed
+// areas stamp yesterday's date, and a roll on any change of day would then
+// wipe every one of them the moment today's Post Sort report landed. So an
+// EARLIER-dated report is loaded and rendered normally, but it neither rolls
+// the stores nor rewinds the clock: areas typed while working it keep stamping
+// the later day, which is the day the shift is actually on and the day they
+// should expire with. Only a LATER day is a new sort day.
+//
+// A day we cannot read leaves everything exactly as it is, and so does the
+// same day loaded again, which is what a same-day re-drop is.
+function applySortDayFrom(rows) {
+  const day = SortDay.sortDayOf(rows);
+  // What is on screen, recorded on EVERY load whether or not the clock moves,
+  // and '' when this report's dates will not parse. Only canPersistArea reads
+  // it; the clock below is a separate, never-cleared value.
+  loadedReportDay = day;
+  if (!SortDay.isLaterSortDay(day, currentSortDay)) return;
+  currentSortDay = day;
+  // Areas typed on an earlier sort day are demoted to dated notes rather than
+  // carried forward as values: #621 found a carried area does not merely
+  // display stale, it reads as FINISHED: stepWork skips the row, the progress
+  // bar counts it, and a typed value reads as scanned, so a package can be
+  // walked to a belt that was right three weeks ago.
+  const rolled = SortDay.rollToSortDay({
+    areas: actualAreaStore,
+    notes: areaNoteStore,
+    day: day,
+  });
+  actualAreaStore = rolled.areas;
+  areaNoteStore = rolled.notes;
+  saveActualAreas();
+  saveAreaNotes();
+}
+
+// canPersistArea() -> whether a typed Goes To area can be given a sort day.
+//
+// Refuses when the report on screen has no readable sort date. Without the
+// refusal an entry is written stamped '' and becomes IMMORTAL: rollToSortDay
+// keeps undated entries on purpose (a missing stamp is not evidence of
+// staleness), so it would pre-fill the box and satisfy isScanned() on every
+// future sort day, forever. That is exactly the defect #621 recorded, made
+// permanent instead of lasting a day.
+//
+// Gated on loadedReportDay, NOT on the clock. The clock is never cleared (see
+// its declaration for the wipe that clearing it causes), so it is no longer a
+// signal for "is there a dateable report in front of me". An earlier-dated
+// report passes this gate and its writes stamp the later clock, which is the
+// day the shift is on and the day they should expire with.
+//
+// The refusal is SPOKEN, never silent: a box that keeps a typed value while
+// persisting nothing is worse than one that refuses, because the supervisor
+// sees the area on screen and moves on. flashGoesToNote is the same channel a
+// refused early-lane write already uses.
+function canPersistArea(raw) {
+  if (loadedReportDay && currentSortDay) return true;
+  if (!ActualArea.normalizeArea(raw)) return true;  // clearing an entry needs no day
+  flashGoesToNote('Not saved: this report has no readable sort date, so the area could never expire. Re-load the report.');
+  return false;
+}
 
 // ─── BARCODE SHEET TICK LIST (2026-08-14) ───────────────────────────────────
 // Which printed barcode cards Tyler has actually worked. Kept in its own
@@ -3943,13 +4306,14 @@ function barcodeDoneSummary() {
 }
 
 function loadActualAreas() {
-  // Prune on load, on the same 30-day window as Repeat History: an area typed
-  // for a package a month ago is not guidance for the package in hand today.
-  actualAreaStore = ActualArea.prune(
-    ActualArea.restore(toolStorage.get(ACTUAL_AREA_KEY, null)),
-    ToolHelpers.isoDate(),
-    ActualArea.DEFAULT_DAYS
-  );
+  // Restored as stored. The retention decision moved to the SORT-DAY clock
+  // (#695): applySortDayFrom clears every area from a different sort day the
+  // moment a report tells us which day it is, and demotes it to a dated note.
+  // The old device-clock prune here (ToolHelpers.isoDate() over a 30-day
+  // window) is deliberately gone, it kept a three-week-old area as a live
+  // value while resetting nothing at a new sort, which is the defect #621
+  // recorded.
+  actualAreaStore = ActualArea.restore(toolStorage.get(ACTUAL_AREA_KEY, null));
 }
 
 function saveActualAreas() {
@@ -4053,9 +4417,14 @@ function attachGoesToInput(tr, item) {
 // propagation would be the wrong shape: rows changing off-screen with no notice
 // is how a human stops trusting the field.
 function commitGoesTo(label, raw) {
+  // No readable sort day means no expiry date, so the write is refused out
+  // loud and the box snaps back to whatever is really stored.
+  if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
   const result = ActualArea.set(actualAreaStore, label, raw, {
     items: manualAddressPairs(),
-    today: ToolHelpers.isoDate(),
+    // The LOADED REPORT's sort day, not the device's (#695). Stamping with the
+    // device date is what made a 1:30 AM sort look like two days.
+    today: currentSortDay,
   });
   actualAreaStore = result.store;
   saveActualAreas();
@@ -4264,29 +4633,15 @@ function postSortBarcodeStatus(msg, isError) {
 // earlyIsMine(item) -> THE one predicate deciding whether an early row is part
 // of Tyler's queue, shared by the stat cards (earlyWorkingItems) and by what
 // actually renders (earlyVisibleItems). One predicate, two readers, so a count
-// on a card can never disagree with the rows on screen.
+// on a card can never disagree with the rows on screen (ADR 0021).
 //
-// Two conditions, the second added 2026-08-14 (Tyler, on the first real Post
-// Sort run through the one-at-a-time workflow: "its still showing all not just
-// my flagged work areas"):
-//   needsWork ............... the disposition fold (#657), unchanged.
-//   isWorkAreaFlagged ....... NEW. The Post Sort report is a building-wide
-//                             pull; on the 2026-08-12 export that is 289 rows
-//                             across 110 Work Areas, of which 8 sit in the
-//                             areas Tyler actually works. The other 281 are
-//                             someone else's queue and were burying his.
-//
-// FOLDED, NOT REMOVED — the same constraint the disposition fold obeys
-// (constraint 1 on map #608: nothing this tool does disappears). The hidden
-// rows stay one click away behind the SAME "Show all" toggle, which always
-// states its own count. This reuses the existing fold rather than adding a
-// second, competing hiding mechanism.
-//
-// Reads the SAME configured list as the Flagged Work Areas settings box and as
-// PostSortLane.flaggedLookupBatch, via IbnoRules.isWorkAreaFlagged — so what is
-// on screen and what the Copy button puts on the clipboard can never diverge.
+// The rule itself moved to lib/post-sort-lane.js (#694), beside the lane it
+// describes and where a Node test can reach it. Its two conditions (the
+// disposition fold plus the flagged-Work-Area fold, folded not removed) are
+// documented there. This stays as the page's one call site so every reader
+// here keeps reading the same predicate.
 function earlyIsMine(it) {
-  return PostSortLane.needsWork(it) && IbnoRules.isWorkAreaFlagged(it && it.ibWork);
+  return PostSortLane.earlyIsMine(it);
 }
 
 function earlyWorkingItems() {
@@ -4403,6 +4758,12 @@ function loadPostSortAsMain(rows, fileName) {
     postSortStatus('Error reading Post Sort report: ' + (err && err.message ? err.message : err), true);
     return;
   }
+  // resetApp() clears loadedReportDay (nothing on screen) but NOT the sort-day
+  // clock, which is what makes this reset safe to run right before an ingest.
+  // The hazard it used to carry, and the reason the clock is never cleared
+  // anywhere: a clock that dipped to '' in between would make ANY Post Sort
+  // day look later than nothing, roll the stores, and wipe areas typed against
+  // a NEWER report. The clock belongs to the work, not to what is on screen.
   resetApp();
   document.getElementById('file-label').textContent = fileName;
   document.getElementById('drop-zone').style.display = 'none';
@@ -4420,6 +4781,10 @@ function loadPostSortAsMain(rows, fileName) {
 // loadPostSortAsMain's reset changes, not this.
 function ingestPostSortRecords(records, fileName) {
   postSortItems = PostSortLane.buildPostSortLane(records);
+  // Under ADR 0021 the Post Sort report IS the loaded report, so it sets the
+  // sort day exactly like a main-report load does (#695). Its rows carry
+  // INBOUND_DATE too, and this runs before renderEarlyLane below.
+  applySortDayFrom(postSortItems);
   // Prune the tick list to THIS report's labels. Without it the list would
   // accumulate every tracking number ever ticked, and yesterday's ticks would
   // show against today's lane the moment a label repeated across reports.
@@ -4930,59 +5295,32 @@ function postSortBarcodeTagHtml(item) {
 }
 
 // earlyReviewFields(item) -> shapes ONE lib/post-sort-lane.js item into the
-// field shape buildManualRow() expects (issue #662, extended by #664). No
-// code/category/reason is DECIDED here -- that happens in
-// PostSortLane.applyEarlyCode, called right after applyDisposition wherever
-// postSortItems is (re)built. This function only reads what applyEarlyCode
-// already resolved onto item.category/item.reason (the main report's real
-// classification when it has one, or the flagged-Work-Area fallback for the
-// fresh tail, each with item.plaArbitrated saying which) and falls back to
-// the pre-#664 canned strings when applyEarlyCode has not run yet (e.g. a
-// direct call in a context that skips it). provenance: 'early' is the ONLY
-// signal buildManualRow reads to take the early-specific branches.
+// field shape buildManualRow() expects (issue #662, extended by #664). The
+// shaping rule moved into lib/post-sort-lane.js with #694, next to the lane
+// item it reshapes; what it reads (applyEarlyCode's resolved category/reason,
+// the pre-#664 canned fallbacks) and what it guarantees (provenance 'early',
+// the ONLY signal buildManualRow reads for the early-specific branches) are
+// documented there and unchanged.
 function earlyReviewFields(item) {
-  return Object.assign({}, item, {
-    category: item.category || '',
-    reason: item.reason || 'Post Sort, awaiting full report',
-    scanBarcode: item.barcode || '',
-    provenance: 'early',
-  });
+  return PostSortLane.earlyReviewFields(item);
 }
 
 // earlyLaneOf(item) -> which Needs Manual Review lane an early Post Sort row
-// belongs in: the SAME three MANUAL_LANES keys a full-report row is routed to
-// ('ground' / 'express' / 'express-other'), decided by the SAME function
-// (issue #663, OPTION B -- Tyler's decision, 2026-08-13).
+// belongs in: the SAME MANUAL_LANES keys a full-report row is routed to,
+// decided by the SAME function (issue #663, OPTION B -- Tyler's decision,
+// 2026-08-13; the principle survives #696, only the lanes changed).
 //
-// It reads the `express` and `ibWork` fields lib/post-sort-lane.js's
-// buildPostSortLane already derives from EXPRESS_TRACK (the report's own
-// service label -- "Express" -- NOT a tracking number, the exact trap #663
-// calls out) and IB_WORK_AREA, so manualLane's rule 1
-// (isWorkAreaFlagged(row.ibWork)) does the work here: an early Express row
-// outside the flagged areas falls through to 'express-other', which is
-// precisely the intent.
+// #696 replaces the three service lanes with two need lanes, so the rule this
+// calls changes with them: manualLaneOf, which is the population rule
+// (IbnoMergedView.inWorkingPopulation) and nothing else. PostSortLane's own
+// earlyLaneOf still answers the service split and is still unit-tested there;
+// the merged page simply no longer asks that question, because a lane keyed on
+// service is exactly what let an express intercept sit under "not mine to
+// work" (#616).
 //
-// Its category-based rules 2 and 3 (Unassigned Zip, and the AREA_GROUPED
-// "worked alongside the flagged area" categories) used to be inert for an early
-// row by construction, because earlyReviewFields always set category '' (#662).
-// Since #664 they are LIVE: PostSortLane.applyEarlyCode fills item.category
-// from the main report's OWN classification for a label it has already coded
-// 'manual' (and leaves it '' for the fresh tail the main report has never
-// seen). That is the RIGHT outcome under Option B rather than a leak of #664
-// into routing -- an early Express QA-Intercept now lands in the same lane its
-// full-report twin lands in a few minutes later, instead of jumping lanes the
-// moment the main report catches up. It changes nothing about CODING: routing
-// reads item.category, and #661's "explicitly not modified" list still keeps
-// decideCode/decideCodeInner untouched (applyEarlyCode never calls them).
-//
-// Why Option B and not "every early Express row into Tyler's queue": on a real
-// pull (2026-08-12 fixture) 72 of the 73 early Express rows are OUTSIDE the
-// flagged work areas. Routing them by the Express label alone would put 72
-// rows he does not work at the top of the lane that exists to show what he
-// DOES work -- exactly the mis-read the express-other lane was created on
-// 2026-08-06 to prevent. The Express split still holds for early rows; it
-// simply holds the same way it holds everywhere else in this tool, through
-// one shared rule rather than a second one that only early rows obey.
+// One rule, two readers, unchanged in spirit: an early row and its full-report
+// twin land in the same lane, so a row cannot be Tyler's on one report and not
+// on the other.
 function earlyLaneOf(item) {
   return manualLaneOf(item);
 }
@@ -5011,18 +5349,19 @@ function earlyVisibleItems() {
 // renderEarlyLane, which every data change funnels through) and defensive (the
 // cached array identity + fold state are re-checked on every read), so an
 // in-place mutation of postSortItems can never be served a stale split.
+//
+// #694 splits this in two: the CACHE and the fold state stay here (page state),
+// the partition itself is PostSortLane.earlyLanesByKey. The two arguments are
+// the whole contract — the already-folded population, and the lane keys to seed
+// — so handing it the unfolded postSortItems, or forgetting the keys, is a
+// wiring bug tests/ibno-lib-extraction-dom.test.js is written to catch.
 let earlyLaneCache = null;
 function invalidateEarlyLanes() { earlyLaneCache = null; }
 function earlyLanesByKey() {
   if (earlyLaneCache && earlyLaneCache.src === postSortItems && earlyLaneCache.showAll === postSortShowAll) {
     return earlyLaneCache.byKey;
   }
-  const byKey = {};
-  MANUAL_LANES.forEach(l => { byKey[l.key] = []; });
-  earlyVisibleItems().forEach(it => {
-    const key = earlyLaneOf(it);
-    (byKey[key] || (byKey[key] = [])).push(it);
-  });
+  const byKey = PostSortLane.earlyLanesByKey(earlyVisibleItems(), MANUAL_LANES.map(l => l.key), earlyLaneOf);
   earlyLaneCache = { src: postSortItems, showAll: postSortShowAll, byKey: byKey };
   return byKey;
 }
@@ -5249,17 +5588,14 @@ function renderEarlyLane() {
   // renderResults() re-run — no caller of this function called
   // updateExpressSection() before now, so nothing else keeps it in step.
   updateExpressSection();
+  updateManualBadge();
   // Post-Sort-as-main mode (one report at a time, 2026-08-14): with no main
-  // report loaded, updateManualBadge's #stat-manual would read 0 over full
-  // lanes. Count the early working set instead — flagged lanes only, the
-  // same notOurs rule updateStatTotal applies.
-  if (!(Array.isArray(lastRows) && lastRows.length)) {
-    const statManual = document.getElementById('stat-manual');
-    if (statManual) {
-      statManual.textContent = earlyWorkingItems()
-        .filter(it => IbnoRules.manualLane(it) !== 'express-other').length;
-    }
-  }
+  // report loaded, a badge counting full-report rows alone reads 0 over a lane
+  // full of early rows. updateManualBadge counts BOTH reports by unique label
+  // now (#696), so the badge and the Needs Review card are one number computed
+  // one way, in every load state, rather than a second rule that only applies
+  // when no main report is loaded. The old branch here also read
+  // IbnoRules.manualLane's 'express-other' — a lane that no longer exists.
   // Issue #667: "Select with area (N)" and "Barcode selected (N)" both count
   // early rows now, and this function is the ONLY place early rows appear,
   // disappear or change their checked state without a full renderResults()
@@ -5350,7 +5686,10 @@ function attachPostSortGoesToInput(tr, item) {
 // hard requirement. This never calls lib/ibno-review-plan.js and never writes
 // a code, category, or disposition; it is Goes To only.
 function commitPostSortGoesTo(label, raw) {
-  const result = ActualArea.setEarly(actualAreaStore, label, raw, { today: ToolHelpers.isoDate() });
+  // Same refusal as commitGoesTo: an unstamped entry would outlive every sort.
+  if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
+  // Stamped with the loaded report's sort day, same clock as commitGoesTo (#695).
+  const result = ActualArea.setEarly(actualAreaStore, label, raw, { today: currentSortDay });
   actualAreaStore = result.store;
   saveActualAreas();
   result.changed.forEach(repaintGoesTo);
@@ -5392,12 +5731,16 @@ function flashGoesToNote(text) {
 // report carried no barcode column (lib/ibno-rules.js), so this is never empty —
 // but the dialog says which of the two it is rather than letting a short code
 // pass for a full one.
+//
+// ISSUE #693: the rule itself now lives in lib/post-sort-lane.js beside the
+// print gating that consumes it, where a Node test can reach it. These two are
+// thin delegates so every existing call site keeps its exact signature.
 function barcodeValueOf(item) {
-  return String((item && item.scanBarcode) || (item && item.label) || '');
+  return PostSortLane.barcodeValueOf(item);
 }
 
 function barcodeIsFallback(item) {
-  return barcodeValueOf(item) === String((item && item.label) || '');
+  return PostSortLane.barcodeIsFallback(item);
 }
 
 // ─── RECIPIENT / ADDRESS CELL ───────────────────────────────────────────────
@@ -6310,9 +6653,13 @@ function laneBarcodeCardPlan(cfg) {
 // tracking number". When the main report has a real SCAN_BARCODE it still
 // wins, which is the #649 tier order holding, and applyBarcodeLookup has
 // already given the early item that same value anyway.
+//
+// ISSUE #693: the DECISION above moved to PostSortLane.dedupeLaneBarcodeEntries
+// (behaviour unchanged, now pinned by Node tests). What stays here is the DOM
+// walk that collects the checked rows, in the order that rule documents:
+// full-report half first, early half second.
 function laneBarcodeEntries(cfg) {
-  const entries = [];
-  const byLabel = new Map();
+  const rows = [];
   [[cfg.tbody, false], [cfg.earlyTbody, true]].forEach(([tbodyId, early]) => {
     const body = tbodyId ? document.getElementById(tbodyId) : null;
     if (!body) return;
@@ -6322,42 +6669,22 @@ function laneBarcodeEntries(cfg) {
       .forEach(tr => {
         const label = tr.dataset.label;
         if (!label) return;
-        const prev = byLabel.get(label);
-        if (!prev) {
-          const entry = { label: label, early: early };
-          byLabel.set(label, entry);
-          entries.push(entry);
-          return;
-        }
-        // The overlap. `prev` is always the full-report half (collected
-        // first); mutate it in place so the row keeps its position on the
-        // sheet and the caller still sees exactly one entry per package.
-        if (early && !prev.early && fullReportBarcodeIsUnusable(label)) prev.early = true;
+        rows.push({ label: label, early: early });
       });
   });
-  return entries;
+  return PostSortLane.dedupeLaneBarcodeEntries(rows, itemByLabel);
 }
 
 // fullReportBarcodeIsUnusable(label) -> would the FULL-REPORT card for this
 // label encode a tracking number rather than a real barcode? (#667 review,
 // CRITICAL — see laneBarcodeEntries.)
 //
-// Deliberately expressed as "is the full-report value unusable", not "does the
-// early item have something better": the question being asked is whether the
-// pre-existing full-report path is safe to take for an overlapping package,
-// and if it is not, the answer is to hand the package to the gated early path
-// — which refuses rather than guesses. A doubly-unresolved package therefore
-// prints nothing and says why, instead of printing an unscannable card.
-//
-// NOTE the one benign false positive: a package whose REAL SCAN_BARCODE
-// happens to equal its own tracking number (measured — one real 16-digit case)
-// reads as a fallback here. It is handed to the early half, which holds that
-// same value via mainReportScanBarcodeMap and prints the identical card. No
-// length test is involved either way.
+// The rule moved to lib/post-sort-lane.js in #693, where its reasoning and the
+// benign 16-digit false positive are documented in full. This is the label ->
+// item resolution the lib deliberately does not do, kept so the tool-side
+// signature is unchanged.
 function fullReportBarcodeIsUnusable(label) {
-  const item = itemByLabel(label);
-  if (!item) return true;
-  return barcodeIsFallback(item);
+  return PostSortLane.fullReportBarcodeIsUnusable(itemByLabel(label));
 }
 
 function buildManualRow(item, bucket) {
@@ -6820,11 +7147,18 @@ function copyAutoTable(lane) {
   if (!lines.length) return;
   const text = lines.join('\n');
   ToolHelpers.copyText(text).catch(() => {});
-  const btn = document.getElementById(lane === 'express' ? 'express-copy-btn' : 'copy-btn');
-  const orig = btn.textContent;
+  // ONE Copy All on the merged section (#696), so there is one button to flash.
+  // The `lane` argument still narrows what is EXPORTED (autoExportPairs keeps
+  // the per-service split), which is a different question from which button
+  // the user pressed — the express-only button it used to look up is gone with
+  // the express section, and looking up a dead id here threw on a null button.
+  const btn = document.getElementById('copy-btn');
+  if (!btn) return;
   btn.textContent = '✓ Copied!';
   btn.className = 'btn btn-success';
-  setTimeout(() => { btn.textContent = orig; btn.className = 'btn btn-purple'; }, 2000);
+  // Restore by RE-DERIVING the label rather than by replaying a saved one: a
+  // chip clicked during the flash must not be undone two seconds later.
+  setTimeout(() => { btn.className = 'btn btn-purple'; updateReadyExportLabels(); }, 2000);
 }
 
 
@@ -6833,7 +7167,11 @@ function downloadAutoTable(lane) {
   if (!outRows.length) return;
   const content = ToolHelpers.buildTSV([], outRows).split('\n').slice(1).join('\n') + '\n';
   const today = ToolHelpers.isoDate();
-  ToolHelpers.downloadTSV('ibno-ready-' + (lane === 'express' ? 'express-' : '') + today + '.tsv', content);
+  // The filename names the scope for the same reason the button label does: a
+  // ground-only file called ibno-ready- lies about itself the moment it is
+  // sitting in the Downloads folder next to yesterday's full export.
+  const scope = (lane === 'express' || lane === 'ground') ? lane : readyExportScope().lane;
+  ToolHelpers.downloadTSV('ibno-ready-' + (scope ? scope + '-' : '') + today + '.tsv', content);
 }
 
 // ─── CLEAN EXCEL-READY EXPORT (#385) ────────────────────────────────────────────
@@ -6858,6 +7196,10 @@ function exportCleanCSV() {
 function applySnapshot(rows, opts) {
   opts = opts || {};
   const snap = IbnoSession.applyRows(rows, { history: loadHistory() });
+  // The sort-day clock (#695) reads the report BEFORE anything renders, so the
+  // rows paint against the right day's Goes To areas rather than flashing
+  // yesterday's and then clearing them.
+  applySortDayFrom(rows);
   saveHistory(snap.updatedHistory);
   scheduleHistorySync(); // write the new inbound dates through to other devices (#174)
   ingestArchive(opts.archiveRows || snap.rows); // accumulate raw rows for global search (#286) — local only, not synced
@@ -7035,6 +7377,18 @@ function resetApp() {
   // early-aware guards below (which read postSortItems/earlyLaneItems) all
   // evaluate to "nothing left" afterwards.
   clearPostSortLane();
+  // No report on screen, so no report day (#695). Paired with canPersistArea:
+  // the next typed area is REFUSED out loud until a report supplies a date,
+  // never stamped with '' and never stamped with a day it has nothing to do
+  // with. The typed areas themselves are untouched, as a reset has always left
+  // them.
+  //
+  // currentSortDay is deliberately NOT cleared here. It is the clock, it is
+  // monotonic, and clearing it would let the very next report roll the stores
+  // no matter how it is dated: isLaterSortDay(anyDay, '') is true. The
+  // sequence that used to cost a shift's work is Load New File between a
+  // Post Sort report dated 8/12 and the 1:30 AM main pull dated 8/11.
+  loadedReportDay = '';
   document.getElementById('drop-zone').style.display       = 'block';
   document.getElementById('reset-btn').style.display       = 'none';
   document.getElementById('rerun-btn').style.display       = 'none';
@@ -7057,14 +7411,13 @@ function resetApp() {
   }
   document.getElementById('day-banner').style.display      = 'none';
   document.getElementById('auto-section').style.display    = 'none';
-  document.getElementById('express-auto-section').style.display = 'none';
-  // Both express sections are JS-revealed by renderEarlyLane whenever their
-  // lane holds an early row (issue #663), so hiding one must be gated on the
-  // fold-aware early population (earlyLaneItems — PR #673 review finding 5:
-  // testing the UNFOLDED postSortItems left an empty ghost section visible).
-  // With one report at a time, clearPostSortLane() above has already emptied
-  // that population, so every lane section hides here — the guard stays so
-  // the invariant is local, not dependent on call order.
+  // The Other work areas line is JS-revealed whenever its lane holds a row
+  // (full-report or early), so hiding it must be gated on the fold-aware early
+  // population (earlyLaneItems — PR #673 review finding 5: testing the UNFOLDED
+  // postSortItems left an empty ghost section visible). With one report at a
+  // time, clearPostSortLane() above has already emptied that population, so the
+  // line hides here — the guard stays so the invariant is local, not dependent
+  // on call order.
   MANUAL_LANES.forEach(lane => {
     if (!lane.section || earlyLaneItems(lane.key).length) return;
     const sec = document.getElementById(lane.section);
@@ -7102,6 +7455,7 @@ function resetApp() {
   document.getElementById('auto-chips').innerHTML = '';
   document.getElementById('auto-filter-note').textContent = '';
   document.getElementById('copy-btn').textContent = 'Copy All';
+  document.getElementById('download-btn').textContent = '\u2193 TSV';
   currentDayType = 'weekday';
   toolStorage.remove(SESSION_KEY); // "Load New File" discards the persisted session
   mergeSeq++; // invalidates any in-flight merge read — its primary is gone (#459 review F2)
@@ -7123,11 +7477,13 @@ function resetApp() {
   // badges refreshed; #manual-badge, #stat-manual, #stat-auto, #auto-badge and
   // #stat-total kept the discarded report's numbers over lanes that had just
   // been emptied. Symmetric now, all six.
-  const groundAuto = autoItems.filter(it => !itemIsExpress(it)).length;
-  document.getElementById('stat-auto').textContent = groundAuto;
-  document.getElementById('auto-badge').textContent = groundAuto;
+  document.getElementById('stat-auto').textContent = autoItems.length;
+  document.getElementById('auto-badge').textContent = autoItems.length;
   updateManualBadge();          // #manual-badge + #stat-manual
-  updateExpressSection();       // both express badges + #stat-express + #stat-express-manual
+  updateExpressSection();       // the section's express note
+  updateOtherAreasLine();       // the counted line, which vanishes at zero
+  renderMergedChips('manual');  // chip counts, now over an empty population
+  renderMergedChips('ready');
   updateStatTotal();            // #stat-total
   // PR #673 review finding 3: resetViewControls() emptied every search box by
   // assigning .value = '', which fires no 'input' event, and nothing re-ran the
@@ -7147,6 +7503,16 @@ function resetApp() {
 // collapsed. Collapse state is ephemeral — fresh load/restore starts expanded.
 function initCollapsibleSections() {
   document.querySelectorAll('.section').forEach(sec => {
+    // The Other work areas counted line (#696) is NOT a collapsible header. It
+    // drives its own open/close through toggleOtherAreas(), carries its own
+    // #other-areas-chevron, and is deliberately not behind a header toggle: a
+    // counted line is a trace, a hidden section is an absence. Both of the
+    // steps below reach for the section's FIRST .section-header, which for this
+    // section IS that line, so without this guard it rendered a second .chev
+    // beside the real one and bound a second click handler on top of the
+    // line's own.
+    const first = sec.querySelector('.section-header');
+    if (first && first.id === 'other-areas-line') return;
     const h2 = sec.querySelector('.section-header h2');
     if (h2 && !h2.querySelector('.chev')) {
       const chev = document.createElement('span');
@@ -7227,13 +7593,16 @@ function onDrop(e) {
 // Wire collapsible result sections (#166).
 initCollapsibleSections();
 initSortControls();
+initMergedShortcuts();   // the All chip's `A` (#696). C / B / W are untouched.
 
 // Reflect the saved copy-mode choice (#copy-mode) in the toggle on load.
 syncCopyModeControl();
 
-// Typed "Goes To" areas, pruned to the 30-day window. Loaded BEFORE any restore
-// renders rows, so a restored session's inputs come up already filled.
+// Typed "Goes To" areas, scoped to the sort day by applySortDayFrom once a
+// report says which day it is (#695). Loaded BEFORE any restore renders rows,
+// so a restored session's inputs come up already filled.
 loadActualAreas();
+loadAreaNotes();  // before restoreSession, which sets the sort day and may roll areas into notes
 loadBarcodeDone();
 // Work mode is remembered across a reload, but only takes effect once there
 // are rows to work — restoring it onto an empty page would show a bar with
