@@ -308,15 +308,32 @@
     .goesto-input.has-area { border-color: var(--brand-ink); color: var(--brand-ink); background: var(--hover-soft); }
     .goesto-input.big { width: 100%; font-size: 22px; padding: 7px 10px; text-align: center; }
 
-    /* Propagation notice. Fixed, transient, never blocks a click. */
+    /* Propagation notice. Fixed, transient, never blocks a click.
+       z-index 90 puts it ABOVE the barcode sheet's in-page overlay (80), which
+       is opaque and full-viewport: at 60 every note raised while that overlay
+       was up was painted behind it. That includes the #667 refusal sentence
+       ("2 of 6 rows printed nothing, and why"), so a short sheet would have
+       reached Tyler with no explanation at all — the exact ambiguity that
+       message exists to remove. The overlay carries its own persistent copy of
+       the refusal too (.sheet-note); this note is the transient half. */
     #goesto-note {
       display: none; position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
-      z-index: 60; padding: 8px 16px; border-radius: 999px; pointer-events: none;
+      z-index: 90; padding: 8px 16px; border-radius: 999px; pointer-events: none;
       /* Inverted pill: --text on --surface reads correctly in BOTH themes
          without pinning a hex, which the #307 hardcoded-color budget rightly
          resists. */
       background: var(--text); color: var(--surface); font-size: 13px; font-weight: 600;
       box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    }
+    /* The dock-flex drift guard: the wrong-belt backstop, so it must not read as
+       routine feedback. Amber on near-black is legible in BOTH themes without
+       depending on a theme token that flips underneath it, and the pill grows a
+       ring and squares off so it is a different shape at a glance, not just a
+       different colour (the shape carries it for a colour-blind reader too). */
+    #goesto-note.warn {
+      background: #7a2e00; color: #ffe3c2; border: 2px solid #ffb44d;
+      border-radius: 10px; padding: 10px 18px; font-size: 14px; max-width: min(560px, 92vw);
+      text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.38);
     }
 
     /* Barcode dialog. The CARD follows the theme; the barcode STAGE never does —
@@ -352,6 +369,38 @@
     .barcode-area-label { display: block; margin-top: 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
     .barcode-addr { margin-top: 8px; text-align: center; font-size: 12px; color: var(--text-faint); }
     .barcode-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+    /* The barcode SHEET's in-page fallback (#700), shown only when the browser
+       refused the pop-up. The bar around it follows the theme like any other
+       tool chrome (tokens only); the sheet inside the iframe is its own
+       document and stays deliberately black-on-white in both themes, because
+       it is the thing that reaches a printer. */
+    #barcode-sheet-overlay {
+      display: none; position: fixed; inset: 0; z-index: 80;
+      flex-direction: column; background: var(--surface);
+    }
+    #barcode-sheet-overlay .sheet-bar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--surface-2); border-bottom: 1px solid var(--border);
+    }
+    #barcode-sheet-overlay .sheet-title {
+      font-size: 13px; font-weight: 700; color: var(--text);
+    }
+    /* The #667 refusal, ON the overlay. The lane's own status line and the
+       transient note both sit behind or outside this full-viewport surface, so
+       the sentence explaining a short sheet has to live here as well —
+       persistent, not a 2.6s toast, because "did I lose a page?" is a question
+       asked minutes later. */
+    #barcode-sheet-overlay .sheet-note {
+      flex: 1; font-size: 12px; font-weight: 600; color: var(--text);
+      background: var(--surface); border: 1px solid var(--brand-ink);
+      border-radius: 6px; padding: 4px 9px;
+    }
+    #barcode-sheet-overlay .sheet-note:empty { display: none; }
+    #barcode-sheet-overlay .sheet-spacer { flex: 1; }
+    #barcode-sheet-overlay .sheet-frame {
+      flex: 1; width: 100%; border: 0; background: var(--surface);
+    }
     .dt-td .dt-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-style: dotted; }
     .dt-td .dt-link:hover { color: var(--text); text-decoration-style: solid; }
     .code-pill {
@@ -372,7 +421,16 @@
       font-weight: 600;
       margin-right: 4px;
       margin-bottom: 2px;
-      white-space: nowrap;
+      /* Was white-space: nowrap, which made the pill spill past its cell over
+         the neighbouring column once the Reason column was narrowed to the 60px
+         floor (#701: 45 of 837 cells, all of them "Work area: NNN" at 114px in a
+         100px cell). It now WRAPS inside the cell instead. Nothing is clipped or
+         ellipsised either way — nothing in this tool truncates — and at every
+         normal column width the pill still sits on one line, because the text is
+         shorter than the cell. */
+      white-space: normal;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
     .flag-pill-work  { background: #fff3e0; color: #b45309; }
     .flag-pill-label { background: #fef2f2; color: #dc2626; }
@@ -549,6 +607,12 @@
       transition: background 0.12s;
     }
     .btn-apply-mini:hover { background: #15803d; }
+    /* The coded row's Undo (#697) is .btn-undo-mini, NOT this class — every
+       "click the row's Done button" path in the tool and in three DOM tests
+       selects .btn-done-mini, and sharing the class turned those into
+       un-resolves. .btn-undo-mini already existed for Manually Resolved's own
+       Undo (below), so the coded row's Undo looks like every other Undo for
+       free. */
     .btn-done-mini {
       padding: 3px 9px;
       background: #e4e4e7;
@@ -808,6 +872,70 @@
        Named Work mode, not Copy mode: "Copy mode" already means the Copy-as
        tracking/barcode toggle in the header, and C/B are already its shortcuts. */
 
+    /* ─── COLUMN LAYOUT (#701) ────────────────────────────────────────────
+       Tyler's own arrangement of the merged page's tables: drag a header to
+       reorder, pull an edge or use the panel to resize, hide anything but the
+       two columns he writes to. Every color here is a theme token — the
+       hardcoded-hex budget in tests/theme-contrast-dom.test.js is a ratchet and
+       dark values belong in theme.css, which loads after this block and wins.
+
+       NOTHING TRUNCATES: no rule below sets text-overflow or white-space, and a
+       pinned width is a width, not a clip. A long address in a narrow column
+       wraps and the row grows. That is deliberate (prototype round 6): the only
+       reason to clip is to fit more columns on screen, and hiding a column is
+       the honest way to do that. */
+    th[data-col][draggable="true"] { cursor: grab; }
+    th[data-col].col-dragging { opacity: 0.45; cursor: grabbing; }
+    /* The drop indicator is a border on the header the column would land
+       before/after, so the target is the thing the pointer is actually over. */
+    th[data-col].col-drop-before { box-shadow: inset 3px 0 0 0 var(--text-muted); }
+    th[data-col].col-drop-after  { box-shadow: inset -3px 0 0 0 var(--text-muted); }
+    /* The edge-pull handle. Absolutely positioned inside a relative th so it
+       sits ON the border between two columns; 8px wide because a 1px target is
+       not grabbable, matching lib/data-table.js's handle. */
+    th[data-col] { position: relative; }
+    .col-resizer {
+      position: absolute; top: 0; right: 0; bottom: 0; width: 8px;
+      cursor: col-resize; user-select: none; touch-action: none;
+    }
+    .col-resizer:hover { background: var(--hover-row); }
+    body.col-resizing { cursor: col-resize; user-select: none; }
+    /* The panel. Anchored under its Columns button; one panel element is reused
+       for both sections so there is only ever one open. */
+    .col-panel {
+      position: absolute; z-index: 60; display: none; min-width: 300px;
+      max-height: 70vh; overflow: auto; padding: 10px;
+      background: var(--surface); border: 1px solid var(--border-strong);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      font-size: 13px; color: var(--text);
+    }
+    .col-panel.open { display: block; }
+    .col-panel h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); }
+    .col-panel-note { margin: 0 0 8px; font-size: 12px; color: var(--text-faint); }
+    .col-row {
+      display: flex; align-items: center; gap: 6px; padding: 3px 4px;
+      border-radius: 5px;
+    }
+    .col-row:hover { background: var(--hover-soft); }
+    .col-row .col-name { flex: 1 1 auto; min-width: 0; }
+    .col-row.col-locked .col-name { color: var(--text-muted); }
+    /* One button treatment for the whole panel, Reset included — it shipped as a
+       raw browser default button beside styled siblings in both themes. */
+    .col-row button, .col-panel-actions button {
+      font: inherit; line-height: 1; padding: 3px 7px; cursor: pointer;
+      background: var(--field-bg); color: var(--text);
+      border: 1px solid var(--border-strong); border-radius: 5px;
+    }
+    .col-row button:disabled { opacity: 0.35; cursor: default; }
+    .col-row .col-width { width: 52px; text-align: right; color: var(--text-faint);
+      font-variant-numeric: tabular-nums; }
+    /* "showing 46px": what the column actually paints when the table cannot give
+       it the width that was set. Faint, because it is information, not an error. */
+    .col-width-actual { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+    .col-panel-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
+    .col-lock-tag { font-size: 11px; color: var(--text-faint); }
+
     /* The Street column exists in the markup at all times so colspans and sort
        wiring stay constant; only its visibility is conditional. */
     .street-col, .street-cell { display: none; }
@@ -956,10 +1084,41 @@
       background: var(--field-bg); color: var(--text);
     }
     .work-bar input:focus { outline: none; border-color: var(--brand-ink); }
-    .work-bar .work-prog { width: 140px; height: 4px; background: var(--border); border-radius: 3px; overflow: hidden; }
-    .work-bar .work-prog span { display: block; height: 100%; background: var(--brand-ink); transition: width .2s; }
+    /* Two bars in one track (#697): the outer fill is WORKED (a row carries a
+       Goes To area, including a dock-flexed sibling), the inner fill is DONE
+       (the package was actually scanned off the monitor). Tyler scans each
+       package individually, so one number could never tell the truth about
+       both — a dock flex moves worked without moving done. */
+    .work-bar .work-prog { position: relative; width: 140px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .work-bar .work-prog span {
+      position: absolute; left: 0; top: 0; display: block; height: 100%;
+      background: var(--brand-ink); transition: width .2s;
+    }
+    .work-bar .work-prog span.work-prog-worked { opacity: .38; }
+    .work-bar .work-prog span.work-prog-done { opacity: 1; }
+    .work-bar .work-prog-note { font-size: 11px; font-weight: 700; color: var(--text-muted); }
     .work-bar .work-hint { font-size: 11px; color: var(--text-muted); }
     #work-toggle.on { background: var(--brand-ink); color: var(--surface); border-color: var(--brand-ink); }
+
+    /* The coded-count chip and the coded rows it filters (#697). Theme tokens
+       only — no new hardcoded hex (the budget in tests/theme-contrast-dom.test.js
+       is a ratchet), and no dark-mode override needed because every value here
+       is a token theme.css already redefines. */
+    .coded-chip {
+      font: 700 11px/1 inherit; padding: 4px 10px; border-radius: 20px; cursor: pointer;
+      background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft);
+    }
+    .coded-chip:hover { background: var(--hover-soft); color: var(--text); }
+    .coded-chip[aria-pressed="true"] {
+      background: var(--brand-ink); color: var(--surface); border-color: var(--brand-ink);
+    }
+    /* Dimmed in place, never removed: the list must not shrink under his hand
+       while dock flex is settling several rows at once (#612 decision 2). */
+    .manual-body tr.row-coded > td { opacity: .55; }
+    .manual-body tr.row-coded .coded-tag {
+      font: 800 10.5px/1 inherit; padding: 3px 7px; border-radius: 4px; margin-right: 6px;
+      background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft);
+    }
 </style>
   <link rel="stylesheet" href="theme.css">
   <script>(function(){try{if(localStorage.getItem('dashboard_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
@@ -998,7 +1157,11 @@
   <label style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--text-muted)">GOES TO
     <input type="text" id="work-area" maxlength="24" placeholder="area" autocomplete="off" aria-label="Work area for the package being worked">
   </label>
-  <div class="work-prog"><span id="work-prog"></span></div>
+  <!-- Worked (faint) and scanned (solid) share one track. The note beside it
+       spells out both numbers, because a bar alone cannot be read off a
+       monitor at arm's length mid-sort. -->
+  <div class="work-prog" id="work-prog-track"><span class="work-prog-worked" id="work-prog"></span><span class="work-prog-done" id="work-prog-done"></span></div>
+  <span class="work-prog-note" id="work-prog-note"></span>
   <span class="work-hint"><kbd>Enter</kbd> next &middot; <kbd>Esc</kbd> exit</span>
   <button class="btn btn-gray" onclick="setWorkMode(false)">Exit</button>
 </div>
@@ -1243,6 +1406,7 @@
       </select>
       <!-- Both labels are rewritten by updateReadyExportLabels() on every filter
            pass, so the screen and the clipboard can never disagree about scope. -->
+      <button class="btn btn-gray col-btn" id="columns-btn-ready" data-col-table="ready" aria-haspopup="true" aria-expanded="false" title="Reorder, resize or hide the columns on this table. Your arrangement is saved and survives new reports and new sort days.">&#8801; Columns</button>
       <button class="btn btn-purple" id="copy-btn" onclick="copyAutoTable()">Copy All</button>
       <button class="btn btn-purple" id="download-btn" onclick="downloadAutoTable()">&#8595; TSV</button>
     </div>
@@ -1257,14 +1421,18 @@
   <table>
     <thead>
       <tr>
-        <th>Tracking #</th>
-        <th>Code</th>
-        <th>Category</th>
-        <th class="sortable" data-table="auto" data-sort="time">Inbound Date</th>
-        <th class="sortable" data-table="auto" data-sort="time">Scan Time</th>
-        <th class="sortable" data-table="auto" data-sort="address">Recipient / Address</th>
-        <th>Service</th>
-        <th style="width:54px"></th>
+        <!-- Ready to Enter carries its own column layout (#701), separate state
+             from the manual tables because it is a different column set. Code
+             is locked here for the same reason Goes To is locked there: it is
+             the column Tyler WRITES, and job 3 ends at it. -->
+        <th data-col="label">Tracking #</th>
+        <th data-col="code">Code</th>
+        <th data-col="category">Category</th>
+        <th class="sortable" data-table="auto" data-sort="time" data-col="inbound">Inbound Date</th>
+        <th class="sortable" data-table="auto" data-sort="time" data-col="scan">Scan Time</th>
+        <th class="sortable" data-table="auto" data-sort="address" data-col="recipient">Recipient / Address</th>
+        <th data-col="service">Service</th>
+        <th style="width:54px" data-col="actions" data-col-role="trail"></th>
       </tr>
     </thead>
     <!-- Both lanes render into ONE table now. The tbodies stay separate so each
@@ -1283,6 +1451,13 @@
       <span class="badge" id="manual-badge">0</span>
       <span class="filter-note" id="manual-search-note"></span>
       <span class="filter-note showing-note" id="manual-showing"></span>
+      <!-- The coded-count chip (#697, spec #690 story 32; #612 decision 2,
+           Tyler: "they should stay but let me filter them out"). A coded row
+           does NOT leave the working list — it dims in place and this chip
+           hides it. Absent entirely at zero, so it is never volume without
+           information. -->
+      <button type="button" class="coded-chip" id="manual-coded-chip" style="display:none"
+        aria-pressed="false" onclick="toggleCodedHidden()"></button>
     </div>
     <div class="right">
       <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
@@ -1293,6 +1468,11 @@
            typed Goes To area on each card. Read-only, never codes a row. -->
       <button class="btn btn-gray" id="select-area-mine" onclick="selectRowsWithArea('mine')" title="Check every row in this section that already has a Goes To area, ready to barcode">&#10003; Select with area (0)</button>
       <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('mine')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+      <!-- The Columns panel (#701). One config for the merged manual section,
+           shared with Other work areas below it (same rows, same columns). The
+           button prints its own hidden count so a hidden column always leaves a
+           counted trace (the findability rule, #611). -->
+      <button class="btn btn-gray col-btn" id="columns-btn-manual" data-col-table="manual" aria-haspopup="true" aria-expanded="false" title="Reorder, resize or hide the columns on this table. Your arrangement is saved and survives new reports and new sort days.">&#8801; Columns</button>
       <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
       <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
         <option value="report">Report order</option>
@@ -1352,20 +1532,26 @@
   <table>
     <thead>
       <tr>
-        <th style="width:28px"></th>
-        <th>Tracking #</th>
-        <th>Category</th>
-        <th class="sortable" data-table="manual" data-sort="time">Inbound Date</th>
-        <th class="sortable" data-table="manual" data-sort="time">Scan Time</th>
-        <th>IB_WORK_AREA</th>
-        <th class="sortable street-col" data-table="manual" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
-        <th class="sortable goesto-col" data-table="manual" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
-        <th class="sortable" data-table="manual" data-sort="zip">ZIP</th>
-        <th class="sortable" data-table="manual" data-sort="isp">Service Provider</th>
-        <th>Reason</th>
-        <th class="sortable" data-table="manual" data-sort="address">Recipient / Address</th>
-        <th>Service</th>
-        <th style="width:180px">Resolve</th>
+        <!-- data-col names each column for lib/ibno-column-layout.js (#701).
+             The order here is MARKUP order and never changes; Tyler's order
+             lives in the layout model and is applied to this row and to every
+             data row after render. The two structural columns (the select
+             checkbox, the Resolve cell) carry data-col-role so the model keeps
+             them pinned at the ends. -->
+        <th style="width:28px" data-col="select" data-col-role="lead"></th>
+        <th data-col="label">Tracking #</th>
+        <th data-col="category">Category</th>
+        <th class="sortable" data-table="manual" data-sort="time" data-col="inbound">Inbound Date</th>
+        <th class="sortable" data-table="manual" data-sort="time" data-col="scan">Scan Time</th>
+        <th data-col="workarea">IB_WORK_AREA</th>
+        <th class="sortable street-col" data-table="manual" data-sort="street" data-col="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+        <th class="sortable goesto-col" data-table="manual" data-sort="goesto" data-col="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+        <th class="sortable" data-table="manual" data-sort="zip" data-col="zip">ZIP</th>
+        <th class="sortable" data-table="manual" data-sort="isp" data-col="isp">Service Provider</th>
+        <th data-col="reason">Reason</th>
+        <th class="sortable" data-table="manual" data-sort="address" data-col="recipient">Recipient / Address</th>
+        <th data-col="service">Service</th>
+        <th style="width:180px" data-col="code" data-col-role="trail">Resolve</th>
       </tr>
     </thead>
     <tbody id="post-sort-tbody" class="manual-body"></tbody>
@@ -1492,20 +1678,23 @@
     <table>
       <thead>
         <tr>
-          <th style="width:28px"></th>
-          <th class="sortable" data-table="other-areas" data-sort="report">Tracking #</th>
-          <th class="sortable" data-table="other-areas" data-sort="category">Category</th>
-          <th class="sortable" data-table="other-areas" data-sort="time">Inbound Date</th>
-          <th class="sortable" data-table="other-areas" data-sort="time">Scan Time</th>
-          <th class="sortable" data-table="other-areas" data-sort="wa">IB_WORK_AREA</th>
-          <th class="sortable street-col" data-table="other-areas" data-sort="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
-          <th class="sortable goesto-col" data-table="other-areas" data-sort="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
-          <th class="sortable" data-table="other-areas" data-sort="zip">ZIP</th>
-          <th class="sortable" data-table="other-areas" data-sort="isp">Service Provider</th>
-          <th class="sortable" data-table="other-areas" data-sort="reason">Reason</th>
-          <th class="sortable" data-table="other-areas" data-sort="address">Recipient / Address</th>
-          <th>Service</th>
-          <th style="width:180px">Resolve</th>
+          <!-- Same 14 columns, same data-col names, same layout state as the
+               merged section above (#701): Other work areas is the same rows
+               with the same columns, so one arrangement governs both tables. -->
+          <th style="width:28px" data-col="select" data-col-role="lead"></th>
+          <th class="sortable" data-table="other-areas" data-sort="report" data-col="label">Tracking #</th>
+          <th class="sortable" data-table="other-areas" data-sort="category" data-col="category">Category</th>
+          <th class="sortable" data-table="other-areas" data-sort="time" data-col="inbound">Inbound Date</th>
+          <th class="sortable" data-table="other-areas" data-sort="time" data-col="scan">Scan Time</th>
+          <th class="sortable" data-table="other-areas" data-sort="wa" data-col="workarea">IB_WORK_AREA</th>
+          <th class="sortable street-col" data-table="other-areas" data-sort="street" data-col="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+          <th class="sortable goesto-col" data-table="other-areas" data-sort="goesto" data-col="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+          <th class="sortable" data-table="other-areas" data-sort="zip" data-col="zip">ZIP</th>
+          <th class="sortable" data-table="other-areas" data-sort="isp" data-col="isp">Service Provider</th>
+          <th class="sortable" data-table="other-areas" data-sort="reason" data-col="reason">Reason</th>
+          <th class="sortable" data-table="other-areas" data-sort="address" data-col="recipient">Recipient / Address</th>
+          <th data-col="service">Service</th>
+          <th style="width:180px" data-col="code" data-col-role="trail">Resolve</th>
         </tr>
       </thead>
       <!-- Post Sort early rows demoted by the same population rule land in the
@@ -1515,6 +1704,11 @@
     </table>
   </div>
 </div>
+
+<!-- The Columns panel (#701). ONE element, re-rendered for whichever section's
+     Columns button opened it, so two panels can never disagree about a layout.
+     It edits the same state the header drag and the edge-pull do. -->
+<div class="col-panel" id="col-panel" role="dialog" aria-label="Column layout"></div>
 
 <!-- Options populated from lib/scan-codes.js at init (single source, #158/#200). -->
 <datalist id="common-codes"></datalist>
@@ -1577,6 +1771,13 @@
 <script src="lib/address-normalize.js"></script>
 <script src="lib/actual-area.js"></script>
 <script src="lib/sort-day.js"></script>
+<!-- The barcode sheet's own planning rules (#700): the stop-key
+     physical-address invariant, same-street bands with their position pills,
+     and the rule that a card may only ever print an area Tyler decided.
+     Loaded after actual-area, whose isMatchable it composes — one statement of
+     "a stop is a number and a name", shared with dock-flex propagation.
+     Barcode GATING is not here; that stays in lib/post-sort-lane.js (#693). -->
+<script src="lib/ibno-barcode-sheet.js"></script>
 <!-- Street-only copy: house number + street name, no unit, city, state or ZIP. -->
 <script src="lib/street-address.js"></script>
 <!-- The sort model: date/clock/address/firm/cluster keys and the comparator
@@ -1591,6 +1792,15 @@
      toggle, "showing X of Y". Loaded after ibno-rules / ibno-review-plan /
      actual-area / street-address, whose readers the page injects into it. -->
 <script src="lib/ibno-merged-view.js"></script>
+<!-- The job-2 working loop's rules (#697): the stop key (unit-exact, dock flex
+     rides it) against the building key (unit stripped, bands ride it), the
+     dock-flex plan, worked-vs-scanned progress, and which focused elements own
+     an Enter. Loaded after actual-area, whose two key functions it delegates
+     to rather than re-implementing. -->
+<script src="lib/ibno-work-loop.js"></script>
+<!-- The column layout model (#701): order, width and hidden state for the
+     merged page's tables. Pure state; the wiring below owns the pixels. -->
+<script src="lib/ibno-column-layout.js"></script>
 <!-- Code 128 encoder: the scannable rendering of a package's FULL scan barcode.
      Offline-first, so it is a local lib and never a CDN. -->
 <script src="lib/barcode-128.js"></script>
@@ -2419,6 +2629,10 @@ function resetViewControls() {
   // row on this one. resetViewControls() is the one funnel every load runs
   // through, which is why they reset HERE rather than at each call site.
   mergedFilters = IbnoMergedView.defaultFilters();
+  // Same rule, same funnel: the coded-count chip is a FILTER (#697), so it
+  // resets to "showing" on every load. A filter that survived a fresh pull
+  // would hide rows on a report it was never applied to.
+  codedHidden = false;
   manualCollapsed.area = manualCollapsed.zip = manualCollapsed.other = true;  // fresh report → all collapsed
 }
 
@@ -2444,7 +2658,12 @@ const sortComparator = IbnoSort.createComparator({
   ispOf: (item) => ispOf(item),
   streetOf: (item) => streetOf(item),
   actualAreaOf: (item) => actualAreaOf(item),
-  clusterKey: (address) => ActualArea.clusterKey(address),
+  // The BUILDING key, unit stripped — sort clustering, sheet bands and the
+  // Multi-stop chip ride it so one building walks together. Read through
+  // lib/ibno-work-loop.js so the building key and the unit-exact stop key have
+  // one named home each and a future edit cannot quietly swap one for the
+  // other (#697). Same value as ActualArea.clusterKey, which it delegates to.
+  clusterKey: (address) => IbnoWorkLoop.buildingOf(address),
 });
 
 // compareBySort(a, b, table) -> the page's one comparator, kept as a named
@@ -2961,7 +3180,12 @@ const MERGED_VIEW_CTX = {
   isExpress: (item) => itemIsExpress(item),
   bucketOf: (item) => manualBucket(item),
   isWorkAreaFlagged: (ibWork) => IbnoRules.isWorkAreaFlagged(ibWork),
-  clusterKey: (address) => ActualArea.clusterKey(address),
+  // The BUILDING key, unit stripped — sort clustering, sheet bands and the
+  // Multi-stop chip ride it so one building walks together. Read through
+  // lib/ibno-work-loop.js so the building key and the unit-exact stop key have
+  // one named home each and a future edit cannot quietly swap one for the
+  // other (#697). Same value as ActualArea.clusterKey, which it delegates to.
+  clusterKey: (address) => IbnoWorkLoop.buildingOf(address),
   streetOf: (item) => streetOf(item),
   ispOf: (item) => ispOf(item),
   stateOf: (item) => stateOf(item),
@@ -3027,33 +3251,55 @@ function renderManualSectionRows() {
     const tbody = bodies[i];
     if (!tbody) return;
     const mine = manualLaneItems(lane.key);
-    if (!mine.length) {
-      // PR #673 review finding 5: "nothing needs review here" is a statement
-      // about the LANE as Tyler sees it, and since #662/#663 a lane is TWO
-      // tbodies \u2014 its full-report rows and its early Post Sort group in the
-      // sibling tbody just above. Gated on manualLaneItems alone, this painted
-      // "No express packages ... need review" directly beneath 72 real, visible
-      // early Express rows. The early group owns its own rendering
-      // (renderEarlyLane); all that is needed here is to stay quiet when it has
-      // something to show.
-      if (!earlyLaneItems(lane.key).length) {
-        tbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
-          manualLaneEmptyMessage(lane.key) + '</td></tr>';
-      }
-      return;
-    }
+    // The rows Tyler has already coded stay in the list behind the coded chip's
+    // filter (#697), so a re-render has to put them back too — otherwise the
+    // first sort change or Undo would make the thing he asked to keep vanish
+    // after all.
+    const coded = codedItemsForLane(lane.key);
     MANUAL_GROUPS.forEach(g => {
       // Sort per LANE, not per section-type: each lane has its own sort select,
       // and passing the ground key here left the express selects inert.
       const items = mine.filter(it => manualBucket(it) === g.key)
         .sort((a, b) => compareBySort(a, b, lane.table));
-      if (!items.length) return;
+      const codedHere = coded.filter(it => manualBucket(it) === g.key)
+        .sort((a, b) => compareBySort(a, b, lane.table));
+      if (!items.length && !codedHere.length) return;
+      // The header's count is the OPEN rows — the number its bulk button would
+      // act on. The coded ones are counted by the header chip instead, so the
+      // two numbers never claim each other's rows.
       tbody.appendChild(buildGroupHeaderRow(g, items.length));
       items.forEach(item => {
         appendLaneRow(tbody, buildManualRow(item, g.key), item, open, MANUAL_COLSPAN);
       });
+      codedHere.forEach(item => {
+        const row = buildManualRow(item, g.key);
+        appendLaneRow(tbody, row, item, open, MANUAL_COLSPAN);
+        markRowCoded(row, item);
+      });
     });
+    // The lane's empty state, painted LAST so coded rows can sit above it.
+    //
+    // It is a statement about OPEN work — "All packages resolved ✓" is exactly
+    // the right thing to say over a lane whose rows are all coded (#697) — so
+    // it is gated on manualLaneItems, not on whether the tbody has any rows.
+    //
+    // PR #673 review finding 5: "nothing needs review here" is a statement
+    // about the LANE as Tyler sees it, and since #662/#663 a lane is TWO
+    // tbodies — its full-report rows and its early Post Sort group in the
+    // sibling tbody just above. Gated on manualLaneItems alone, this painted
+    // "No express packages ... need review" directly beneath 72 real, visible
+    // early Express rows. The early group owns its own rendering
+    // (renderEarlyLane); all that is needed here is to stay quiet when it has
+    // something to show.
+    if (!mine.length && !earlyLaneItems(lane.key).length) {
+      const empty = document.createElement('tr');
+      empty.className = 'lane-empty';
+      empty.innerHTML = '<td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
+        manualLaneEmptyMessage(lane.key) + '</td>';
+      tbody.appendChild(empty);
+    }
   });
+  renderCodedChip();
   updateManualBadge();
   updateBulkButtons();
   updateExpressSection();
@@ -3178,6 +3424,15 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
     postSortItems = PostSortLane.applyEarlyCode(postSortItems);
     renderEarlyLane();
   }
+
+  // The report is on the page, so the page rests in Work mode (#697). Last,
+  // after every lane has rendered, because it expands the buckets and puts the
+  // cursor on the first row that still needs him.
+  //
+  // `fresh` because this IS the fresh-report path: resetViewControls() above
+  // re-collapsed every bucket, so Work mode has to be re-applied even when it
+  // was already on. Tyler re-drops many times a shift.
+  applyRestingWorkMode({ fresh: true });
 }
 
 // ─── SESSION PERSISTENCE (#157) ─────────────────────────────────────────────
@@ -3497,6 +3752,7 @@ function buildAutoRow(item, idx) {
     if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy')) return;
     toggleDetailRow(tr, item, 8);
   });
+  layoutRow(tr, 'ready');   // #701, after every cell has been built and wired
   return tr;
 }
 
@@ -4013,6 +4269,20 @@ function applyManualSearch() {
       if (tr.classList.contains('detail-row')) { tr.style.display = lastVisible ? '' : 'none'; return; }
       if (tr.classList.contains('manual-group-row')) { tr.style.display = ''; return; } // resolved after the pass
       if (!tr.dataset.label) { tr.style.display = ''; lastVisible = true; return; }
+      // A CODED row (#697) is governed by the coded-count chip, its bucket's
+      // collapse state and the search — and by nothing else. It is deliberately
+      // left out of `shown`/`total`: those numbers speak for the OPEN working
+      // list, and folding finished rows into them would make "showing X of Y"
+      // report a queue longer than the one in front of him.
+      if (tr.dataset.coded) {
+        const codedBkt = tr.dataset.codedBucket;
+        const codedVisible = !codedHidden && rowMatchesQuery(tr, q) &&
+          (active || !manualCollapsed[codedBkt]);
+        tr.style.display = codedVisible ? '' : 'none';
+        lastVisible = codedVisible;
+        if (codedVisible && codedBkt) groupHasMatch[codedBkt] = true;
+        return;
+      }
       const match = rowMatchesQuery(tr, q) && passesChips(lane, tr);
       // A row shows if it matches the search and its bucket isn't collapsed. An
       // ACTIVE search overrides collapse, so searching always reveals its hits even
@@ -4295,6 +4565,10 @@ function markBarcodeDone(label, done) {
   barcodeDoneStore = BarcodeDone.setDone(barcodeDoneStore, l, !!done);
   persistBarcodeDone();
   renderEarlyLane();   // the row's own done marker + the lane's "N of M done"
+  // The Work-mode bar reads worked AND scanned (#697), and this is the only
+  // place "scanned" ever changes — without it the bar reports every dock flex
+  // and never a single scan.
+  if (workModeOn) refreshWorkBar();
 }
 
 // barcodeDoneSummary() -> { done, total } over the rows CURRENTLY in the
@@ -4364,6 +4638,664 @@ function streetCell(item) {
 // column is a one-line change instead of four that drift apart.
 const MANUAL_COLSPAN = 14;
 
+// ─── COLUMN LAYOUT WIRING (#701) ─────────────────────────────────────────────
+//
+// The RULES live in lib/ibno-column-layout.js — order, the one width ceiling,
+// the Code/Goes To lock, Provider last, the durable shape. Nothing below
+// re-decides any of them; this is DOM wiring and localStorage, which is the
+// split spec #690 asks for (born-in-lib mandate 3, #614).
+//
+// WHY THE COLSPAN IS UNTOUCHED BY ALL OF THIS. MANUAL_COLSPAN above still says
+// 14 and still spans every bucket header, empty state and detail row. Hiding a
+// column here sets `display:none` on its cells, which leaves the column in the
+// table's structure — a 14-wide colspan over 14 columns, three of them not
+// painted, is still exactly one row wide. Nothing here may change that constant,
+// and tests/ibno-column-layout-dom.test.js counts the header against it.
+//
+// The specs below are the tables' MARKUP order and must stay in step with the
+// data-col attributes in the <thead>s. That is not a comment-level promise: the
+// DOM test reads the header's data-col list and compares it to these arrays.
+const COLUMN_LAYOUT_KEY = 'ibno_column_layout';
+
+const COLUMN_SPECS = {
+  // Needs Manual Review and Other work areas: the same 14 columns, so ONE
+  // arrangement governs both (prototype round 6: the customizer must not
+  // multiply per lane).
+  manual: [
+    { key: 'select',    label: 'Select',              role: 'lead' },
+    { key: 'label',     label: 'Tracking #' },
+    { key: 'category',  label: 'Category' },
+    { key: 'inbound',   label: 'Inbound Date' },
+    { key: 'scan',      label: 'Scan Time' },
+    { key: 'workarea',  label: 'IB_WORK_AREA' },
+    { key: 'street',    label: 'Street' },
+    { key: 'goesto',    label: 'Goes To' },
+    { key: 'zip',       label: 'ZIP' },
+    { key: 'isp',       label: 'Service Provider' },
+    { key: 'reason',    label: 'Reason' },
+    { key: 'recipient', label: 'Recipient / Address' },
+    { key: 'service',   label: 'Service' },
+    { key: 'code',      label: 'Resolve (code)',      role: 'trail' },
+  ],
+  // Ready to Enter. Its own state: a different column set, and job 3's table.
+  ready: [
+    { key: 'label',     label: 'Tracking #' },
+    { key: 'code',      label: 'Code' },
+    { key: 'category',  label: 'Category' },
+    { key: 'inbound',   label: 'Inbound Date' },
+    { key: 'scan',      label: 'Scan Time' },
+    { key: 'recipient', label: 'Recipient / Address' },
+    { key: 'service',   label: 'Service' },
+    { key: 'actions',   label: 'Actions',             role: 'trail' },
+  ],
+};
+
+// Which tables each layout paints. Two tables share the manual layout.
+const COLUMN_TABLE_SELECTORS = {
+  manual: ['#manual-section table', '#other-areas-section table'],
+  ready: ['#auto-section table'],
+};
+
+// Held in memory, written through to localStorage on every change. Loaded
+// lazily so the first read cannot race the script's own definition order.
+let columnLayouts = null;
+
+function loadColumnLayouts() {
+  const stored = toolStorage.get(COLUMN_LAYOUT_KEY, null) || {};
+  columnLayouts = {};
+  Object.keys(COLUMN_SPECS).forEach(key => {
+    columnLayouts[key] = IbnoColumnLayout.deserialize(stored[key], COLUMN_SPECS[key]);
+  });
+  return columnLayouts;
+}
+
+function columnLayoutFor(key) {
+  if (!columnLayouts) loadColumnLayouts();
+  return columnLayouts[key] || IbnoColumnLayout.createLayout(COLUMN_SPECS[key] || []);
+}
+
+// Durable, deliberately. This is the ONLY state in the tool with no clock on it:
+// filters reset on every load, Goes To areas and set-aside state expire on the
+// report's INBOUND_DATE sort day, and the layout survives all of it. Nothing
+// here may be added to a reset path without changing the spec.
+function saveColumnLayouts() {
+  if (!columnLayouts) return;
+  const out = {};
+  Object.keys(columnLayouts).forEach(key => {
+    out[key] = IbnoColumnLayout.serialize(columnLayouts[key]);
+  });
+  toolStorage.set(COLUMN_LAYOUT_KEY, out);
+}
+
+// setColumnLayout(key, layout) -> the ONE write path. Every control (drag,
+// edge-pull, panel arrow, hide checkbox, width nudge, reset) ends here, so
+// "the panel edits the same state" is structural rather than a promise.
+function setColumnLayout(key, layout) {
+  if (!columnLayouts) loadColumnLayouts();
+  columnLayouts[key] = layout;
+  saveColumnLayouts();
+  applyColumnLayout(key);
+  syncColumnsButton(key);
+  if (columnPanelKey === key) renderColumnPanel(key);
+}
+
+function columnTables(key) {
+  const out = [];
+  (COLUMN_TABLE_SELECTORS[key] || []).forEach(sel => {
+    document.querySelectorAll(sel).forEach(t => out.push(t));
+  });
+  return out;
+}
+
+// Which layout a table belongs to, read back off the DOM so a handler bound to
+// a header knows its own state without closing over it.
+function columnKeyOfTable(table) {
+  let found = '';
+  Object.keys(COLUMN_TABLE_SELECTORS).forEach(key => {
+    if (!found && columnTables(key).indexOf(table) !== -1) found = key;
+  });
+  return found;
+}
+
+// layoutRow(tr, key) -> put ONE row's cells in Tyler's order.
+//
+// Called by the row builders on every row they make, so a row can never be
+// painted in markup order and then corrected a frame later. Rows that are not
+// data rows (bucket headers, empty states, expanded detail panels) all span the
+// table with a single colspan cell, so they are recognised by their cell count
+// and skipped — reordering a one-cell row would be meaningless, and hiding
+// anything on it would blank a message.
+function layoutRow(tr, key) {
+  const spec = COLUMN_SPECS[key];
+  if (!tr || !spec) return;
+  const cells = Array.prototype.slice.call(tr.children);
+  if (cells.length !== spec.length) return;
+  // First contact: name the cells. The builders emit them in MARKUP order, which
+  // is the spec's own order, so index is the naming. After this the row carries
+  // its own names and can be re-laid-out any number of times.
+  cells.forEach((td, i) => { if (!td.dataset.col) td.dataset.col = spec[i].key; });
+  IbnoColumnLayout.columnsFor(spec, columnLayoutFor(key)).forEach(col => {
+    const td = cells.filter(c => c.dataset.col === col.key)[0];
+    if (!td) return;
+    tr.appendChild(td);                       // re-append in render order
+    // '' rather than 'table-cell': the Street column's visibility is owned by
+    // Work mode's CSS (body.work-mode .street-cell), and an inline table-cell
+    // here would override that and show Street with Work mode off.
+    td.style.display = col.hidden ? 'none' : '';
+    if (col.role === 'data') applyCellWidth(td, col.width);
+  });
+}
+
+// A pinned width is applied to the header AND to every cell, because an HTML
+// table column is only as narrow as its widest cell: a width on the <th> alone
+// is a suggestion the first long address overrules. overflow-wrap lets a long
+// value break so the cell CAN reach the width — it wraps and the row grows
+// taller. It never clips: nothing in this tool truncates (story 29).
+//
+// ONLY CALLED FOR 'data' COLUMNS. The structural lead and trail cells carry
+// their widths in the markup (the 28px checkbox, the 180px Resolve cell, Ready
+// to Enter's 54px action cell) and the model always answers null for them — so
+// calling this on one erased an inline width nobody could restore. That fired on
+// every cold load, with the default layout and no user action at all: three
+// tables reflowed differently than they do on main, for every user, forever.
+function applyCellWidth(cell, width) {
+  if (!cell) return;
+  if (width) {
+    cell.style.width = width + 'px';
+    cell.style.maxWidth = width + 'px';
+    cell.style.overflowWrap = 'anywhere';
+  } else {
+    cell.style.width = '';
+    cell.style.maxWidth = '';
+    cell.style.overflowWrap = '';
+  }
+}
+
+// applyColumnLayout(key) -> repaint every header and every existing row.
+function applyColumnLayout(key) {
+  const spec = COLUMN_SPECS[key];
+  if (!spec) return;
+  const cols = IbnoColumnLayout.columnsFor(spec, columnLayoutFor(key));
+  columnTables(key).forEach(table => {
+    const headRow = table.querySelector('thead tr');
+    if (headRow) {
+      cols.forEach(col => {
+        const th = headRow.querySelector('th[data-col="' + col.key + '"]');
+        if (!th) return;
+        headRow.appendChild(th);
+        th.style.display = col.hidden ? 'none' : '';
+        if (col.role === 'data') applyCellWidth(th, col.width);
+        th.draggable = !!col.movable;
+        ensureColumnResizer(th, col);
+      });
+    }
+    table.querySelectorAll('tbody tr').forEach(tr => layoutRow(tr, key));
+  });
+}
+
+function applyColumnLayouts() {
+  Object.keys(COLUMN_SPECS).forEach(applyColumnLayout);
+  Object.keys(COLUMN_SPECS).forEach(syncColumnsButton);
+}
+
+// The counted trace: the button always says how many columns it is holding back
+// (findability rule #611 — nothing vanishes without a number).
+function syncColumnsButton(key) {
+  const btn = document.querySelector('.col-btn[data-col-table="' + key + '"]');
+  if (!btn) return;
+  const n = IbnoColumnLayout.hiddenCount(columnLayoutFor(key));
+  btn.textContent = '≡ Columns' + (n ? ' · ' + n + ' hidden' : '');
+}
+
+// ─── EDGE-PULL RESIZE ───────────────────────────────────────────────────────
+//
+// One handle per resizable header, on its right border. The width it computes
+// goes through IbnoColumnLayout.setWidth, which is the SAME call the panel's
+// −/+ buttons make: one ceiling, two ways to reach it.
+let colResizeState = null;
+let colResizeSuppressClickUntil = 0;
+
+function ensureColumnResizer(th, col) {
+  const existing = th.querySelector('.col-resizer');
+  // Structural lead/trail cells are sized by the markup and get no handle.
+  if (col.role !== 'data') { if (existing) existing.remove(); return; }
+  if (existing) return;
+  const handle = document.createElement('span');
+  handle.className = 'col-resizer';
+  handle.setAttribute('aria-hidden', 'true');
+  handle.addEventListener('pointerdown', startColumnResize);
+  th.appendChild(handle);
+}
+
+function startColumnResize(e) {
+  const th = e.target.closest('th[data-col]');
+  const table = th && th.closest('table');
+  const key = table ? columnKeyOfTable(table) : '';
+  if (!key) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const col = th.dataset.col;
+  colResizeState = {
+    key: key,
+    col: col,
+    th: th,
+    startX: e.clientX,
+    startWidth: currentColumnWidth(key, th, col),
+    width: null,
+    moved: false,
+  };
+  document.body.classList.add('col-resizing');
+  document.addEventListener('pointermove', onColumnResizeMove);
+  document.addEventListener('pointerup', endColumnResize);
+  // A pointer stream can END without a pointerup: a browser gesture takes over,
+  // the window loses the pointer, a touch is cancelled. Without this the drag
+  // state stays non-null and body.col-resizing sticks, so the whole page keeps
+  // a col-resize cursor and the next pointermove anywhere resizes the column.
+  document.addEventListener('pointercancel', endColumnResize);
+}
+
+// ─── TWO SEEDS, BECAUSE THE PIN AND THE PAINT CAN DISAGREE ──────────────────
+//
+// The tables are width:100%, so a pinned width is a REQUEST the auto-layout
+// table grants only out of the space its other columns can give up. On a 2400px
+// screen a 600px pin paints 600px; at 1440px the same pin paints 46px. Both
+// numbers are real, and which one a control should start from depends on which
+// control it is:
+//
+//   DRAG  starts from the PAINTED width. The user has their pointer on the
+//         column's visible edge; starting anywhere else would make the column
+//         jump out from under the hand that grabbed it.
+//
+//   NUDGE starts from the STORED PIN. The −/+ buttons sit next to the number
+//         they edit, so they must move THAT number, every click, in the
+//         direction on the button.
+//
+// Seeding the nudges from the paint is what produced the ratchet the verify
+// caught at 1600px: Wider pinned 85, which painted 40 (overflow-wrap collapses
+// the column's min-content width, so the auto-layout table hands the space to
+// its neighbours), and the next Wider click seeded from 40 and pinned 60. A
+// button labelled Wider made the number go DOWN, then both buttons went inert.
+// The stored pin is monotonic by construction; the paint is not, so it is not
+// allowed anywhere near the nudge.
+
+// paintedColumnWidth(th) -> what the column measures on screen, or 0 with no
+// layout (jsdom, or a collapsed section).
+function paintedColumnWidth(th) {
+  return th && th.getBoundingClientRect ? Math.round(th.getBoundingClientRect().width) : 0;
+}
+
+// currentColumnWidth(key, th, col) -> the DRAG's seed. Painted first.
+function currentColumnWidth(key, th, col) {
+  return paintedColumnWidth(th) || IbnoColumnLayout.widthOf(columnLayoutFor(key), col) ||
+    IbnoColumnLayout.MIN_WIDTH;
+}
+
+// pinnedColumnWidth(key, th, col) -> the NUDGE's seed. The stored pin first, so
+// every click moves the stored number by exactly one step; the paint is only a
+// starting point for a column that has never been pinned at all.
+function pinnedColumnWidth(key, th, col) {
+  return IbnoColumnLayout.widthOf(columnLayoutFor(key), col) || paintedColumnWidth(th) ||
+    IbnoColumnLayout.MIN_WIDTH;
+}
+
+// DURING the drag, only the header is touched.
+//
+// Committing on every pointermove meant a synchronous localStorage JSON write
+// plus a full re-layout of every row in BOTH manual tables — 14 appendChild and
+// style writes per row — on every mouse move. Collapsed rows are display:none,
+// not absent, so that was the whole report, dozens of times a second. The model
+// still owns the number (clampWidth on every move, so the ceiling is live under
+// the pointer); it is just written once, on release.
+function onColumnResizeMove(e) {
+  if (!colResizeState) return;
+  const dx = e.clientX - colResizeState.startX;
+  if (dx) colResizeState.moved = true;
+  const w = IbnoColumnLayout.clampWidth(colResizeState.startWidth + dx);
+  colResizeState.width = w;
+  applyCellWidth(colResizeState.th, w);
+}
+
+function endColumnResize() {
+  const state = colResizeState;
+  colResizeState = null;
+  document.body.classList.remove('col-resizing');
+  document.removeEventListener('pointermove', onColumnResizeMove);
+  document.removeEventListener('pointerup', endColumnResize);
+  document.removeEventListener('pointercancel', endColumnResize);
+  if (!state) return;
+  // Every one of these headers is also a sort control, and a browser fires a
+  // click after the pointerup that ended the drag. Without this the supervisor
+  // re-sorts his list every time he resizes a column (the same trap #515 hit in
+  // lib/data-table.js).
+  if (state.moved) colResizeSuppressClickUntil = Date.now() + 300;
+  if (state.width === null) return;   // a press with no movement changes nothing
+  // The one commit: store it, and lay the rows out to match the header.
+  setColumnLayout(state.key, IbnoColumnLayout.setWidth(
+    columnLayoutFor(state.key), state.col, state.width));
+}
+
+// ─── DRAG TO REORDER ────────────────────────────────────────────────────────
+//
+// The dragged column lands AT the target header's slot, which is what the drop
+// indicator on that header shows. Deliberately index-based rather than
+// pointer-position based: the model owns the order, so the drop is one
+// moveTo call and there is no second notion of "where it went".
+let colDragKey = '';
+let colDragCol = '';
+
+function clearColumnDropMarks() {
+  document.querySelectorAll('th.col-drop-before, th.col-drop-after, th.col-dragging')
+    .forEach(th => th.classList.remove('col-drop-before', 'col-drop-after', 'col-dragging'));
+}
+
+function onColumnDragStart(e) {
+  const th = e.target.closest && e.target.closest('th[data-col]');
+  if (!th || !th.draggable) return;
+  const table = th.closest('table');
+  colDragKey = table ? columnKeyOfTable(table) : '';
+  colDragCol = th.dataset.col;
+  if (!colDragKey) return;
+  th.classList.add('col-dragging');
+  // Firefox refuses to start a drag without payload; the payload itself is
+  // never read back (the two module-level values above are the state).
+  if (e.dataTransfer) {
+    try { e.dataTransfer.setData('text/plain', colDragCol); } catch (err) { /* not required */ }
+    e.dataTransfer.effectAllowed = 'move';
+  }
+}
+
+// dropTargetHeader(e) -> the header under the pointer, but ONLY if it belongs
+// to the table set the dragged column came from.
+//
+// Six column names (label, category, inbound, scan, recipient, service) exist in
+// BOTH specs, so without the table check, dragging Needs Manual Review's
+// Category onto Ready to Enter's Recipient header silently reordered the MANUAL
+// table while the table under the pointer did not move at all.
+function dropTargetHeader(e) {
+  const th = e.target.closest && e.target.closest('th[data-col]');
+  if (!th || th.dataset.col === colDragCol) return null;
+  const table = th.closest('table');
+  if (!table || columnKeyOfTable(table) !== colDragKey) return null;
+  return columnLayoutFor(colDragKey).order.indexOf(th.dataset.col) === -1 ? null : th;
+}
+
+function onColumnDragOver(e) {
+  if (!colDragKey) return;
+  const th = dropTargetHeader(e);
+  if (!th) return;                                    // not a droppable slot
+  const order = columnLayoutFor(colDragKey).order;
+  e.preventDefault();
+  clearColumnDropMarks();
+  document.querySelectorAll('th[data-col="' + colDragCol + '"]').forEach(o => o.classList.add('col-dragging'));
+  th.classList.add(order.indexOf(th.dataset.col) < order.indexOf(colDragCol)
+    ? 'col-drop-before' : 'col-drop-after');
+}
+
+function onColumnDrop(e) {
+  if (!colDragKey) return;
+  const th = dropTargetHeader(e);
+  const key = colDragKey, col = colDragCol;
+  clearColumnDropMarks();
+  colDragKey = ''; colDragCol = '';
+  // A drop on another table, on a structural column, or on nothing at all is
+  // simply not a move. It must never fall through to reordering the table the
+  // pointer left behind.
+  if (!th) return;
+  e.preventDefault();
+  const to = columnLayoutFor(key).order.indexOf(th.dataset.col);
+  if (to === -1) return;
+  setColumnLayout(key, IbnoColumnLayout.moveTo(columnLayoutFor(key), col, to));
+}
+
+function onColumnDragEnd() {
+  clearColumnDropMarks();
+  colDragKey = ''; colDragCol = '';
+}
+
+// ─── THE PANEL ──────────────────────────────────────────────────────────────
+//
+// The discoverable, precise path to everything the drag and the edge-pull do,
+// plus the only path to hiding. It reads and writes the SAME layout object, so
+// a column dragged in the header is already in its new place when the panel
+// opens (round 6 of the prototype).
+let columnPanelKey = '';
+
+function toggleColumnPanel(key, btn) {
+  if (columnPanelKey === key) { closeColumnPanel(); return; }
+  const panel = document.getElementById('col-panel');
+  if (!panel) return;
+  columnPanelKey = key;
+  renderColumnPanel(key);
+  panel.classList.add('open');
+  if (btn && btn.getBoundingClientRect) {
+    const r = btn.getBoundingClientRect();
+    panel.style.top = (r.bottom + window.scrollY + 6) + 'px';
+    panel.style.left = Math.max(8, r.left + window.scrollX - 120) + 'px';
+  }
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+}
+
+function closeColumnPanel() {
+  const panel = document.getElementById('col-panel');
+  if (panel) { panel.classList.remove('open'); panel.innerHTML = ''; }
+  document.querySelectorAll('.col-btn').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  columnPanelKey = '';
+}
+
+// nudgeColumnWidth(key, col, delta) -> the panel's −/+ , seeded from the STORED
+// PIN (see the two-seeds comment above). The SAME setWidth call the edge-pull
+// commits through, so the ceiling and the floor are one rule for both paths.
+function nudgeColumnWidth(key, col, delta) {
+  const th = columnHeaderFor(key, col);
+  setColumnLayout(key, IbnoColumnLayout.setWidth(columnLayoutFor(key), col,
+    pinnedColumnWidth(key, th, col) + delta));
+}
+
+// How far the painted width may drift from the pin before the panel says so.
+// Big enough that sub-pixel rounding never decorates a row, small enough that a
+// real squeeze is always announced.
+const COLUMN_WIDTH_TOLERANCE = 4;
+
+// The first table a layout governs, which is the one the panel measures against.
+// (The manual layout paints two tables; they sit in the same page column and
+// carry the same widths, so either answers the question.)
+function columnHeaderFor(key, col) {
+  const sel = (COLUMN_TABLE_SELECTORS[key] || [])[0];
+  return sel ? document.querySelector(sel + ' thead th[data-col="' + col + '"]') : null;
+}
+
+function renderColumnPanel(key) {
+  const panel = document.getElementById('col-panel');
+  const spec = COLUMN_SPECS[key];
+  if (!panel || !spec) return;
+  const layout = columnLayoutFor(key);
+  const cols = IbnoColumnLayout.columnsFor(spec, layout).filter(c => c.role === 'data');
+  panel.innerHTML = '';
+  panel.dataset.colTable = key;
+
+  const h = document.createElement('h4');
+  h.textContent = 'Columns';
+  panel.appendChild(h);
+  const note = document.createElement('p');
+  note.className = 'col-panel-note';
+  // The honesty line. A width is a request, not a guarantee: the table is
+  // width:100%, so a pinned column can only take space the other columns can
+  // give up. Narrowing is always exact; widening stops where the table runs out
+  // of room, which is why the number here can read 600px while the column on
+  // screen is narrower. Say so, rather than letting the panel look broken.
+  note.textContent = 'Drag a header to reorder, or use the arrows. Widths cap at ' +
+    IbnoColumnLayout.MAX_WIDTH + 'px and share the space the table has: when a column ' +
+    'cannot get the width you set, the row says what it is showing instead — hide a ' +
+    'column or widen the window to free up room. Saved for good: new reports and new ' +
+    'sort days keep this arrangement.';
+  panel.appendChild(note);
+
+  cols.forEach((col, i) => {
+    const row = document.createElement('div');
+    row.className = 'col-row' + (col.locked ? ' col-locked' : '');
+    row.dataset.col = col.key;
+
+    const up = document.createElement('button');
+    up.type = 'button'; up.textContent = '▲'; up.title = 'Move left';
+    up.setAttribute('aria-label', 'Move ' + col.label + ' left');
+    up.disabled = i === 0;
+    up.addEventListener('click', () => setColumnLayout(key,
+      IbnoColumnLayout.moveBy(columnLayoutFor(key), col.key, -1)));
+    row.appendChild(up);
+
+    const down = document.createElement('button');
+    down.type = 'button'; down.textContent = '▼'; down.title = 'Move right';
+    down.setAttribute('aria-label', 'Move ' + col.label + ' right');
+    down.disabled = i === cols.length - 1;
+    down.addEventListener('click', () => setColumnLayout(key,
+      IbnoColumnLayout.moveBy(columnLayoutFor(key), col.key, 1)));
+    row.appendChild(down);
+
+    const name = document.createElement('label');
+    name.className = 'col-name';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'col-show';
+    box.checked = !col.hidden;
+    // The lock is enforced by the model; disabling the box only says so on
+    // screen. Round 6 shipped it the other way round and the probe caught that
+    // the function would still hide them.
+    box.disabled = col.locked;
+    box.addEventListener('change', () => setColumnLayout(key,
+      IbnoColumnLayout.setHidden(columnLayoutFor(key), col.key, !box.checked)));
+    name.appendChild(box);
+    name.appendChild(document.createTextNode(' ' + col.label));
+    if (col.locked) {
+      const tag = document.createElement('span');
+      tag.className = 'col-lock-tag';
+      tag.textContent = ' · always shown';
+      tag.title = 'This is a column you write to, so it cannot be hidden.';
+      name.appendChild(tag);
+    }
+    // Street has a SECOND visibility owner: Work mode (.street-col is display
+    // none until body.work-mode). Ticked here means "not hidden by you", which
+    // is not the same as "on screen", and a checkbox that says visible next to a
+    // column nobody can see reads as a bug. Say which switch is holding it.
+    // The count is untouched on purpose: hiding Street still counts as hidden,
+    // so the findability rule keeps its number.
+    if (col.key === 'street') {
+      const tag = document.createElement('span');
+      tag.className = 'col-lock-tag';
+      tag.textContent = ' · shows in Work mode';
+      tag.title = 'Work mode (W) is what puts the Street column on screen. Unticking here hides it in Work mode too.';
+      name.appendChild(tag);
+    }
+    row.appendChild(name);
+
+    // The nudges move the STORED PIN by one step per click (pinnedColumnWidth),
+    // so they are monotonic whatever the table manages to paint. Seeding them
+    // from half the ceiling once made "Narrower" pin ZIP to 280px on its first
+    // click; seeding them from the PAINTED width once made "Wider" ratchet the
+    // number down at 1600px.
+    const minus = document.createElement('button');
+    minus.type = 'button'; minus.textContent = '−'; minus.title = 'Narrower';
+    minus.setAttribute('aria-label', 'Narrow ' + col.label);
+    minus.addEventListener('click', () => nudgeColumnWidth(key, col.key, -20));
+    row.appendChild(minus);
+
+    const w = document.createElement('span');
+    w.className = 'col-width';
+    w.textContent = col.width ? col.width + 'px' : 'auto';
+    row.appendChild(w);
+
+    // THE PANEL MUST NOT LIE ABOUT WHAT IS ON SCREEN.
+    //
+    // A pin is a request the width:100% table grants out of what its other
+    // columns can spare, so at a laptop width a 600px pin can paint 46px. The
+    // panel used to show only the pin, which left the number Tyler typed sitting
+    // next to a column that is nothing like it, with nothing to explain the gap.
+    //
+    // So when the paint MATERIALLY disagrees with the pin, the row says both:
+    // "600px  showing 46px". Quiet, in the faint tone the rest of the panel uses
+    // for notes, because this is information and not an error — the layout is
+    // saved and it will paint in full on a wider screen.
+    //
+    // Only when a paint exists at all (0 means no layout — jsdom, or a collapsed
+    // section — and "showing 0px" would be the panel lying in the other
+    // direction), and only past a tolerance, so a 2px rounding difference does
+    // not decorate every row.
+    const painted = paintedColumnWidth(columnHeaderFor(key, col.key));
+    if (col.width && painted && Math.abs(painted - col.width) > COLUMN_WIDTH_TOLERANCE) {
+      const actual = document.createElement('span');
+      actual.className = 'col-width-actual';
+      actual.textContent = 'showing ' + painted + 'px';
+      actual.title = painted < col.width
+        ? 'There is not enough room for ' + col.width + 'px at this window size, so the ' +
+          'column is showing ' + painted + 'px. Your width is saved — hide a column, or ' +
+          'widen the window, and it will take the space.'
+        : 'The table is giving this column more room than the ' + col.width + 'px you set.';
+      row.appendChild(actual);
+    }
+
+    const plus = document.createElement('button');
+    plus.type = 'button'; plus.textContent = '+'; plus.title = 'Wider';
+    plus.setAttribute('aria-label', 'Widen ' + col.label);
+    plus.addEventListener('click', () => nudgeColumnWidth(key, col.key, 20));
+    row.appendChild(plus);
+
+    const auto = document.createElement('button');
+    auto.type = 'button'; auto.textContent = 'auto'; auto.title = 'Back to automatic width';
+    auto.setAttribute('aria-label', 'Automatic width for ' + col.label);
+    auto.disabled = !col.width;
+    auto.addEventListener('click', () => setColumnLayout(key,
+      IbnoColumnLayout.clearWidth(columnLayoutFor(key), col.key)));
+    row.appendChild(auto);
+
+    panel.appendChild(row);
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'col-panel-actions';
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.id = 'col-reset';
+  reset.textContent = 'Reset columns';
+  reset.addEventListener('click', () => setColumnLayout(key, IbnoColumnLayout.reset(spec)));
+  actions.appendChild(reset);
+  panel.appendChild(actions);
+}
+
+function initColumnLayout() {
+  loadColumnLayouts();
+  document.querySelectorAll('.col-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleColumnPanel(btn.dataset.colTable, btn);
+    });
+  });
+  // Header drag and drop, delegated so headers repainted by a layout change
+  // never need rebinding.
+  document.addEventListener('dragstart', onColumnDragStart);
+  document.addEventListener('dragover', onColumnDragOver);
+  document.addEventListener('drop', onColumnDrop);
+  document.addEventListener('dragend', onColumnDragEnd);
+  // Swallow the click a finished resize drag trails, before the sort handler
+  // (which is bound on the header) can see it.
+  document.addEventListener('click', (e) => {
+    // Only the click ON A HEADER is swallowed, and only right after a drag that
+    // moved. A blanket time window ate the very next click anywhere on the page
+    // — caught in the browser verify, where resizing a column and then reaching
+    // for the Columns button did nothing at all.
+    if (Date.now() < colResizeSuppressClickUntil &&
+        e.target.closest && e.target.closest('th[data-col]')) {
+      colResizeSuppressClickUntil = 0;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    // Click-away closes the panel; a click inside it does not.
+    if (columnPanelKey && !(e.target.closest && (e.target.closest('#col-panel') || e.target.closest('.col-btn')))) {
+      closeColumnPanel();
+    }
+  }, true);
+  applyColumnLayouts();
+}
+
 // goesToCell(item, opts) -> opts.noPropagate: true when the caller's own
 // commit path never fills a sibling row at the same address (the Post Sort
 // lane's commitPostSortGoesTo, unlike commitGoesTo) — the tooltip must not
@@ -4405,7 +5337,11 @@ function attachGoesToInput(tr, item) {
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('keydown', e => {
     e.stopPropagation();  // the page-level C/B copy-mode shortcuts must not fire while typing
-    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    // #697: Enter IS the loop, on the row's own box as well as on the shared
+    // bar. blur() commits (the blur handler below), then the cursor moves to
+    // the next row that still needs him with ITS street already copied — so
+    // the pass never leaves the keyboard.
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); advanceFromRow(tr); }
     else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
   });
   input.addEventListener('change', e => e.stopPropagation());
@@ -4420,14 +5356,33 @@ function commitGoesTo(label, raw) {
   // No readable sort day means no expiry date, so the write is refused out
   // loud and the box snaps back to whatever is really stored.
   if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
+  const items = manualAddressPairs();
+  // What ONE typed area is allowed to cover, computed before the write
+  // (lib/ibno-work-loop.js). Unit-exact: the stop key requires a house number
+  // and a street name, and APT 171 is a different stop from APT 370.
+  const plan = IbnoWorkLoop.dockFlexPlan(items, label);
   const result = ActualArea.set(actualAreaStore, label, raw, {
-    items: manualAddressPairs(),
+    items: items,
     // The LOADED REPORT's sort day, not the device's (#695). Stamping with the
     // device date is what made a 1:30 AM sort look like two days.
     today: currentSortDay,
   });
   actualAreaStore = result.store;
   saveActualAreas();
+  // DRIFT GUARD (#697). The preview and the write derive the stop from the same
+  // key, so they agree by construction — and if they ever stop agreeing, that
+  // is dock flex reaching outside the stop, which is the wrong-belt error this
+  // whole split exists to prevent. It is said out loud rather than written
+  // silently.
+  const strayed = result.changed.filter(l => l !== label && plan.targets.indexOf(l) === -1);
+  if (strayed.length) {
+    // warn: this is the wrong-belt backstop, and it shares the note element with
+    // the routine spread message written further down the same commit. Without
+    // the flag it lost that race every single time.
+    flashGoesToNote('⚠ Dock flex reached ' + strayed.length +
+      ' package(s) outside this stop — check those addresses before scanning them.',
+      { warn: true });
+  }
   result.changed.forEach(repaintGoesTo);
   // Keep the typed row's own input showing the normalized value even when the
   // store didn't change (e.g. re-typing "belt 12" over "BELT 12").
@@ -4538,6 +5493,119 @@ function mainReportDispositionMap() {
 }
 
 let postSortItems = [];
+
+// ─── ISSUE #668: THE EARLY LANE SURVIVES A REFRESH ─────────────────────────
+//
+// Its OWN key, beside the main report's ibno_session rather than inside it.
+// The two are mutually exclusive by construction under ADR 0021 (one report at
+// a time): a Post Sort load runs resetApp(), which removes SESSION_KEY and
+// calls clearPostSortLane(); a main-report load calls clearPostSortLane(),
+// which removes this key. So the writer that arrived last is the only one with
+// a payload on disk, and "who owns the main slot on boot" answers itself.
+//
+// The payload SHAPE lives in lib/post-sort-lane.js (snapshotEarly /
+// restoreEarly, a whitelist of parsed scalars, version- and day-stamped). This
+// page only does storage I/O, exactly as it does for the session.
+const POST_SORT_KEY = 'ibno_post_sort';
+
+// persistEarlyLane() -> write, or REMOVE when the lane is empty. An empty lane
+// must leave no payload behind: "Clear early" and "Load New File" both end in
+// renderEarlyLane(), and a cleared lane that came back on the next reload is
+// the same class of bug as one that did not come back at all.
+//
+// Called from the top of renderEarlyLane() — the single funnel every change to
+// postSortItems already passes through (its own comment says so, and the
+// memoized lane split is dropped there for the same reason). Hooking the one
+// funnel rather than each mutation site is what stops a future write path from
+// silently shipping without persistence.
+function persistEarlyLane() {
+  if (!postSortItems.length) { toolStorage.remove(POST_SORT_KEY); return; }
+  // The payload stamps ITSELF with the sort day of its own rows' INBOUND_DATE
+  // (snapshotEarly). Nothing here passes a device date, and nothing here may
+  // start: this lane is worked across midnight every night, and a calendar
+  // stamp would delete it at 00:05 mid-sort.
+  const snap = PostSortLane.snapshotEarly(postSortItems);
+  // Free the previous payload's bytes before writing the new one, same reason
+  // persistSession() does: replacing a key in a near-full store needs room for
+  // both copies at once, so an in-place overwrite can fail even when the new
+  // value is the same size.
+  toolStorage.remove(POST_SORT_KEY);
+  if (toolStorage.set(POST_SORT_KEY, snap)) { postSortPersistWarning(false); return; }
+  postSortPersistWarning(true);
+}
+
+// postSortPersistWarning(show) -> the early lane's OWN "this did not save"
+// notice, on the lane's own status line.
+//
+// NO RECLAIM LADDER HERE, AND THAT IS A DECISION, not an omission. #668 names
+// the quota as the risk for this payload, and the answer it specifies is the
+// payload itself: parsed scalars on a whitelist, ~250 bytes a row, measured at
+// under 1.2 MB for a 2,467-row pull against a ~5 MB origin quota. That is the
+// mitigation. persistSession() escalates past that point — trim the Repeat
+// History's detail, then drop the history outright — because an in-progress
+// CODING session is real work that cannot be recovered without re-doing it.
+// This lane is not that: it is a working set that a single re-drop of the Post
+// Sort report rebuilds in full, and that drop re-copies the lookup batch on its
+// own. Spending the cross-day, cross-device Repeat History to save something
+// one drop rebuilds inverts the value ordering that ladder exists to encode,
+// and if the two ever compete for the last bytes, the session must win.
+//
+// It does NOT reuse #storage-warning. That banner states "Older Repeat History
+// detail was trimmed to try to make room" — true of persistSession, a LIE here,
+// since nothing was trimmed. Worse, clearing it on a successful early-lane
+// write would hide a genuine session-quota warning that is still true. So the
+// lane speaks on its own channel and never touches the session's.
+function postSortPersistWarning(show) {
+  if (!show) return;
+  postSortStatus('This browser\'s storage is full, so these early rows will not survive a refresh. ' +
+    'Work and Copy what you have now, or re-drop the Post Sort report after a reload.', true);
+}
+
+// persistedSessionSortDay() -> the sort day of the main-report session sitting
+// in storage, or '' when there is none. Read WITHOUT restoring it.
+//
+// This is what seeds the sort-day clock for the early lane's restore decision
+// on a cold boot, where currentSortDay is still ''. It is the only thing on
+// disk that can prove a LATER sort has already been worked — which is exactly
+// the fact restoreEarly needs to refuse last night's lane, and the fact a
+// device date was standing in for before.
+function persistedSessionSortDay() {
+  try {
+    const s = IbnoSession.restore(toolStorage.get(SESSION_KEY, null));
+    if (!s) return '';
+    return SortDay.sortDayOf(s.auto.concat(s.manual, s.resolved));
+  } catch (e) { return ''; }
+}
+
+// restoreEarlyLane(knownSortDay) -> put the lane back on boot, or leave the
+// page cold. Returns whether it restored, so boot can honour ADR 0021's
+// one-report-at-a-time rule: a restored early lane HOLDS THE MAIN SLOT and
+// restoreSession() is skipped, the same way a live Post Sort load resets the
+// main report.
+//
+// restoreEarly() refuses a payload from a superseded sort day, one whose stamp
+// disagrees with its own rows, an unknown version and a malformed payload —
+// and every refusal is CLEANED UP here rather than left to be re-evaluated on
+// every reload forever.
+function restoreEarlyLane(knownSortDay) {
+  const items = PostSortLane.restoreEarly(toolStorage.get(POST_SORT_KEY, null),
+    { sortDay: knownSortDay || currentSortDay });
+  if (!items.length) { toolStorage.remove(POST_SORT_KEY); return false; }
+  postSortItems = items;
+  // The restored rows carry their own INBOUND_DATE, so the sort day comes back
+  // with them and the typed Goes To areas stay scoped to it (#695) — the same
+  // reason restoreSession() reads the day off items rather than off a file.
+  applySortDayFrom(postSortItems);
+  // The Post Sort report holds the main slot, so the page comes up on the work
+  // rather than the drop zone, exactly as loadPostSortAsMain leaves it.
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('reset-btn').style.display = 'inline-flex';
+  postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
+    ' restored from this device — no file to re-drop.', false);
+  renderEarlyLane();
+  return true;
+}
+
 // Fold state for the disposition filter (#651 follow-up). Deliberately NOT
 // persisted: it resets to the folded view on every load, because the folded
 // view is the correct default and a stale "show all" from yesterday would
@@ -5416,6 +6484,11 @@ function renderEarlyLane() {
   // finding 9). Cheap and unconditional: a stale partition would render rows
   // into the wrong lane, which is far worse than one extra rebuild.
   invalidateEarlyLanes();
+  // Issue #668: persist BEFORE the view work and before the `!tbody` bail
+  // below. What is on disk is a property of the DATA, not of whether this
+  // render found its tbody — a save that only ran when the render completed
+  // would be a save that silently stops happening the day the markup moves.
+  persistEarlyLane();
   const tbody = document.getElementById('post-sort-tbody');
   const badge = document.getElementById('post-sort-badge');
   const clearBtn = document.getElementById('post-sort-clear-btn');
@@ -5606,6 +6679,10 @@ function renderEarlyLane() {
   updateBulkButtons();
   // Early rows obey each lane's own search box.
   applyManualSearch();
+  // A Post Sort report loaded on its own is still "a report is loaded", so the
+  // page rests in Work mode here too (#697). No-op once it is already on, so
+  // the repeated renders this function does never re-steal focus.
+  applyRestingWorkMode();
 }
 
 function renderPostSortFoldToggle(foldedCount, visibleCount) {
@@ -5672,7 +6749,8 @@ function attachPostSortGoesToInput(tr, item) {
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('keydown', e => {
     e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    // Same loop as the full-report rows (#697): commit, then advance.
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); advanceFromRow(tr); }
     else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
   });
   input.addEventListener('change', e => e.stopPropagation());
@@ -5715,13 +6793,43 @@ function commitPostSortGoesTo(label, raw) {
 }
 
 let goesToNoteTimer = null;
-function flashGoesToNote(text) {
+let goesToNoteWarnAt = 0;
+const GOESTO_NOTE_MS = 2600;
+const GOESTO_WARN_MS = 8000;
+
+// flashGoesToNote(text, opts) -> the transient pill under the table.
+//
+// opts.warn marks a message that OUTRANKS routine feedback and holds the pill
+// for as long as it is up.
+//
+// There is one #goesto-note element and every caller writes its textContent, so
+// two writes in the same synchronous pass meant last-writer-wins. commitGoesTo
+// does exactly that: the dock-flex DRIFT GUARD fires, then a few lines later the
+// routine "N other rows at this address set to BELT 46" overwrites it. And it is
+// unconditional — a strayed package is by definition also a spread one, so the
+// warning was ALWAYS overwritten. A MutationObserver over a full commit saw one
+// text change, the soft one. The backstop for the wrong-belt error class had
+// never once been on screen. So a warning claims the channel: routine notes
+// stand aside while it is showing rather than erasing it.
+function flashGoesToNote(text, opts) {
   const el = document.getElementById('goesto-note');
   if (!el) return;
+  const warn = !!(opts && opts.warn);
+  if (!warn && goesToNoteWarnAt && Date.now() - goesToNoteWarnAt < GOESTO_WARN_MS) return;
   el.textContent = text;
+  el.classList.toggle('warn', warn);
+  // A warning is not a status update, and a screen reader should not have to
+  // wait for a polite gap to hear that a package may be on the wrong belt.
+  el.setAttribute('role', warn ? 'alert' : 'status');
+  el.setAttribute('aria-live', warn ? 'assertive' : 'polite');
   el.style.display = 'block';
+  goesToNoteWarnAt = warn ? Date.now() : 0;
   clearTimeout(goesToNoteTimer);
-  goesToNoteTimer = setTimeout(() => { el.style.display = 'none'; }, 2600);
+  goesToNoteTimer = setTimeout(() => {
+    el.style.display = 'none';
+    el.classList.remove('warn');
+    goesToNoteWarnAt = 0;
+  }, warn ? GOESTO_WARN_MS : GOESTO_NOTE_MS);
 }
 
 // ─── BARCODE ────────────────────────────────────────────────────────────────
@@ -5798,16 +6906,61 @@ let workModeOn = false;
 let workIndex = 0;
 const WORK_MODE_KEY = 'ibno_work_mode';
 
+// rowOnScreen(el) -> is this element actually reachable by the eye, i.e. is
+// neither it NOR ANY ANCESTOR display:none?
+//
+// getComputedStyle answers for ONE element in isolation: a row inside a
+// COLLAPSED SECTION still computes display:table-row, because what the
+// `.section.collapsed > table` rule hides is the table above it, not the row.
+// So the element-only test called all 45 rows of the real 2026-07-08 export
+// reachable while the section holding them was hidden and zero of them were on
+// screen. The walk up is the whole point — and it is correct whichever level
+// is hidden, the section, the bucket (a collapsed bucket sets display:none on
+// the row itself), or the row.
+function rowOnScreen(el) {
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+    const cs = window.getComputedStyle(n);
+    if (cs && cs.display === 'none') return false;
+    if (n === document.body) break;
+  }
+  return true;
+}
+
 // The rows Work mode walks: every Needs Manual Review row currently on screen,
 // in the order they are displayed, across all three lanes. Rows inside a
-// collapsed bucket are display:none and are skipped, so the cursor never lands
-// somewhere the eye cannot follow.
+// collapsed bucket — or a collapsed/hidden SECTION — are off screen and are
+// skipped, so the cursor never lands somewhere the eye cannot follow.
 function workRows() {
   return Array.from(document.querySelectorAll('.manual-body tr[data-label]'))
     .filter(tr => {
-      const cs = window.getComputedStyle(tr);
-      return cs && cs.display !== 'none';
+      // A coded row stays on screen (#697) but is finished: the cursor must
+      // never land on it, or Enter would walk back through the work he has
+      // already done.
+      if (tr.dataset.coded) return false;
+      return rowOnScreen(tr);
     });
+}
+
+// The WHOLE working list, not just the rows currently on screen (#697: the
+// progress bar reads worked and done over the whole list). workRows() answers
+// "where can the cursor go", which is a different question: a collapsed bucket
+// is display:none and the cursor cannot reach it, but its packages are still
+// work Tyler has to finish and must still count.
+//
+// Early rows come from postSortItems, whose model is its own shape and is never
+// a member of manualItems (#669 finding 10), so both are read explicitly.
+function workProgressLabels() {
+  const labels = [];
+  const seen = Object.create(null);
+  function add(l) {
+    const s = String(l == null ? '' : l);
+    if (!s || seen[s]) return;
+    seen[s] = true;
+    labels.push(s);
+  }
+  manualLaneItems('mine').forEach(it => add(it.label));
+  earlyLaneItems('mine').forEach(it => add(it.label));
+  return labels;
 }
 function workLabels() { return workRows().map(tr => tr.getAttribute('data-label')); }
 function workStreetOf(tr) {
@@ -5847,19 +7000,57 @@ function clampWorkIndex() {
 // Paint the active row and the bar to match workIndex, and put the street on the
 // clipboard. copyStreet=false when only redrawing (a repaint must not silently
 // replace what the supervisor just copied).
+function paintWorkActive(tr) {
+  document.querySelectorAll('.manual-body tr.work-active').forEach(r => r.classList.remove('work-active'));
+  if (tr) tr.classList.add('work-active');
+}
+
+// copyRowStreet(tr) -> put THIS row's street (house number and name only, no
+// unit — lib/street-address.js, Tyler's call 2026-08-08) on the clipboard,
+// ready to paste into FRO.
+//
+// Auto-copy DEFAULTS TO ALWAYS (#697): it fires whether or not Work mode is
+// on, because pasting the street into FRO is the reason he is on the row at
+// all. The full Address column stays on the row for verifying a unit or suite
+// when the street alone is not enough (spec #690 story 30).
+function copyRowStreet(tr) {
+  const street = workStreetOf(tr);
+  if (!street) return '';
+  ToolHelpers.copyText(street).catch(() => {});
+  return street;
+}
+
 function focusWorkRow(copyStreet) {
   clampWorkIndex();
   const rows = workRows();
-  document.querySelectorAll('.manual-body tr.work-active').forEach(tr => tr.classList.remove('work-active'));
   const tr = rows[workIndex];
+  paintWorkActive(tr);
   if (!tr) { refreshWorkBar(); return; }
-  tr.classList.add('work-active');
   if (tr.scrollIntoView) tr.scrollIntoView({ block: 'center' });
-  const street = workStreetOf(tr);
-  if (copyStreet && street) ToolHelpers.copyText(street).catch(() => {});
+  if (copyStreet) copyRowStreet(tr);
   refreshWorkBar();
-  const input = document.getElementById('work-area');
-  if (input) { input.value = ActualArea.get(actualAreaStore, tr.getAttribute('data-label')); input.focus(); input.select(); }
+  // Work mode types into the shared bar. With Work mode OFF the loop still
+  // works — Enter on a row's own Goes To box still advances (#697) — so focus
+  // has to land on the NEXT ROW'S OWN box rather than on a bar that is
+  // display:none, which would drop the keyboard out of the loop entirely.
+  const input = workModeOn
+    ? document.getElementById('work-area')
+    : tr.querySelector('.goesto-input');
+  if (input) {
+    if (workModeOn) input.value = ActualArea.get(actualAreaStore, tr.getAttribute('data-label'));
+    input.focus();
+    if (input.select) input.select();
+  }
+}
+
+// advanceFromRow(tr) -> the cursor is on THIS row; move to the next one that
+// still needs him. Used by Enter on a row's own Goes To box, so the mouse and
+// the keyboard drive one cursor rather than two competing ones.
+function advanceFromRow(tr) {
+  const rows = workRows();
+  const i = rows.indexOf(tr);
+  if (i >= 0) workIndex = i;
+  stepWork(1);
 }
 
 function refreshWorkBar() {
@@ -5868,20 +7059,40 @@ function refreshWorkBar() {
   const rows = workRows();
   const tr = rows[workIndex];
   const street = tr ? workStreetOf(tr) : '';
-  // isScanned, not get(): a Post Sort "early" value (issue #634) has a Goes To
-  // value to show but must NOT count toward the progress bar — it has not
-  // been confirmed against a scan on this report yet.
-  const done = rows.filter(r => ActualArea.isScanned(actualAreaStore, r.getAttribute('data-label'))).length;
+  // WORKED vs SCANNED (#697, #612 decision 3). Worked is "this row carries a
+  // Goes To area" — isScanned(), not get(), because a Post Sort "early" value
+  // (issue #634) has a value to show but was never confirmed against a scan on
+  // this report. Scanned is the barcode-done tick, set one package at a time:
+  // Tyler scans every package individually off the monitor, so a dock-flexed
+  // sibling is worked and is NOT scanned. One number could not say both.
+  //
+  // Over the WHOLE working list, not the visible rows: a collapsed bucket is
+  // still work to do.
+  const prog = IbnoWorkLoop.progress(workProgressLabels(), {
+    isWorked: (l) => ActualArea.isScanned(actualAreaStore, l),
+    isDone: (l) => BarcodeDone.isDone(barcodeDoneStore, l),
+  });
   const ctx = document.getElementById('work-context');
   const st = document.getElementById('work-street');
   const cp = document.getElementById('work-copied');
   const pr = document.getElementById('work-prog');
+  const prDone = document.getElementById('work-prog-done');
+  const note = document.getElementById('work-prog-note');
+  // "No rows to work" would be a lie whenever the section is collapsed or a
+  // chip is slicing: the work exists, it is just not on screen. Say which.
+  const offScreen = !tr && prog.total > 0;
   if (ctx) ctx.textContent = tr
-    ? (workContextOf(tr) + '  ·  ' + (workIndex + 1) + ' of ' + rows.length + '  ·  ' + done + ' with an area')
-    : 'No rows to work';
+    ? (workContextOf(tr) + '  ·  ' + (workIndex + 1) + ' of ' + rows.length + '  ·  ' + prog.worked + ' with an area')
+    : (offScreen ? ('Open Needs Manual Review to work the list  ·  ' + prog.total + ' waiting')
+                 : 'No rows to work');
   if (st) st.textContent = street || (tr ? '(no street on this row)' : '—');
   if (cp) cp.style.display = street ? '' : 'none';
-  if (pr) pr.style.width = rows.length ? Math.round(done / rows.length * 100) + '%' : '0%';
+  if (pr) pr.style.width = prog.workedPct + '%';
+  if (prDone) prDone.style.width = prog.donePct + '%';
+  if (note) note.textContent = IbnoWorkLoop.progressText(prog);
+  const track = document.getElementById('work-prog-track');
+  if (track) track.title = IbnoWorkLoop.progressText(prog) +
+    ' (a dock-flexed package is worked; only a package you scanned is scanned)';
 }
 
 // Move to the next package that still needs an area. Skipping the ones an
@@ -5940,7 +7151,78 @@ function restoreManualGroups(snapshot) {
   applyManualSearch();
 }
 
-function setWorkMode(on) {
+// enterWorkLoop(copyStreet) -> everything "being in Work mode" means for the
+// rows currently on the page: the buckets open, the cursor on the first package
+// that still needs an area, the bar repainted.
+//
+// Extracted so setWorkMode() and applyRestingWorkMode() cannot drift. They did:
+// setWorkMode had this inline and applyRestingWorkMode bailed whenever Work
+// mode was already on, so the SECOND drop of a report re-collapsed every bucket
+// (resetViewControls) and nothing ever re-opened them. Tyler re-drops many
+// times a shift, so "Work mode is on after a report loads" was true only on the
+// very first load.
+// revealWorkSection() -> open the ONE section that holds the row Work mode is
+// about to land on.
+//
+// #375 collapses every section on a fresh drop, and enterWorkLoop only ever
+// opened the BUCKETS inside them. Verified against the real 2026-07-08 export:
+// Work mode was on, the bar was painted, every bucket was open — and
+// #manual-section was still `collapsed`, so its table was display:none and
+// ZERO rows were on screen until Tyler clicked "Expand all". That is exactly
+// the empty landing #697 set out to remove, and spec #690 story 9 asks the page
+// to open quiet but "never open empty-handed after I ask it to reorganize" — a
+// report drop is that ask.
+//
+// Narrow on purpose: it opens the section holding the first row that thereby
+// becomes reachable and stops. A section it opens speculatively and that turns
+// out to hide its rows for another reason (a chip filter, a search) is put back
+// exactly as it was, so every section that does NOT hold the active row keeps
+// #375's collapse-on-load.
+function revealWorkSection() {
+  const rows = Array.from(document.querySelectorAll('.manual-body tr[data-label]'))
+    .filter(tr => !tr.dataset.coded);
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i];
+    if (rowOnScreen(tr)) return;            // already landing on rows, nothing to open
+    const sec = tr.closest ? tr.closest('.section') : null;
+    if (!sec || sec.style.display === 'none') continue;   // a section the page is deliberately not showing
+    if (!sec.classList.contains('collapsed')) continue;   // open already; this row is hidden for another reason
+    sec.classList.remove('collapsed');
+    if (rowOnScreen(tr)) { syncCollapseAllButton(); return; }
+    sec.classList.add('collapsed');         // it was not the section standing in the way
+  }
+}
+
+// The toolbar button is an affordance for what the page will do next, so it has
+// to agree with the sections after revealWorkSection() has opened one —
+// collapseAllSections() left it saying "Expand all".
+function syncCollapseAllButton() {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+  const anyOpen = Array.from(document.querySelectorAll('.section'))
+    .filter(s => s.style.display !== 'none')
+    .some(s => !s.classList.contains('collapsed'));
+  btn.textContent = anyOpen ? '✄ Collapse all' : '✢ Expand all';
+}
+
+function enterWorkLoop(copyStreet) {
+  expandAllManualGroups();
+  // Buckets first, then the section: a bucket left collapsed would make the
+  // reveal test below answer "still off screen" and put the section back.
+  revealWorkSection();
+  const labels = workLabels();
+  workIndex = 0;
+  if (labels.length && ActualArea.isScanned(actualAreaStore, labels[0])) {
+    const n = ActualArea.nextNeedingArea(actualAreaStore, labels, 0, 1);
+    if (typeof n === 'number' && isFinite(n)) workIndex = n;
+  }
+  // focusWorkRow repaints the bar on every path, including the no-rows path,
+  // so a stale "3 of 12" from the previous report can never survive here.
+  focusWorkRow(!!copyStreet);
+}
+
+function setWorkMode(on, opts) {
+  const o = opts || {};
   const was = workModeOn;
   workModeOn = !!on;
   document.body.classList.toggle('work-mode', workModeOn);
@@ -5956,20 +7238,57 @@ function setWorkMode(on) {
     btn.classList.toggle('on', workModeOn);
     btn.innerHTML = workModeOn ? '&#9632; Work mode' : '&#9654; Work mode';
   }
-  try { toolStorage.set(WORK_MODE_KEY, workModeOn ? '1' : ''); } catch (e) { /* storage full */ }
+  // '1' / '0' rather than '1' / '', because Work mode is the RESTING STATE now
+  // (#697): an absent key must read as ON, and only an explicit "he turned it
+  // off" may keep it off through the next report.
+  try { toolStorage.set(WORK_MODE_KEY, workModeOn ? '1' : '0'); } catch (e) { /* storage full */ }
   if (workModeOn) {
-    // Start on the first package that still needs an area rather than at the
-    // top, so re-entering mid-shift picks up where the work actually is.
-    const labels = workLabels();
-    workIndex = 0;
-    if (labels.length && ActualArea.isScanned(actualAreaStore, labels[0])) {
-      const n = ActualArea.nextNeedingArea(actualAreaStore, labels, 0, 1);
-      if (typeof n === 'number' && isFinite(n)) workIndex = n;
-    }
-    focusWorkRow(true);
+    // copy defaults to true (a keystroke or a click got us here, so the
+    // clipboard write is gesture-chained and Chrome permits it). The resting
+    // state applies it on a plain page render, where there is no gesture.
+    enterWorkLoop(o.copy !== false);
   } else {
     document.querySelectorAll('.manual-body tr.work-active').forEach(tr => tr.classList.remove('work-active'));
   }
+}
+
+// ─── WORK MODE IS THE RESTING STATE ─────────────────────────────────────────
+//
+// #697 / #612 decision 1, asked directly and answered: "yeah make it the
+// resting state." Once a report is loaded this is simply what the page looks
+// like, and the W toggle turns it OFF. The discarded alternative is on record:
+// leaving it a mode meant a fresh load still showed zero rows until he pressed
+// something, and he re-drops many times a shift.
+//
+// Deliberately NOT applied at boot. An empty page in Work mode is a sticky bar
+// with nothing in it, so the trigger is "a report produced rows", not "the
+// script ran".
+function workModePreferredOn() {
+  try { return toolStorage.get(WORK_MODE_KEY, '') !== '0'; } catch (e) { return true; }
+}
+
+// applyRestingWorkMode(opts)
+//
+//   opts.fresh  a REPORT just rendered. Work mode is re-applied even when it is
+//               already on, because resetViewControls() has just re-collapsed
+//               every bucket and the cursor is pointing at rows that no longer
+//               exist. Without this the second and every later drop left Work
+//               mode nominally on but functionally dead: shut buckets, no
+//               active row, and the previous report's text still in the bar.
+//
+// Callers that are NOT a fresh report render (renderEarlyLane runs on a barcode
+// tick and a fold toggle too) must leave `fresh` off. Re-applying there would
+// yank focus and move the cursor every time a card is ticked.
+function applyRestingWorkMode(opts) {
+  const o = opts || {};
+  if (!workModePreferredOn()) return;           // he turned it off, and that sticks
+  // The MODEL, not workRows(): on a fresh load every bucket is collapsed and
+  // therefore display:none, so counting visible rows would answer zero on
+  // exactly the load this is meant to fire on.
+  if (!workProgressLabels().length) return;
+  if (!workModeOn) { setWorkMode(true, { copy: false }); return; }
+  if (!o.fresh) return;                         // already resting here, nothing new to apply
+  enterWorkLoop(false);                         // no gesture behind a render, so no clipboard write
 }
 
 // laneRowsWithArea(cfg) -> every row in BOTH halves of one lane that already
@@ -6071,6 +7390,59 @@ function updateSelectAreaButtons() {
   });
 }
 
+// aModalIsOpen() -> is a dialog covering the page right now?
+//
+// Reads the tool's own barcode-dialog flag AND the element's painted display,
+// because an overlay opened by the pop-up fallback is shown without that flag
+// being the thing that tracks it. Either one means the page underneath is not
+// the supervisor's target.
+function aModalIsOpen() {
+  if (barcodeDialogLabel) return true;
+  const dlg = document.getElementById('barcode-dialog');
+  return !!(dlg && getComputedStyle(dlg).display !== 'none');
+}
+
+// resumeWorkLoop() -> put the cursor back on the first row that still needs an
+// area, with its street already copied. This is what a bare Enter does from
+// anywhere on the page.
+//
+// When every bucket is collapsed there is nothing on screen to land on (rows
+// are display:none, the standing landmine), so it says so rather than silently
+// doing nothing.
+function resumeWorkLoop() {
+  const labels = workLabels();
+  if (!labels.length) {
+    if (workProgressLabels().length) flashGoesToNote('Open a bucket first — no rows are on screen');
+    return;
+  }
+  const n = ActualArea.nextNeedingArea(actualAreaStore, labels, -1, 1);
+  workIndex = (typeof n === 'number' && isFinite(n)) ? n : 0;
+  focusWorkRow(true);
+}
+
+// Landing on a row auto-copies its street (#697). "Landing" is any way the
+// keyboard or the mouse puts focus in a row's Goes To box — Tab, a click, or
+// the loop's own advance — so the paste into FRO is always ready without a
+// select-and-copy detour.
+document.addEventListener('focusin', e => {
+  const el = e.target;
+  if (!el || !el.classList || !el.classList.contains('goesto-input')) return;
+  const tr = el.closest ? el.closest('tr[data-label]') : null;
+  if (!tr || !tr.closest('.manual-body')) return;
+  copyRowStreet(tr);
+  // One cursor, whichever input he reached for: focusing a row's own box makes
+  // it the row the loop advances FROM. Painted directly rather than through
+  // focusWorkRow(), which would hand focus to the shared bar and yank it out
+  // of the box he just clicked into.
+  const rows = workRows();
+  const i = rows.indexOf(tr);
+  if (i >= 0) {
+    workIndex = i;
+    paintWorkActive(tr);
+    if (workModeOn) refreshWorkBar();
+  }
+});
+
 // W toggles Work mode from anywhere; Escape leaves it. Ignored while typing, so
 // it never fights the Goes To fields — except in the bar's own input, where
 // Enter commits and advances and Escape exits.
@@ -6081,6 +7453,22 @@ document.addEventListener('keydown', e => {
   if (inBar) {
     if (e.key === 'Enter') { e.preventDefault(); commitWorkArea(); stepWork(1); }
     else if (e.key === 'Escape') { e.preventDefault(); setWorkMode(false); }
+    return;
+  }
+  // GLOBAL ENTER re-enters the working loop from anywhere on the page (#697,
+  // prototype round 14) — EXCEPT when something already owns that Enter. A
+  // focused BUTTON is the named case (#613 round 18): tab to a button, press
+  // Enter, the button must fire. Advancing the cursor there would skip a row
+  // AND leave the button unpressed. The rule is IbnoWorkLoop.enterAdvances, so
+  // it is one testable predicate rather than a growing tag list here.
+  if (e.key === 'Enter') {
+    if (!IbnoWorkLoop.enterAdvances(t)) return;
+    // A modal owns the page while it is up. Without this, Enter with focus on
+    // the body pulled the cursor into the table BEHIND the open barcode dialog
+    // — scrolling and focusing a row the supervisor cannot even see.
+    if (aModalIsOpen()) return;
+    e.preventDefault();
+    resumeWorkLoop();
     return;
   }
   const tag = t && t.tagName;
@@ -6353,13 +7741,31 @@ function printBarcodeDialog() {
   printBarcodesFor([barcodeDialogLabel]);
 }
 
-// barcodeCardHtml(label, value, item) -> ONE card on the print sheet: the
+// areaProvenanceOf(label) -> which of IbnoBarcodeSheet's provenances the
+// actual-area store holds for this label: '' (no value), 'early' (typed in the
+// Post Sort pre-assignment lane, #634), 'auto' (dock flex spread Tyler's own
+// typed area across the stop) or 'typed' (he typed it on this row).
+//
+// A carried-over area from an earlier sort day is NOT a case here and must not
+// become one: lib/sort-day.js's rollToSortDay moves it OUT of the area store
+// and into a dated note, so by the time this reads the store there is nothing
+// to misread. If that ever changes, the value arrives with a provenance this
+// function does not name, and IbnoBarcodeSheet.cardArea fails it closed to the
+// dash — which is the right answer either way.
+function areaProvenanceOf(label) {
+  if (!ActualArea.get(actualAreaStore, label)) return '';
+  if (ActualArea.isEarly(actualAreaStore, label)) return 'early';
+  if (ActualArea.isAuto(actualAreaStore, label)) return 'auto';
+  return 'typed';
+}
+
+// barcodeCardHtml(label, value, item, position) -> ONE card on the print sheet: the
 // barcode, the encoded value, the "Goes to" area in large type, and the
 // address. Split out of printBarcodesFor by issue #667 so the full-report path
 // and the early path render an IDENTICAL card — the only thing #667 changes is
 // WHICH value is encoded and whether the card is emitted at all, never how a
 // card looks. Two copies of this markup would be two sheets that could drift.
-function barcodeCardHtml(label, value, item) {
+function barcodeCardHtml(label, value, item, position) {
   let svg;
   try {
     svg = Barcode128.toSvg(value, { moduleWidth: 2, height: 80, showText: false });
@@ -6367,7 +7773,15 @@ function barcodeCardHtml(label, value, item) {
     return '<div class="card"><div class="err">Cannot encode ' +
       ToolHelpers.escapeHtml(value) + '</div></div>';
   }
-  const area = ActualArea.get(actualAreaStore, label);
+  // THE CARD'S AREA IS A COMMAND (#700, prototype round 27). Only an area
+  // Tyler decided may occupy that 30px line; anything else is a dash, and the
+  // package goes back to a human. The allowlist itself is
+  // IbnoBarcodeSheet.cardArea's — this function only says which provenance the
+  // store holds, so the rule cannot be restated (and drift) here.
+  const area = IbnoBarcodeSheet.cardArea({
+    area: ActualArea.get(actualAreaStore, label),
+    provenance: areaProvenanceOf(label),
+  });
   // Mark an EARLY area on the physical card itself (/code-review on #642,
   // finding 2): a Post Sort pre-fill (issue #634) has never been confirmed
   // against a scan on this report. A bulk "Select with area" + "Barcode
@@ -6394,7 +7808,15 @@ function barcodeCardHtml(label, value, item) {
   // Pre-checked from the store, so re-printing a sheet does not lose the ticks
   // already made on the previous one.
   const done = BarcodeDone.isDone(barcodeDoneStore, label);
-  return '<div class="card' + (done ? ' done' : '') + '" data-label="' + ToolHelpers.escapeHtml(label) + '">' +
+  // The position pill, "2 of 5" (#700, prototype round 25). Only on a card that
+  // is actually in a band: the number exists so a walk can tell "I have all
+  // five" from "I am missing one", and "1 of 1" on every single card would be
+  // noise that makes the real pills stop registering.
+  const pill = (position && position.of > 1)
+    ? '<div class="pos">' + position.position + ' of ' + position.of + '</div>'
+    : '';
+  return '<div class="card' + (done ? ' done' : '') +
+    '" data-label="' + ToolHelpers.escapeHtml(label) + '">' + pill +
     '<label class="tick"><input type="checkbox" class="done-box"' + (done ? ' checked' : '') +
       ' data-label="' + ToolHelpers.escapeHtml(label) + '" aria-label="Mark ' +
       ToolHelpers.escapeHtml(label) + ' done"><span class="tick-text">Done</span></label>' +
@@ -6453,25 +7875,60 @@ function printBarcodesFor(entries) {
   // rather than printing every early row after every full-report one.
   const printableEarly = new Map((plan ? plan.printable : []).map(p => [p.label, p]));
 
+  // WHICH CARDS SURVIVE, decided first and by the gating alone (#667). Bands
+  // are pure layout and are planned only over what already earned a card — a
+  // band must never be able to put a refused package back on the paper.
   const cards = list.map(entry => {
     if (entry.early) {
       const ok = printableEarly.get(entry.label);
-      if (!ok) return '';   // REFUSED — nothing reaches the paper
-      return barcodeCardHtml(entry.label, ok.barcode, ok.item);
+      if (!ok) return null;   // REFUSED — nothing reaches the paper
+      return { label: entry.label, value: ok.barcode, item: ok.item };
     }
     const item = itemByLabel(entry.label);
-    if (!item) return '';
-    return barcodeCardHtml(entry.label, barcodeValueOf(item), item);
-  }).filter(Boolean);
+    if (!item) return null;
+    return { label: entry.label, value: barcodeValueOf(item), item };
+  }).filter(Boolean).map(c => ({
+    label: c.label,
+    value: c.value,
+    item: c.item,
+    address: (c.item && c.item.address) || '',
+    street: streetOf(c.item),
+  }));
 
+  // The #667 refusal sentence, said three ways because each home can be the
+  // wrong one: the lane's status line (behind the overlay when the sheet fell
+  // back in-page), the transient note (now z-index 90, so it clears that
+  // overlay), and — when there IS a refusal — the overlay's own bar, which is
+  // the only one of the three still on screen a minute later.
+  let refusalNote = '';
   if (plan) {
     const msg = PostSortLane.describeBarcodePrint(plan);
     postSortBarcodeStatus(msg, plan.refusedCount > 0);
     flashGoesToNote(msg);
+    if (plan.refusedCount > 0) refusalNote = msg;
   }
 
   if (!cards.length) return plan;
-  const cardHtml = cards.join('');
+
+  // SAME-STREET BANDS (#700, prototype rounds 23-25). Packages sharing one
+  // street print together, biggest band first, so walking the dock follows the
+  // physical order of stops and one FRO lookup pays off across the whole band.
+  // The banding key requires a real number-and-name street
+  // (IbnoBarcodeSheet's invariant), so address-less rows never band on
+  // identical junk — Tyler's round-24 catch.
+  const sheet = IbnoBarcodeSheet.planSheetBands(cards);
+  const cardHtml = sheet.groups.map(group => {
+    const cardsHtml = group.cards
+      .map(c => barcodeCardHtml(c.card.label, c.card.value, c.card.item,
+        { position: c.position, of: c.of }))
+      .join('');
+    if (!group.banded) return cardsHtml;
+    return '<section class="band">' +
+      '<div class="band-head">' + ToolHelpers.escapeHtml(group.label) +
+        (group.street ? ' &middot; ' + ToolHelpers.escapeHtml(group.street) : '') +
+        ' &mdash; one FRO lookup covers these</div>' +
+      cardsHtml + '</section>';
+  }).join('');
   // How many of THIS sheet's cards are already ticked, so a re-print of a
   // part-worked batch opens showing the progress rather than "0 of N".
   const doneOnSheet = BarcodeDone.countDone(
@@ -6500,6 +7957,17 @@ function printBarcodesFor(entries) {
     '.val{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:0.02em}' +
     '.addr{font-size:11px;margin-top:3px}' +
     '.err{font-size:12px;font-weight:700}' +
+    // ─── same-street bands and the position pill (#700) ───────────────────
+    // Named colors again, never hex: the band edge is rebeccapurple on screen
+    // (the tool's own accent, near enough) and plain black on paper, because a
+    // colored rule is the first thing a mono laser turns into mud.
+    '.band{border:2px solid rebeccapurple;border-left-width:7px;border-radius:8px;' +
+      'padding:8px 10px 2px;margin:0 0 12px;break-inside:avoid;page-break-inside:avoid}' +
+    '.band-head{font-size:13px;font-weight:800;color:rebeccapurple;margin:0 0 8px;' +
+      'letter-spacing:0.01em}' +
+    '.band .card{margin-bottom:8px}' +
+    '.pos{position:absolute;top:8px;left:10px;font-size:11px;font-weight:800;' +
+      'color:rebeccapurple;border:1px solid rebeccapurple;border-radius:10px;padding:1px 7px}' +
     // ─── the tick box, screen and paper ───────────────────────────────────
     // Screen: a real control, sized for a thumb on the phone Tyler carries on
     // the floor, sitting top-right of its card.
@@ -6530,6 +7998,15 @@ function printBarcodesFor(entries) {
       // Never fade a card on paper: toner-light grey is exactly what does not
       // photocopy or read under dock lighting.
       '.card.done{opacity:1}' +
+      // On paper the band is black — a purple rule photocopies to nothing and
+      // prints grey on a mono laser, and this band is load-bearing information
+      // (these packages walk together), not decoration.
+      // ...and pulled a few px off the paper edge. Print drops the body margin,
+      // and the band's 7px left rule is the one cue that says "these walk
+      // together" — a printer's unprintable margin eating it is a silent loss.
+      '.band{border-color:black;margin-left:4px;margin-right:4px}' +
+      '.band-head{color:black}' +
+      '.pos{color:black;border-color:black}' +
     '}' +
     '</style></head><body><h1>IBNO barcodes — ' + ToolHelpers.escapeHtml(ToolHelpers.isoDate()) +
     // The count is the number of cards ACTUALLY on the sheet, never the number
@@ -6559,19 +8036,128 @@ function printBarcodesFor(entries) {
       'var n=document.querySelectorAll(".done-box:checked").length;' +
       'var out=document.getElementById("done-count");' +
       'if(out)out.textContent=n;' +
-      'try{if(window.opener&&!window.opener.closed&&window.opener.markBarcodeDone){' +
-        'window.opener.markBarcodeDone(box.dataset.label,box.checked);}}catch(err){}' +
+      // The tool window this sheet reports back to. window.opener when the
+      // sheet got its own page; window.parent when pop-ups were blocked and it
+      // is living in the in-page overlay's iframe instead (#700). Ticks have to
+      // reach the list either way, or the fallback is a second, silent record.
+      'var host=window.opener||(window.parent&&window.parent!==window?window.parent:null);' +
+      'try{if(host&&!host.closed&&host.markBarcodeDone){' +
+        'host.markBarcodeDone(box.dataset.label,box.checked);}}catch(err){}' +
     '});' +
     '})();<\/script>' +
     '</body></html>';
 
-  const w = window.open('', '_blank');
-  if (!w) { flashGoesToNote('Allow pop-ups to print barcodes'); return plan; }
-  w.document.write(doc);
-  w.document.close();
-  w.focus();
-  w.print();
+  openBarcodeSheet(doc, refusalNote);
   return plan;
+}
+
+// openBarcodeSheet(doc, note) -> put the sheet in front of Tyler, wherever it fits.
+//
+// ITS OWN PAGE FIRST (#700, prototype round 21): a tab he can zoom, keep open
+// beside the list, and print from, with the ticks reporting back through
+// window.opener.
+//
+// OVERLAY WHEN POP-UPS ARE BLOCKED (round 21, spec story 28). A blocked pop-up
+// used to end the whole action in a one-line "Allow pop-ups" note — the
+// supervisor is mid-sort with a batch selected and gets nothing, on a machine
+// whose pop-up policy he may not be able to change. The overlay is the SAME
+// document, rendered in an <iframe> in this page rather than re-written into
+// tool markup: one sheet document, one set of print rules, no second copy to
+// drift. The iframe also keeps the sheet's deliberately light-only,
+// black-on-white styling out of reach of the tool's theme.
+//
+// `note` is the #667 refusal sentence, or '' when nothing was refused. On the
+// pop-up path the lane's status line and the transient note carry it as they
+// always have; on the overlay path it has to travel WITH the sheet, because the
+// overlay covers the whole viewport and outlives any toast.
+//
+// Returns true when the sheet got its own page, false when it fell back.
+function openBarcodeSheet(doc, note) {
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+    w.print();
+    return true;
+  }
+  showBarcodeSheetOverlay(doc, note);
+  return false;
+}
+
+// showBarcodeSheetOverlay(doc, note) -> the fallback sheet, in this page.
+//
+// Built on demand rather than sitting in the markup: it is the exception path,
+// and an empty iframe on every load is a frame the browser still has to make.
+function showBarcodeSheetOverlay(doc, note) {
+  let overlay = document.getElementById('barcode-sheet-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'barcode-sheet-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Barcode sheet');
+    overlay.innerHTML =
+      '<div class="sheet-bar">' +
+        '<span class="sheet-title">Barcode sheet &mdash; pop-up blocked, so it opened here</span>' +
+        '<span class="sheet-note" id="barcode-sheet-note" role="status"></span>' +
+        '<span class="sheet-spacer"></span>' +
+        '<button type="button" class="btn btn-purple" data-action="print-sheet">&#128424; Print</button>' +
+        '<button type="button" class="btn btn-gray" data-action="close-sheet">Close</button>' +
+      '</div>' +
+      '<iframe class="sheet-frame" title="Barcode sheet"></iframe>';
+    overlay.querySelector('[data-action="print-sheet"]')
+      .addEventListener('click', printBarcodeSheetOverlay);
+    overlay.querySelector('[data-action="close-sheet"]')
+      .addEventListener('click', closeBarcodeSheetOverlay);
+    document.body.appendChild(overlay);
+  }
+  // srcdoc, not document.write into the frame: it survives the frame being
+  // re-rendered and needs no same-origin handshake to populate.
+  overlay.querySelector('iframe').setAttribute('srcdoc', doc);
+  // Set every time, including to '', so a clean second print never inherits the
+  // previous batch's refusal — a stale "2 rows printed nothing" over a complete
+  // sheet is its own wrong answer.
+  setBarcodeSheetOverlayNote(note);
+  overlay.style.display = 'flex';
+  return overlay;
+}
+
+// setBarcodeSheetOverlayNote(text) -> the sentence in the overlay's bar. Also
+// the one place the overlay reports a failure of its own (see
+// printBarcodeSheetOverlay): flashGoesToNote alone is not enough while this
+// surface is up, and a print dialog that silently never opens is exactly the
+// kind of failure a supervisor reads as "I printed it".
+function setBarcodeSheetOverlayNote(text) {
+  const el = document.getElementById('barcode-sheet-note');
+  if (el) el.textContent = String(text || '');
+}
+
+function closeBarcodeSheetOverlay() {
+  const overlay = document.getElementById('barcode-sheet-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'none';
+  // Drop the document, so a closed overlay is not a second stale sheet quietly
+  // holding ticks against labels from an older batch.
+  overlay.querySelector('iframe').removeAttribute('srcdoc');
+  setBarcodeSheetOverlayNote('');
+}
+
+// Print the overlay's sheet, not the tool page around it.
+function printBarcodeSheetOverlay() {
+  const frame = document.querySelector('#barcode-sheet-overlay iframe');
+  if (!frame || !frame.contentWindow) return;
+  try {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  } catch (e) {
+    // Said in BOTH places. The transient note now clears this overlay
+    // (z-index 90), and the bar keeps the message after it fades — a print
+    // that silently never happened reads as a print that did.
+    const msg = 'Could not open the print dialog for the sheet';
+    setBarcodeSheetOverlayNote(msg);
+    flashGoesToNote(msg);
+  }
 }
 
 // barcodeSelected(lane) -> print sheet for the checked rows of ONE lane, the
@@ -6893,6 +8479,10 @@ function buildManualRow(item, bucket) {
     if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy') || e.target.closest('.goesto-cell')) return;
     toggleDetailRow(tr, item, MANUAL_COLSPAN);
   });
+  // Tyler's column arrangement, applied at build time so a row is never painted
+  // in markup order first (#701). Last, because everything above appends to and
+  // queries the cells by their MARKUP positions.
+  layoutRow(tr, 'manual');
   return tr;
 }
 
@@ -6978,6 +8568,112 @@ function buildActionCell(item, tr) {
   return td;
 }
 
+// ─── CODED ROWS STAY IN THE LIST ────────────────────────────────────────────
+//
+// #697 / spec #690 story 32 / #612 decision 2. Coding a row writes exactly the
+// same record it always did (IbnoSession.resolve -> resolvedItems -> Manually
+// Resolved -> the OPS2 export). What changed is that the ROW no longer leaves
+// the working list: it dims in place, and the coded-count chip on the section
+// header hides and shows the set.
+//
+// A coded row is deliberately taken OUT of every selection and bulk path — its
+// checkbox is removed and its data-bucket/data-bulk attributes move to
+// data-coded-bucket — so nothing that walks "rows in this bucket" can reach a
+// row that is already resolved. That is why the attribute is renamed rather
+// than kept: an attribute a bulk selector still matches is a bulk apply
+// re-resolving a resolved row.
+
+// Transient by design, like every other filter on this page (#690's
+// three-way persistence split): it resets on every load and every fresh pull.
+let codedHidden = false;
+
+function markRowCoded(tr, item) {
+  if (!tr) return;
+  tr.classList.add('row-coded');
+  const code = String((item && item.code) || '');
+  tr.dataset.coded = code || 'skipped';
+  if (tr.dataset.bucket) { tr.dataset.codedBucket = tr.dataset.bucket; delete tr.dataset.bucket; }
+  delete tr.dataset.bulk;
+  const cb = tr.querySelector('.manual-check');
+  if (cb) { cb.checked = false; cb.remove(); }
+  const cell = tr.querySelector('td.action-cell');
+  if (cell) {
+    cell.innerHTML = '';
+    const tag = document.createElement('span');
+    tag.className = 'coded-tag';
+    tag.textContent = code ? ('Coded ' + code) : 'Done';
+    cell.appendChild(tag);
+    const undo = document.createElement('button');
+    // Its OWN class, NOT .btn-done-mini. Sharing that class made every
+    // "click the row's Done button" path — including three existing DOM tests
+    // — land on Undo instead, silently un-resolving a row.
+    undo.className = 'btn-undo-mini';
+    undo.textContent = 'Undo';
+    undo.title = 'Put this row back in the working list';
+    undo.addEventListener('click', () => undoResolve(tr.getAttribute('data-label')));
+    cell.appendChild(undo);
+  }
+  renderCodedChip();
+}
+
+// The coded rows a fresh render has to put back. Read off the MODEL
+// (resolvedItems) rather than off the DOM, so a re-render, an F5-restored
+// session and a same-day re-drop all land the same set.
+//
+// Scoped to the SORT DAY, on the report's own INBOUND_DATE clock (#690's
+// persistence split, #668's fix — never the device clock, because the 1:30 AM
+// sort would lose the day at midnight). resolvedItems survives a re-drop by
+// design and is the OPS2 record, so without this a package coded three days
+// ago and long gone from the report would reappear in today's working list.
+// Manually Resolved keeps every one of them regardless: this gates the working
+// list's copy, never the record.
+//
+// GATED ON THE SAME PAIR canPersistArea USES (loadedReportDay && currentSortDay),
+// so the working list's coded rows and the Goes To areas beside them appear and
+// disappear together. No readable sort day means no day-scoped state at all.
+//
+// The STAMP is currentSortDay, and that is deliberate rather than an oversight:
+// commitGoesTo stamps areas with exactly the same value, and #695 settled why —
+// an earlier-dated report passes the gate and its writes stamp the LATER clock,
+// which is the day the shift is on and the day they should expire with. Codes
+// and areas have to expire together; a row whose area is live while its coded
+// mark has vanished is a row that reads as unworked and gets worked twice.
+function codedItemsForLane(laneKey) {
+  if (!loadedReportDay || !currentSortDay) return [];
+  return resolvedItems.filter(it => manualLaneOf(it) === laneKey && it._codedDay === currentSortDay);
+}
+
+// Every lane's coded rows, because codedHidden hides every lane's coded rows —
+// applyManualSearch walks them all. A chip that counted only the working list
+// while hiding Other work areas' rows too was promising one number and acting
+// on another.
+function codedItemsAllLanes() {
+  return MANUAL_LANES.reduce((n, l) => n + codedItemsForLane(l.key).length, 0);
+}
+
+function renderCodedChip() {
+  const chip = document.getElementById('manual-coded-chip');
+  if (!chip) return;
+  const n = codedItemsAllLanes();
+  if (!IbnoWorkLoop.codedChipVisible(n)) {
+    chip.style.display = 'none';
+    codedHidden = false;                 // nothing to hide, so no invisible filter survives
+    chip.setAttribute('aria-pressed', 'false');
+    return;
+  }
+  chip.style.display = '';
+  chip.textContent = IbnoWorkLoop.codedChipText(n, codedHidden);
+  chip.title = IbnoWorkLoop.codedChipTitle(codedHidden);
+  chip.setAttribute('aria-pressed', codedHidden ? 'true' : 'false');
+}
+
+function toggleCodedHidden() {
+  codedHidden = !codedHidden;
+  renderCodedChip();
+  applyManualSearch();
+  if (workModeOn) refreshWorkBar();
+}
+
 function resolveItem(item, tr) {
   // Remove ONLY the applied row (and its detail row, if expanded). Do NOT rebuild
   // the whole manual table — that would wipe every OTHER row's <input> and the
@@ -6990,12 +8686,21 @@ function resolveItem(item, tr) {
     bucket = tr.dataset.bucket;
     const detail = tr.nextElementSibling;
     if (detail && detail.classList.contains('detail-row')) detail.remove();
-    tr.remove();
+    // #697 (spec #690 story 32, #612 decision 2). The row used to be REMOVED
+    // here. Tyler's call: "they should stay but let me filter them out." Dock
+    // flex settles several rows at once, so rows vanishing in clumps while his
+    // hand is on the scanner is the failure this replaces. The record is
+    // unchanged — the item still moves into resolvedItems below and Manually
+    // Resolved is still the terminus — only the row's fate on screen changed.
+    markRowCoded(tr, item);
   }
 
   // Move the item from the unresolved manual model into resolved (the
   // transition lives in lib/ibno-session.js); this page only re-renders.
   if (item._resolvedOrd === undefined) item._resolvedOrd = resolvedItems.length;
+  // Which SORT DAY this row was coded on, so the working list can keep it (#697)
+  // for today and drop it tomorrow. The report's clock, never the device's.
+  if (item._codedDay === undefined) item._codedDay = currentSortDay || '';
   const next = IbnoSession.resolve(manualItems, resolvedItems, item);
   manualItems = next.manual;
   resolvedItems = next.resolved;
@@ -7004,7 +8709,14 @@ function resolveItem(item, tr) {
   // Drop the group header once its bucket has no rows left (#batch-code).
   // Both are per-lane: resolving the last express row must not clear the ground
   // lane's header or paint its empty state (and vice versa).
-  if (bucket && laneTbody && !laneTbody.querySelector('tr[data-label][data-bucket="' + bucket + '"]')) {
+  //
+  // A CODED row still sits under that header (#697), so the header only goes
+  // when the bucket holds neither an open row nor a coded one — otherwise the
+  // rows Tyler asked to keep would be left under no heading, and collapsing
+  // them would have no control.
+  if (bucket && laneTbody &&
+      !laneTbody.querySelector('tr[data-label][data-bucket="' + bucket + '"]') &&
+      !laneTbody.querySelector('tr[data-label][data-coded-bucket="' + bucket + '"]')) {
     const gh = laneTbody.querySelector('tr.manual-group-row[data-group="' + bucket + '"]');
     if (gh) gh.remove();
   }
@@ -7024,15 +8736,29 @@ function resolveItem(item, tr) {
   //     the Express-other lane got the GROUND message. All three lanes are
   //     named by MANUAL_LANES and worded by manualLaneEmptyMessage now, which
   //     renderManualSectionRows uses too — one message per lane, one source.
-  if (laneTbody && EARLY_TBODY_IDS.indexOf(laneTbody.id) === -1 && !laneTbody.querySelector('tr[data-label]')) {
+  //
+  // ":not([data-coded])" (#697): the empty state is about OPEN work, and coded
+  // rows now stay on screen. Without it, coding the lane's last row would leave
+  // no message at all, because the row it just coded is still sitting there.
+  if (laneTbody && EARLY_TBODY_IDS.indexOf(laneTbody.id) === -1 &&
+      !laneTbody.querySelector('tr[data-label]:not([data-coded])')) {
     const cfg = MANUAL_LANES.find(l => l.tbody === laneTbody.id);
-    if (cfg && !earlyLaneItems(cfg.key).length) {
-      laneTbody.innerHTML = '<tr><td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
-        manualLaneEmptyMessage(cfg.key) + '</td></tr>';
+    // APPENDED, not written over the tbody's innerHTML (#697). The coded rows
+    // are in that tbody now, and blanking it would delete the very rows this
+    // ticket keeps. Guarded against a second copy on the next resolve.
+    if (cfg && !earlyLaneItems(cfg.key).length && !laneTbody.querySelector('tr.lane-empty')) {
+      const empty = document.createElement('tr');
+      empty.className = 'lane-empty';
+      empty.innerHTML = '<td colspan="' + MANUAL_COLSPAN + '" class="empty-state">' +
+        manualLaneEmptyMessage(cfg.key) + '</td>';
+      laneTbody.appendChild(empty);
     }
   }
   updateExpressSection();
   updateBulkButtons();
+  // After the model moved, not inside markRowCoded: the chip counts
+  // resolvedItems, and inside markRowCoded the item is not in there yet.
+  renderCodedChip();
   applyManualSearch();          // refresh the "showing N of M" note (no rebuild)
   renderResolvedSection();
   persistSession();
@@ -7048,6 +8774,10 @@ function resolveItem(item, tr) {
 function undoResolve(label) {
   const item = resolvedItems.find(i => i.label === label);
   if (!item) return;
+  // Back in the working list, so it is no longer coded on any day. Left behind,
+  // a stale stamp would survive a later re-code and pin the row to the wrong
+  // sort day's coded set (#697).
+  delete item._codedDay;
   // Move it back into the unresolved model (transition in lib/ibno-session.js).
   const next = IbnoSession.undo(manualItems, resolvedItems, label);
   manualItems = next.manual;
@@ -7594,6 +9324,9 @@ function onDrop(e) {
 initCollapsibleSections();
 initSortControls();
 initMergedShortcuts();   // the All chip's `A` (#696). C / B / W are untouched.
+// Tyler's column arrangement (#701). Runs before any restore renders rows, so
+// the header comes up in his order rather than snapping into it a frame later.
+initColumnLayout();
 
 // Reflect the saved copy-mode choice (#copy-mode) in the toggle on load.
 syncCopyModeControl();
@@ -7604,12 +9337,11 @@ syncCopyModeControl();
 loadActualAreas();
 loadAreaNotes();  // before restoreSession, which sets the sort day and may roll areas into notes
 loadBarcodeDone();
-// Work mode is remembered across a reload, but only takes effect once there
-// are rows to work — restoring it onto an empty page would show a bar with
-// nothing in it.
-try {
-  if (toolStorage.get(WORK_MODE_KEY, '')) setWorkMode(true);
-} catch (e) { /* storage unavailable: start with it off */ }
+// Work mode is the resting state once a report is loaded (#697), so it is
+// applied by applyRestingWorkMode() after rows exist — from renderResults on a
+// fresh drop, and from the restore below on a reload. Nothing is switched on
+// here: restoring it onto a still-empty page would show a bar with nothing in
+// it, which is what the old boot-time restore did.
 
 // Escape closes the barcode dialog; clicking the backdrop does too. The dialog
 // is display-only, so dismissing it can never lose a code — the area field
@@ -7620,7 +9352,23 @@ document.addEventListener('keydown', e => {
 
 // Restore an in-progress session if one was persisted (#157), so a mid-shift
 // reload lands back on the work instead of the empty drop zone.
-restoreSession();
+//
+// Issue #668: the early Post Sort lane restores FIRST and, when it has rows,
+// it holds the main slot — restoreSession() is skipped rather than layering a
+// second report onto the page. That is ADR 0021's one-report-at-a-time rule
+// applied to a reload: whichever report was loaded last is the one whose key
+// still exists (each load path removes the other's), so in practice only one
+// of these two ever has anything to restore. The order is the tiebreak for a
+// store that somehow holds both — a hand-edited or pre-#668 legacy store —
+// and it resolves toward the lane the supervisor is mid-sort on.
+//
+// The early lane is offered the sort day of the persisted session FIRST, so a
+// lane from a superseded sort is refused on its own merits (INBOUND_DATE, not
+// the calendar) before it can claim a slot it has no right to.
+if (!restoreEarlyLane(persistedSessionSortDay())) restoreSession();
+
+// Whichever of those produced rows, the page rests in Work mode (#697).
+applyRestingWorkMode();
 
 // Cross-device: pull-merge the shared Repeat History on load (#176). No-op unless
 // sync is configured; offline degrades to the local cache.
