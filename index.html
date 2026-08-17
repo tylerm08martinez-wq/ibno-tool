@@ -1883,7 +1883,7 @@ function loadHistory() {
 }
 
 function saveHistory(history) {
-  toolStorage.set(HISTORY_KEY, history);
+  return toolStorage.set(HISTORY_KEY, history);
 }
 
 // ─── REPEAT HISTORY PANEL (#166, ADR-0007) ────────────────────────────────────
@@ -4590,8 +4590,24 @@ function loadActualAreas() {
   actualAreaStore = ActualArea.restore(toolStorage.get(ACTUAL_AREA_KEY, null));
 }
 
+// Returns whether the write LANDED. Every caller that a human just typed into
+// must branch on this: `toolStorage.set` reports a dropped write (a full origin
+// throws QuotaExceededError), and until 2026-08-17 this function threw that
+// answer away. A refused area then sat on screen looking saved and was gone on
+// the next reload — the exact failure canPersistArea() already refuses out loud
+// for a missing sort day ("a box that keeps a typed value while persisting
+// nothing is worse than one that refuses"). Same standard, second cause.
 function saveActualAreas() {
-  toolStorage.set(ACTUAL_AREA_KEY, ActualArea.serialize(actualAreaStore));
+  return toolStorage.set(ACTUAL_AREA_KEY, ActualArea.serialize(actualAreaStore));
+}
+
+// The one message both Goes To commit paths speak when the write was dropped.
+// warn:true on purpose — it claims the note channel over the routine "N other
+// rows set to BELT 46", because a routing decision that did not persist is the
+// same class of error as one that landed on the wrong belt.
+function warnAreaNotSaved() {
+  flashGoesToNote('NOT SAVED: this browser\'s storage is full, so this area will be gone on refresh. ' +
+    'Clear the Repeat History (Settings) to make room.', { warn: true });
 }
 
 function actualAreaOf(item) {
@@ -4603,6 +4619,15 @@ function actualAreaOf(item) {
 // into the auto-coded or resolved lists, which are not being worked by hand.
 function manualAddressPairs() {
   return manualItems.map(it => ({ label: it.label, address: it.address || '' }));
+}
+
+// The same pairs for the Post Sort early lane. EVERY early row, not just the
+// ones the flagged-work-area fold is currently showing: a package at this stop
+// is at this stop whether or not it is on screen, and scoping propagation to
+// the visible set would make one typed area mean different things depending on
+// a fold state (ADR 0021's fold is a display decision, not a population one).
+function postSortAddressPairs() {
+  return postSortItems.map(it => ({ label: it.label, address: it.address || '' }));
 }
 
 // goesToCell(item) -> the editable cell. A plain text input, because the set of
@@ -5296,12 +5321,15 @@ function initColumnLayout() {
   applyColumnLayouts();
 }
 
-// goesToCell(item, opts) -> opts.noPropagate: true when the caller's own
-// commit path never fills a sibling row at the same address (the Post Sort
-// lane's commitPostSortGoesTo, unlike commitGoesTo) — the tooltip must not
-// claim a propagation that will not happen (/code-review on #642, finding 9;
-// the shared default tooltip previously always said "also fills any other
-// review row at the SAME address", which was simply false for that lane).
+// goesToCell(item, opts) -> opts.earlyLane: true when the caller's commit path
+// is commitPostSortGoesTo rather than commitGoesTo. Both lanes fill siblings at
+// the same address as of 2026-08-17, so the tooltip no longer denies
+// propagation — but they do not fill the SAME siblings, and the difference is
+// the one worth stating: an early write only reaches a box that is empty or
+// itself early, never a confirmed one. (Was opts.noPropagate, added by
+// /code-review on #642 finding 9 because the shared tooltip claimed a
+// propagation that lane did not do. Same rule, opposite direction: the tooltip
+// says what the lane actually does.)
 function goesToCell(item, opts) {
   const o = opts || {};
   const v = actualAreaOf(item);
@@ -5315,8 +5343,8 @@ function goesToCell(item, opts) {
   // shared buildManualRow() row builder (issue #662), which reuses this
   // exact function with opts.noPropagate: true for an early row.
   const early = v && ActualArea.isEarly(actualAreaStore, item && item.label);
-  const title = o.noPropagate
-    ? 'Where this package actually goes. Pre-fills this row only — does not fill any other row.'
+  const title = o.earlyLane
+    ? 'Where this package actually goes. Typing here also fills any other row at the SAME address that is still empty — it never overwrites a confirmed area.'
     : 'Where this package actually goes. Typing here also fills any other review row at the SAME address.';
   return '<td class="goesto-cell">' +
     '<input type="text" class="goesto-input" maxlength="' + ActualArea.MAX_LEN + '"' +
@@ -5368,7 +5396,13 @@ function commitGoesTo(label, raw) {
     today: currentSortDay,
   });
   actualAreaStore = result.store;
-  saveActualAreas();
+  const saved = saveActualAreas();
+  // Spoken BEFORE the drift guard on purpose. Both claim the warning channel and
+  // the last writer wins, so this ordering hands precedence to the drift guard:
+  // a package about to be walked to the wrong belt outranks one whose area will
+  // not survive a refresh. The routine spread note further down cannot erase
+  // either — flashGoesToNote holds a warning against non-warn writes.
+  if (!saved) warnAreaNotSaved();
   // DRIFT GUARD (#697). The preview and the write derive the stop from the same
   // key, so they agree by construction — and if they ever stop agreeing, that
   // is dock flex reaching outside the stop, which is the wrong-belt error this
@@ -5531,13 +5565,45 @@ function persistEarlyLane() {
   // value is the same size.
   toolStorage.remove(POST_SORT_KEY);
   if (toolStorage.set(POST_SORT_KEY, snap)) { postSortPersistWarning(false); return; }
+
+  // ONE reclaim rung, and only the free one (2026-08-17). The paragraph below
+  // still stands: this lane does not get to DROP the Repeat History, because a
+  // re-drop rebuilds the lane and nothing rebuilds a cross-day cross-device
+  // record. But the history's `detail` field is not that record. #287 made it
+  // device-local and historyForSync() strips it before every sync, so a device
+  // that syncs gets it back and a device that does not never shared it — and
+  // persistSession() already burns it first for the same reason. Trimming it
+  // costs nothing that the value ordering was protecting, and not trimming it
+  // loses a whole worked lane to bytes that were free for the taking. Remove
+  // before writing the lean copy: a 100%-full store refuses an in-place replace.
+  //
+  // The write ORDER is inverted relative to persistSession(), and deliberately.
+  // persistSession() removes first because it is allowed to end with no history
+  // at all, so a failed write costs it nothing it was not about to spend. This
+  // path is not allowed to end that way, and remove-then-write has a window
+  // where the key is gone. So: replace in place first, which is the case that
+  // works whenever the new value is SMALLER (it always is — lean is a subset).
+  // Only if that is refused does it fall back to remove-then-write, and a
+  // failure there puts the original back rather than leaving the key absent.
+  try {
+    const before = loadHistory();
+    const lean = IbnoRules.historyForSync(before);
+    if (!saveHistory(lean)) {
+      toolStorage.remove(HISTORY_KEY);
+      if (!saveHistory(lean)) saveHistory(before);
+    }
+  } catch (e) {}
+  if (toolStorage.set(POST_SORT_KEY, snap)) { postSortPersistWarning(false); return; }
+
   postSortPersistWarning(true);
 }
 
 // postSortPersistWarning(show) -> the early lane's OWN "this did not save"
 // notice, on the lane's own status line.
 //
-// NO RECLAIM LADDER HERE, AND THAT IS A DECISION, not an omission. #668 names
+// ONE RECLAIM RUNG, NOT A LADDER, AND THAT IS A DECISION, not an omission.
+// (2026-08-17: the rung was added; everything below about what this lane may
+// NOT spend is unchanged and still enforced — see persistEarlyLane.) #668 names
 // the quota as the risk for this payload, and the answer it specifies is the
 // payload itself: parsed scalars on a whitelist, ~250 bytes a row, measured at
 // under 1.2 MB for a 2,467-row pull against a ~5 MB origin quota. That is the
@@ -6739,10 +6805,11 @@ function togglePostSortFold() {
   renderEarlyLane();
 }
 
-// Commit on blur and on Enter, same discipline as attachGoesToInput, but this
-// lane's input writes with EARLY provenance (below) and never propagates to
-// other rows — the pre-assignment pass only ever answers for the exact label
-// it was fed.
+// Commit on blur and on Enter, same discipline as attachGoesToInput. This
+// lane's input writes with EARLY provenance (below), and since 2026-08-17 it
+// spreads across the same unit-exact stop the way the Manual Review lanes
+// always have — see lib/actual-area.js's setEarly for why the #642 no-spread
+// rule was the wrong read of what these values are.
 function attachPostSortGoesToInput(tr, item) {
   const input = tr.querySelector('.goesto-input');
   if (!input) return;
@@ -6766,10 +6833,35 @@ function attachPostSortGoesToInput(tr, item) {
 function commitPostSortGoesTo(label, raw) {
   // Same refusal as commitGoesTo: an unstamped entry would outlive every sort.
   if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
+  // Every row a typed area is allowed to answer for. BOTH lanes, because the
+  // same tracking label and the same stop can be on screen in either: ADR 0021
+  // gives one report the main slot, but a Post Sort row and a Manual Review row
+  // at one address must not disagree about where that address goes. setEarly
+  // protects whatever it does not own, so widening the pool cannot overwrite a
+  // confirmed value — it only lets an early write reach an EMPTY box.
+  const items = postSortAddressPairs().concat(manualAddressPairs());
+  // The same unit-exact stop the write will spread to, computed BEFORE it, so
+  // the drift guard below has something independent to compare against.
+  const plan = IbnoWorkLoop.dockFlexPlan(items, label);
   // Stamped with the loaded report's sort day, same clock as commitGoesTo (#695).
-  const result = ActualArea.setEarly(actualAreaStore, label, raw, { today: currentSortDay });
+  const result = ActualArea.setEarly(actualAreaStore, label, raw, {
+    items: items,
+    today: currentSortDay,
+  });
   actualAreaStore = result.store;
-  saveActualAreas();
+  // DRIFT GUARD (#697), now that this lane spreads too. Same reasoning as
+  // commitGoesTo: preview and write derive the stop from the same key, so they
+  // agree by construction, and a disagreement means the spread reached outside
+  // the stop — the wrong-belt error the unit-exact split exists to prevent.
+  const strayed = result.changed.filter(l => l !== label && plan.targets.indexOf(l) === -1);
+  if (strayed.length) {
+    flashGoesToNote('⚠ Dock flex reached ' + strayed.length +
+      ' package(s) outside this stop — check those addresses before scanning them.',
+      { warn: true });
+  }
+  // Same standard as commitGoesTo: a dropped write is said out loud rather than
+  // leaving a typed area on screen that a refresh will silently take back.
+  if (!saveActualAreas()) warnAreaNotSaved();
   result.changed.forEach(repaintGoesTo);
   // Keep the typed row's own input showing the normalized/refused value even
   // when the store didn't change (e.g. a blocked overwrite attempt).
@@ -6779,9 +6871,23 @@ function commitPostSortGoesTo(label, raw) {
   // silent: repaintGoesTo alone snaps the box back to the protected value
   // with no explanation, which reads as "my correction landed" when it did
   // not. flashGoesToNote already exists for exactly this kind of notice.
+  //
+  // Gated on THIS ROW, not on the whole changed list. Before this lane spread,
+  // the two were the same thing; now a refused typed row whose sibling did move
+  // reports a non-empty `changed`, and testing the array would swallow the
+  // refusal exactly when there is something else on screen to misread it as.
   const normalized = ActualArea.normalizeArea(raw);
-  if (normalized && result.changed.length === 0 && ActualArea.get(actualAreaStore, label) !== normalized) {
+  const rowChanged = result.changed.indexOf(label) !== -1;
+  if (normalized && !rowChanged && ActualArea.get(actualAreaStore, label) !== normalized) {
     flashGoesToNote('Not changed: this row already has a confirmed area from the report');
+  }
+  // Propagation is never silent, same as commitGoesTo — rows changing off-screen
+  // with no notice is how a human stops trusting the field.
+  const spread = result.changed.filter(l => l !== label).length;
+  if (spread) {
+    const nowValue = ActualArea.get(actualAreaStore, label);
+    flashGoesToNote(spread + ' other row' + (spread === 1 ? '' : 's') + ' at this address ' +
+      (nowValue ? 'set to ' + nowValue : 'cleared'));
   }
   syncBarcodeDialogArea(label);
   // Mirrors commitGoesTo: keeps every "Select with area (N)" button honest.
@@ -8374,11 +8480,11 @@ function buildManualRow(item, bucket) {
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibScanTime || '\u2014') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(ibWork) + '</td>' +
     streetCell(item) +
-    // noPropagate: true for an early row -- commitPostSortGoesTo (below) never
-    // fills a sibling row at the same address, so goesToCell's default
-    // tooltip ("also fills any other review row at the SAME address") would
-    // be false here (/code-review on #642, finding 9).
-    (isEarly ? goesToCell(item, { noPropagate: true }) : goesToCell(item)) +
+    // earlyLane: true for an early row -- commitPostSortGoesTo fills siblings
+    // at the same address too, but only ones that are empty or themselves
+    // early, so the tooltip states that narrower promise rather than the
+    // Manual Review lanes' broader one.
+    (isEarly ? goesToCell(item, { earlyLane: true }) : goesToCell(item)) +
     '<td class="cat-text mono">' + ToolHelpers.escapeHtml(zipOf(item) || '\u2014') + '</td>' +
     ispCell(item) +
     '<td>' + reasonPills(reason) + '</td>' +
