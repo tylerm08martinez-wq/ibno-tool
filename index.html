@@ -325,6 +325,26 @@
       background: var(--text); color: var(--surface); font-size: 13px; font-weight: 600;
       box-shadow: 0 4px 14px rgba(0,0,0,0.22);
     }
+    /* The Undo control inside the note pill (#746 review finding 1/3). The pill
+       itself stays pointer-events:none so it never eats a click aimed at the
+       table underneath it, exactly as before; the BUTTON re-enables pointer
+       events for itself alone, which is all that has to be clickable. Inverted
+       to match the pill (--surface on --text), so it needs no hex and no dark
+       override. */
+    #goesto-note .note-action {
+      pointer-events: auto;
+      margin-left: 10px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--surface);
+      background: transparent;
+      color: var(--surface);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #goesto-note .note-action:hover { background: var(--surface); color: var(--text); }
+
     /* The dock-flex drift guard: the wrong-belt backstop, so it must not read as
        routine feedback. Amber on near-black is legible in BOTH themes without
        depending on a theme token that flips underneath it, and the pill grows a
@@ -400,6 +420,55 @@
     #barcode-sheet-overlay .sheet-spacer { flex: 1; }
     #barcode-sheet-overlay .sheet-frame {
       flex: 1; width: 100%; border: 0; background: var(--surface);
+    }
+
+    /* MARK AS DONE, the confirm panel (#734).
+       z-index 95: ABOVE #barcode-sheet-overlay (80) so it is reachable on the
+       pop-up-blocked path, and above the transient note (90) so a routine toast
+       cannot paint over the one control that files a batch. Docked bottom-right
+       rather than centred, so it never covers the cards being confirmed
+       against. Tokens only, no literal colors — theme.css loads after this
+       block, and a hardcoded dark value here would silently lose to its generic
+       dark selectors. */
+    .barcode-confirm {
+      position: fixed; right: 18px; bottom: 18px; z-index: 95;
+      width: min(380px, calc(100vw - 36px)); max-height: min(60vh, 520px);
+      display: flex; flex-direction: column;
+      background: var(--surface); color: var(--text);
+      border: 2px solid var(--brand-ink); border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    }
+    .barcode-confirm .bc-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface-2); border-radius: 8px 8px 0 0;
+    }
+    .barcode-confirm .bc-title { font-size: 13px; font-weight: 800; flex: 1; }
+    .barcode-confirm .bc-x {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      border-radius: 5px; cursor: pointer; font-size: 12px; line-height: 1; padding: 4px 7px;
+    }
+    .barcode-confirm .bc-sub {
+      padding: 8px 12px 0; font-size: 12px; color: var(--text-muted);
+    }
+    .barcode-confirm .bc-list {
+      flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12.5px;
+    }
+    .barcode-confirm .bc-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .barcode-confirm .bc-row:last-child { border-bottom: 0; }
+    .barcode-confirm .bc-row input { width: 16px; height: 16px; cursor: pointer; margin: 0; }
+    .barcode-confirm .bc-label { font-family: ui-monospace, monospace; }
+    .barcode-confirm .bc-area {
+      margin-left: auto; font-weight: 800; letter-spacing: .02em;
+    }
+    .barcode-confirm .bc-area:empty { display: none; }
+    .barcode-confirm .bc-foot {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 9px 12px; border-top: 1px solid var(--border);
+      background: var(--surface-2); border-radius: 0 0 8px 8px;
     }
     .dt-td .dt-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-style: dotted; }
     .dt-td .dt-link:hover { color: var(--text); text-decoration-style: solid; }
@@ -593,7 +662,13 @@
     .btn-bulk.b65 { background:#0369a1; }
     .btn-bulk:disabled { opacity:.4; cursor:default; }
     .manual-check, .postsort-check { width:16px; height:16px; cursor:pointer; }
-    .manual-body tr.row-checked td { background:#fff6ee; }
+    /* .assigned-body is the ✅ Work area assigned tab's tbody (#734). It carries
+       the same ROW styling as a lane, because its rows are built by the very
+       same buildManualRow(), but deliberately NOT the .manual-body class:
+       that class means "a workable lane" to workRows(), and a filed row must
+       never take the Work-mode cursor. */
+    .manual-body tr.row-checked td,
+    .assigned-body tr.row-checked td { background:#fff6ee; }
     .btn-apply-mini {
       padding: 3px 9px;
       background: #16a34a;
@@ -1134,8 +1209,10 @@
     }
     /* Dimmed in place, never removed: the list must not shrink under his hand
        while dock flex is settling several rows at once (#612 decision 2). */
-    .manual-body tr.row-coded > td { opacity: .55; }
-    .manual-body tr.row-coded .coded-tag {
+    .manual-body tr.row-coded > td,
+    .assigned-body tr.row-coded > td { opacity: .55; }
+    .manual-body tr.row-coded .coded-tag,
+    .assigned-body tr.row-coded .coded-tag {
       font: 800 10.5px/1 inherit; padding: 3px 7px; border-radius: 4px; margin-right: 6px;
       background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft);
     }
@@ -1147,7 +1224,15 @@
       background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft);
     }
     .parked-chip:hover { background: var(--hover-soft); color: var(--text); }
-    .btn-park-mini {
+    /* .btn-503-mini is the one-click 503 control (#746). It shares this rule
+       rather than getting hardcoded colours of its own, so it inherits the same
+       tokens Park does and cannot break in dark mode while Park stays fine —
+       theme.css redefines every token used here, so there is nothing to
+       override. Its own CLASS, not .btn-park-mini, because three existing DOM
+       tests reach a row's Park button with querySelector('.btn-park-mini') and
+       a second element with that class in the same cell is how a test starts
+       clicking the wrong button (the .btn-done-mini/.btn-undo-mini lesson). */
+    .btn-park-mini, .btn-503-mini {
       padding: 3px 9px;
       background: var(--surface-2);
       color: var(--text-muted);
@@ -1159,7 +1244,21 @@
       margin-left: 4px;
       transition: background 0.12s;
     }
-    .btn-park-mini:hover { background: var(--hover-soft); color: var(--text); }
+    .btn-park-mini:hover, .btn-503-mini:hover { background: var(--hover-soft); color: var(--text); }
+    /* Review finding 4: the 503 control sat pixel-identical to Park, right
+       beside it. One is benign (Park writes no record); the other is
+       records-tier — a 503 keeps a package's code out of OPS2 (#615), so a
+       misfire strands a good package on the 503 pallet. It keeps the SHARED
+       rule above, which is what makes dark mode safe, and separates itself
+       with two EXISTING tokens rather than a new colour literal: the stronger
+       control border and full-strength text, both of which flip with the
+       theme. Deliberately not a red/danger pill — this is a routine daily
+       action on the report Tyler works from, not an alarm. */
+    .btn-503-mini {
+      border-color: var(--border-strong);
+      color: var(--text);
+      letter-spacing: .02em;
+    }
     .section.set-aside .lane-scope {
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
       color: var(--text-faint); text-transform: uppercase;
@@ -1541,6 +1640,12 @@
       <button type="button" class="parked-chip" id="manual-not-fixed-chip" style="display:none"
         onclick="reveal503()"
         title="Addresses you flagged 503 on an earlier sort day that are back on this report. Still coming back means the address update did not happen. Click to see which."></button>
+      <!-- The filed count (#734), the same quiet register as the parked and 503
+           chips: rows that left the working list leave a number behind. Absent
+           at zero, because "0 assigned" is volume without information (#611). -->
+      <button type="button" class="parked-chip" id="manual-assigned-chip" style="display:none"
+        onclick="revealAssigned()"
+        title="Rows you barcoded and confirmed you assigned. They wait in the Set aside group at the page bottom, still fully codeable, and reset on a new sort day. Click to open them."></button>
     </div>
     <div class="right">
       <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
@@ -1826,6 +1931,14 @@
               aria-selected="false" aria-controls="set-aside-pane-503"
               onclick="event.stopPropagation();clickSetAsideTab('503')"
               onkeydown="event.stopPropagation()">&#128683; 503s <span class="badge" id="filed-503-badge">0</span></button>
+      <!-- ✅ WORK AREA ASSIGNED (#734). Rows that got a barcode card AND a
+           confirmation that Tyler actually assigned them. It is a third TAB
+           rather than a second list because these rows are still fully
+           workable — see the pane below. -->
+      <button type="button" class="set-aside-tab" id="set-aside-tab-assigned" role="tab"
+              aria-selected="false" aria-controls="set-aside-pane-assigned"
+              onclick="event.stopPropagation();clickSetAsideTab('assigned')"
+              onkeydown="event.stopPropagation()">&#9989; Work area assigned <span class="badge" id="assigned-badge">0</span></button>
       <span class="lane-scope">deferred for a later look &middot; waits until you unpark it, or the package stops showing up</span>
     </div>
   </div>
@@ -1887,6 +2000,85 @@
         <tbody id="filed-503-tbody"></tbody>
       </table>
     </div>
+
+    <!-- ✅ WORK AREA ASSIGNED (#734, spec #690, map #608). Rows Tyler generated
+         a barcode card for AND confirmed on the panel that he actually
+         assigned. Generation alone never files a row: a sheet can be reprinted
+         or abandoned, and a silently hidden package is the failure this ticket
+         exists to prevent.
+
+         A FILED ROW IS NOT A FROZEN ROW, and that is why this pane's table is
+         the MANUAL table's own column set rather than the six-column shape the
+         Parked and 503s tabs use. Its rows are built by buildManualRow(), the
+         same builder the working list uses, so the quick-code pill, the free
+         code entry with Apply, the checkbox and every chip are the SAME
+         controls — not a second copy that can drift. Tyler still needs to code
+         a 33 on a filed row.
+
+         The tbody is NOT `.manual-body`: that class means "a workable lane" to
+         workRows(), and a filed row must never take the Work-mode cursor. Its
+         row styling is carried explicitly alongside .manual-body's in the CSS
+         above. -->
+    <div id="set-aside-pane-assigned" role="tabpanel" aria-labelledby="set-aside-tab-assigned" style="display:none">
+      <div class="section-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="filter-note">barcoded and confirmed assigned &middot; still fully codeable &middot; never counts as scanned &middot; clears on a new sort day</span>
+        </div>
+        <div class="right">
+          <button class="btn btn-gray" id="copy-all-assigned" onclick="copyAllAssigned()" title="Copy every assigned row (tracking # or full barcode per the Copy-as toggle), one per line">Copy all (0)</button>
+          <button class="btn btn-gray" id="barcode-all-assigned" onclick="barcodeAllAssigned()" title="Re-print a barcode sheet for every row in this tab — for a sheet that was lost or smudged. Read-only; it never codes a row and never files one again.">&#9612;&#9613;&#9612; Barcode all (0)</button>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:28px" data-col="select" data-col-role="lead"></th>
+            <th data-col="label">Tracking #</th>
+            <th data-col="category">Category</th>
+            <th data-col="inbound">Inbound Date</th>
+            <th data-col="scan">Scan Time</th>
+            <th data-col="workarea">IB_WORK_AREA</th>
+            <th class="street-col" data-col="street" title="House number and street only — what you paste into FRO. Shown while Copy mode is on.">Street</th>
+            <th class="goesto-col" data-col="goesto" title="Where this package ACTUALLY goes — typed by you, printed on the barcode. Not from the report.">Goes To</th>
+            <th data-col="zip">ZIP</th>
+            <th data-col="isp">Service Provider</th>
+            <th data-col="reason">Reason</th>
+            <th data-col="recipient">Recipient / Address</th>
+            <th data-col="service">Service</th>
+            <th style="width:180px" data-col="code" data-col-role="trail">Resolve</th>
+          </tr>
+        </thead>
+        <tbody id="assigned-tbody" class="assigned-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MARK AS DONE, AFTER GENERATION (#734). Opened by "Barcode selected" the
+     moment a sheet is generated, listing the cards that ACTUALLY reached the
+     paper with every one pre-checked. Tyler unchecks anything he did not
+     assign; those rows stay in the working list untouched. Dismissing marks
+     nothing at all.
+
+     DOCKED, NOT MODAL, and that is deliberate: on the pop-up-blocked path the
+     sheet lives in #barcode-sheet-overlay covering the whole viewport, and a
+     centred modal would either sit behind the sheet (unreachable) or cover the
+     very cards he is confirming against. A bottom-right panel above the overlay
+     is reachable and non-occluding on BOTH paths. -->
+<div id="barcode-confirm" class="barcode-confirm" role="dialog" aria-modal="false"
+     aria-labelledby="barcode-confirm-title" style="display:none">
+  <div class="bc-head">
+    <span id="barcode-confirm-title" class="bc-title">&#9989; Mark as done</span>
+    <button type="button" class="bc-x" id="barcode-confirm-dismiss"
+            onclick="dismissBarcodeConfirm()"
+            title="Close without marking anything. Every row stays in the working list.">&#10005;</button>
+  </div>
+  <div class="bc-sub" id="barcode-confirm-sub"></div>
+  <div class="bc-list" id="barcode-confirm-list"></div>
+  <div class="bc-foot">
+    <button type="button" class="btn btn-gray" onclick="dismissBarcodeConfirm()">Not now</button>
+    <button type="button" class="btn btn-purple" id="barcode-confirm-apply"
+            onclick="applyBarcodeConfirm()">Mark 0 as done</button>
   </div>
 </div>
 
@@ -1961,6 +2153,12 @@
      store, loaded after sort-day.js whose day-store mechanics it delegates
      to, so park and the Goes To areas ride the same INBOUND_DATE clock. -->
 <script src="lib/ibno-parked.js"></script>
+<!-- The BARCODED state and the "✅ Work area assigned" tab (#734): a card was
+     generated for this package AND Tyler confirmed he assigned it. Its OWN
+     store, deliberately never a flag on lib/barcode-done.js — ADR 0022
+     invariant 2 forbids a filed batch reading as scanned. Loaded after
+     sort-day.js, whose day-store mechanics it delegates to. -->
+<script src="lib/ibno-filed.js"></script>
 <script src="lib/ibno-503.js"></script>
 <!-- The barcode sheet's own planning rules (#700): the stop-key
      physical-address invariant, same-street bands with their position pills,
@@ -3143,8 +3341,10 @@ let setAsideTab = 'parked';
 let setAsideTabPinned = false;
 
 const SET_ASIDE_TABS = [
-  { key: 'parked', tab: 'set-aside-tab-parked', pane: 'set-aside-pane-parked' },
-  { key: '503',    tab: 'set-aside-tab-503',    pane: 'set-aside-pane-503' },
+  { key: 'parked',   tab: 'set-aside-tab-parked',   pane: 'set-aside-pane-parked' },
+  { key: '503',      tab: 'set-aside-tab-503',      pane: 'set-aside-pane-503' },
+  // ✅ Work area assigned (#734): barcoded AND confirmed assigned.
+  { key: 'assigned', tab: 'set-aside-tab-assigned', pane: 'set-aside-pane-assigned' },
 ];
 
 function selectSetAsideTab(key) {
@@ -3424,11 +3624,18 @@ function renderSetAside() {
   const n503 = rows503.length;
   const notFixed = notFixed503();
   const nNotFixed = notFixed.length;
+  // The ✅ Work area assigned tab's count (#734), read off the SAME loaded
+  // population, so no tab can claim a package the report in front of Tyler no
+  // longer carries.
+  const rowsAssigned = assignedRows();
+  const nAssigned = rowsAssigned.length;
+  const anything = n || n503 || nNotFixed || nAssigned;
   const section = document.getElementById('set-aside-section');
-  // The group is on screen while ANY of the three has something to say. It
+  // The group is on screen while ANY of the four has something to say. It
   // used to key on the parked count alone, which would have hidden a full
-  // 503s tab (#699).
-  if (section) section.style.display = (n || n503 || nNotFixed) ? 'block' : 'none';
+  // 503s tab (#699), and keying it on three would hide a full assigned tab
+  // the same way (#734).
+  if (section) section.style.display = anything ? 'block' : 'none';
   const badge = document.getElementById('parked-badge');
   if (badge) badge.textContent = n;
   const chip = document.getElementById('manual-parked-chip');
@@ -3439,6 +3646,7 @@ function renderSetAside() {
   const copyBtn = document.getElementById('copy-all-parked');
   if (copyBtn) copyBtn.textContent = 'Copy all (' + n + ')';
   render503Tab(rows503, notFixed);
+  renderAssignedTab(rowsAssigned);
   // CLEARED BEFORE the zero early-return below, never after it. The clear used
   // to live under that return, so at a count of zero the tab kept the PREVIOUS
   // report's rows: the badge read 0 over rows still in the tbody, which is the
@@ -3448,8 +3656,9 @@ function renderSetAside() {
   if (tbody) tbody.innerHTML = '';
   if (tbody && n) rows.forEach(item => tbody.appendChild(buildParkedRow(item)));
   // Collapse only when the WHOLE group is empty. Keying this on the parked
-  // count alone would have shut the group on every 503 filing (#699).
-  if (!(n || n503 || nNotFixed)) {
+  // count alone would have shut the group on every 503 filing (#699), and on
+  // three counts would shut it on every "Mark as done" (#734).
+  if (!anything) {
     setSetAsideOpen(false);
     setAsideTabPinned = false;   // nothing left to have chosen between
     selectSetAsideTab('parked');
@@ -3462,10 +3671,16 @@ function renderSetAside() {
   // Skipped once he has picked a tab himself: opening the empty Parked tab on
   // purpose and being thrown back to 503s on the next repaint is the control
   // arguing with him.
-  if (setAsideTabPinned) selectSetAsideTab(setAsideTab);
-  else if (setAsideTab === 'parked' && !n && (n503 || nNotFixed)) selectSetAsideTab('503');
-  else if (setAsideTab === '503' && !(n503 || nNotFixed) && n) selectSetAsideTab('parked');
-  else selectSetAsideTab(setAsideTab);
+  //
+  // #734 makes this a THREE-tab decision, so it is expressed as "does the
+  // selected tab have anything in it, and if not, which one does" rather than
+  // as a growing chain of pairwise swaps — a chain of three pairs would be six
+  // branches and is exactly how a fourth tab would get silently missed.
+  if (setAsideTabPinned) { selectSetAsideTab(setAsideTab); return; }
+  const counts = { parked: n, '503': n503 || nNotFixed, assigned: nAssigned };
+  if (counts[setAsideTab]) { selectSetAsideTab(setAsideTab); return; }
+  const withRows = SET_ASIDE_TABS.filter(t => counts[t.key])[0];
+  selectSetAsideTab(withRows ? withRows.key : setAsideTab);
 }
 
 // ─── THE 503s TAB (#699) ────────────────────────────────────────────────────
@@ -3612,13 +3827,217 @@ function build503Row(item) {
 // clear503(label) -> empty this row's Goes To through whichever commit path
 // owns it. A label the main report carries (open or coded) is commitGoesTo's;
 // a label only the Post Sort lane carries is commitPostSortGoesTo's.
-function clear503(label) {
+function clear503(label) { commitGoesToOwning(label, ''); }
+
+// commitGoesToOwning(label, raw) -> commit a Goes To value through the path that
+// OWNS this row. A label the main report carries (open or coded) is
+// commitGoesTo's; a label only the Post Sort lane carries is
+// commitPostSortGoesTo's.
+//
+// Which path matters, and getting it wrong stranded packages. A Post Sort-ONLY
+// row was filed through commitPostSortGoesTo, whose pool is the early lane and
+// whose writer is ActualArea.setEarly; routing its clear through commitGoesTo
+// instead passed a pool the label is not even in, so siblings() came back empty
+// and every sibling stayed filed — in the tab, out of OPS2, with no reachable
+// control to clear them. It also sent an early-provenance entry through the
+// main-report clear, which deletes unconditionally rather than honouring
+// setEarly's oursToTouch guard.
+//
+// FOR CALLERS WITH NO ROW IN HAND. build503Row's Clear is on the 503s tab,
+// which renders from a union of both reports' items and has no provenance to
+// route on, so a label lookup is the only honest answer there. A caller that
+// DOES hold the row must route on item.provenance instead — see build503Button
+// (#746 review finding 2) — because a lookup and the row can disagree the
+// moment both reports are populated at once, which the #732 line of work will
+// make possible.
+function commitGoesToOwning(label, raw) {
   const l = String(label == null ? '' : label).trim();
   if (!l) return;
   const inMain = manualItems.some(it => it && it.label === l)
     || resolvedItems.some(it => it && it.label === l);
-  if (inMain) commitGoesTo(l, '');
-  else commitPostSortGoesTo(l, '');
+  if (inMain) commitGoesTo(l, raw);
+  else commitPostSortGoesTo(l, raw);
+}
+
+// build503Button(item) -> the one-click 503 control for a working-list row
+// (#746). Tyler, 2026-08-19: "i noticed the 503s go to their own category when
+// i type them in but i still need to manually assign them to 503 first before
+// they go over there." Park got a one-click control in #698 and on early rows
+// in #744; 503 simply never got one, and there is no principled reason the two
+// differ.
+//
+// A TOGGLE, and its state is read at CLICK time, not at build time. The two
+// reads are not the same: a row's filing can change under a rendered button
+// (a dock-flexed sibling, a Clear from the tab, a re-drop), and a button that
+// acted on what it looked like when it was built would file a row the supervisor
+// can see is already filed. The LABEL is built from the render-time read because
+// that is all a label can be; the ACTION re-asks.
+//
+// The tooltip names the mechanism rather than implying a second state, because
+// there is no second state: a row is filed 503 exactly when its Goes To reads
+// 503. Saying otherwise on screen would be the first place the tool taught a
+// wrong model of the flag.
+//
+// NO CONFIRM DIALOG, and that is the deliberate reading of "the confirmation
+// story should be no weaker than typing it by hand" (#746's records-tier note).
+// Typing 503 by hand is unconfirmed, so the bar to clear is reversibility, not
+// friction: the same control inverts to Clear 503 the moment the row is filed,
+// the 503s tab row carries Clear 503, and clearing walks back the auto-log
+// through Ibno503.unrecord. A modal here would also defeat the point of the
+// ticket, whose title is "one-click".
+function build503Button(item) {
+  const btn = document.createElement('button');
+  btn.className = 'btn-503-mini';
+  const filed = isFiled503(item);
+  btn.textContent = filed ? 'Clear 503' : '503';
+  btn.title = filed
+    ? 'Empty this row’s Goes To, returning it to the working list'
+    : 'File this bad address: types 503 into this row’s Goes To for you. The flag IS that value, so this does exactly what typing it does — same dock flex across the stop, same auto-log, same 503s tab, and no OPS2 code.';
+  // ROUTED ON THE ROW'S OWN PROVENANCE, never on a label lookup (#746 review
+  // finding 2). item.provenance === 'early' is the single signal for a Post
+  // Sort row everywhere else on this page, and it is what the row's own Goes To
+  // box already routes on — attachPostSortGoesToInput commits an early row
+  // through commitPostSortGoesTo. A button sitting two cells away from that box
+  // must not answer the question a different way.
+  //
+  // commitGoesToOwning's label lookup is the RIGHT answer where the caller has
+  // no row in hand (build503Row's Clear, on the 503s tab), and it is still used
+  // there. It is the wrong answer here, and the difference is currently
+  // invisible: under ADR 0021 exactly one report is populated at a time, so an
+  // early row's label is never in manualItems and the two agree. The #732 line
+  // of work breaks that invariant — renderManualSectionRows says so in as many
+  // words — and on that day this button would have routed an early row through
+  // commitGoesTo while the box beside it routed through commitPostSortGoesTo.
+  // Those are not equivalent: setEarly REFUSES to overwrite a confirmed value
+  // and ActualArea.set does not, so the click could have written 503 over a
+  // confirmed belt the keystroke would have protected. That is criterion 2
+  // failing in the dangerous direction, and it costs one line to make
+  // impossible instead of leaving it for #732 to discover.
+  const commitFn = item && item.provenance === 'early' ? commitPostSortGoesTo : commitGoesTo;
+  btn.addEventListener('click', () => {
+    commitFn(item.label, isFiled503(item) ? '' : Ibno503.AREA);
+  });
+  return btn;
+}
+
+// ─── THE ✅ WORK AREA ASSIGNED TAB (#734) ────────────────────────────────────
+//
+// Membership is the filing store and nothing else: a card was generated for
+// this package AND Tyler confirmed on the panel that he actually assigned it.
+// Generation alone never files a row (a sheet can be reprinted or abandoned),
+// and nothing here ever reads or writes lib/barcode-done.js — ADR 0022
+// invariant 2 keeps barcoded and scanned apart.
+
+function revealAssigned() { revealSetAside('assigned'); }
+
+function renderAssignedTab(rows) {
+  const n = rows.length;
+  const badge = document.getElementById('assigned-badge');
+  if (badge) badge.textContent = n;
+  // The trace that cannot be filtered away (#612 decision 8, applied to this
+  // state): while anything is filed a count stays on the Needs Manual Review
+  // header, clickable to reveal the rows. Absent at zero (#611).
+  const chip = document.getElementById('manual-assigned-chip');
+  if (chip) {
+    chip.style.display = n ? '' : 'none';
+    chip.textContent = IbnoFiled.chipText(n);
+  }
+  const copyBtn = document.getElementById('copy-all-assigned');
+  if (copyBtn) copyBtn.textContent = 'Copy all (' + n + ')';
+  const barcodeBtn = document.getElementById('barcode-all-assigned');
+  if (barcodeBtn) {
+    barcodeBtn.innerHTML = '&#9612;&#9613;&#9612; Barcode all (' + n + ')';
+    barcodeBtn.disabled = n === 0;
+  }
+  // Cleared BEFORE any early return, the rule both neighbouring tabs already
+  // follow: a badge reading 0 over the previous report's rows is the tab
+  // claiming nothing is filed while holding rows nobody can clear.
+  const tbody = document.getElementById('assigned-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  rows.forEach(item => tbody.appendChild(buildAssignedRow(item)));
+}
+
+// buildAssignedRow(item) -> a filed row, built by buildManualRow — THE SAME
+// BUILDER THE WORKING LIST USES, and that is the load-bearing part of this
+// ticket rather than a shortcut.
+//
+// "A filed row is not a frozen row": Tyler still needs to code a 33 on one, so
+// the quick-code pill, the free code entry with Apply, the Done button, the
+// checkbox, the Goes To box and every chip have to be the controls he already
+// knows. Re-implementing them here would be a second copy of the working list's
+// row that drifts from it the first time either side changes — the drift class
+// /code-review on #642 finding 8 already caught once on this page. Calling the
+// one builder makes "identical" structural instead of a promise.
+//
+// A row that has since been CODED renders coded, the same buildManualRow +
+// markRowCoded pair renderManualSectionRows uses for its own coded rows, so a
+// filed row Tyler codes stays visibly coded across the next repaint.
+//
+// The only addition is the tab's own action, which is the mirror of Unpark.
+function buildAssignedRow(item) {
+  const tr = buildManualRow(item, null);
+  if (resolvedItems.some(it => it && it.label === item.label)) markRowCoded(tr, item);
+  attachAssignedBackButton(tr);
+  return tr;
+}
+
+// attachAssignedBackButton(tr) -> the tab's own action, the mirror of Unpark.
+//
+// Called from buildAssignedRow AND from markRowCoded, and the second call site
+// is the point. markRowCoded EMPTIES the action cell and rebuilds it (coded tag
+// + Undo), which on a working-list row is exactly right and on a filed row took
+// "Back to list" away with it — coding a filed row left it with no reachable
+// way back into the working list until the next full repaint of the group. It
+// is idempotent, so a row that already has one does not grow a second.
+function attachAssignedBackButton(tr) {
+  if (!tr || !tr.dataset || !tr.dataset.label) return;
+  const cell = tr.querySelector('td.action-cell');
+  if (!cell || cell.querySelector('.btn-assigned-back')) return;
+  const back = document.createElement('button');
+  back.className = 'btn-park-mini btn-assigned-back';
+  back.textContent = 'Back to list';
+  back.title = 'Return this row to the working list. Use it when the assignment did not actually happen — it writes no record either way.';
+  back.addEventListener('click', (e) => { e.stopPropagation(); unfileRow(tr.dataset.label); });
+  cell.appendChild(back);
+}
+
+// Copy all: every filed row, one per line, honoring the Copy-as toggle. The
+// same shared batch, skip-telling and clipboard write BOTH other Set aside
+// "Copy all" buttons use (#750, #760), so the three cannot drift apart on the
+// question of whether the clipboard actually took the batch.
+function copyAllAssigned() {
+  const rows = assignedRows();
+  if (!rows.length) return;
+  const batch = setAsideCopyBatch(rows);
+  const btn = document.getElementById('copy-all-assigned');
+  if (!batch.lines.length) {
+    if (btn) {
+      btn.textContent = '0 copied';
+      setTimeout(() => { renderSetAside(); }, 1200);
+    }
+    setAsideCopySkipNote(batch.skipped);
+    return;
+  }
+  setAsideCopyWrite('copy-all-assigned', batch.lines);
+  setAsideCopySkipNote(batch.skipped);
+}
+
+// Barcode all: re-print a sheet for the whole tab, for a sheet that was lost or
+// smudged. It goes through printBarcodesFor like every other barcode action, so
+// the #667 gating, the #700 bands and the tick handling are the same paper.
+//
+// IT OPENS NO CONFIRM PANEL, and that is deliberate: every row here is ALREADY
+// filed, so there is nothing left to confirm and a panel would only offer to
+// re-file what is already filed. The confirm panel belongs to the one act that
+// changes state, "Barcode selected" on the working list.
+function barcodeAllAssigned() {
+  const rows = assignedRows();
+  if (!rows.length) return;
+  printBarcodesFor(rows.map(it => ({
+    label: it.label,
+    early: it.provenance === 'early',
+  })));
 }
 
 // setAsideCopyBatch(rows) -> { lines, skipped } for either Set aside tab's
@@ -4233,7 +4652,12 @@ const MERGED_VIEW_CTX = {
   streetOf: (item) => streetOf(item),
   ispOf: (item) => ispOf(item),
   stateOf: (item) => stateOf(item),
-  isSetAside: (item) => IbnoParked.isParked(parkedStore, item && item.label) || isFiled503(item),
+  // #734: a BARCODED-and-confirmed row is set aside on exactly the same terms
+  // as a parked or 503 row. This is the line that makes "chip counts on the
+  // merged sections exclude filed rows" true, so a chip can never promise rows
+  // the list will not produce.
+  isSetAside: (item) => IbnoParked.isParked(parkedStore, item && item.label) || isFiled503(item)
+    || IbnoFiled.isFiled(filedStore, item && item.label),
 };
 
 // The population rule, one call, one place. Both the full-report split and the
@@ -4254,7 +4678,18 @@ function workingLaneItems(key) {
     // Filed 503s leave the working list on exactly the same terms (#699): the
     // row is answered, it is waiting on the 503 pallet, and it must not inflate
     // a badge, a search note, or the progress bar while being invisible here.
-    .filter(it => !isFiled503(it));
+    .filter(it => !isFiled503(it))
+    // And barcoded-and-confirmed rows on the same terms again (#734): the row
+    // is handled and waiting in the ✅ Work area assigned tab, so it must stop
+    // competing with open work. It leaves the progress POPULATION with the
+    // working list, which is that bar's whole contract — "the list that still
+    // needs him" — exactly as a parked or 503 row already does.
+    //
+    // THE THING TO GET RIGHT: this moves neither half of the bar by making
+    // anything read as SCANNED. Nothing on the filing path touches
+    // barcodeDoneStore, the scanned NUMERATOR is untouched by a filing, and
+    // ADR 0022 invariant 2 is what forbids ever closing that gap.
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));
 }
 // The same exclusion for the early (Post Sort) lane (#698 review finding 2):
 // a label parked from the main report can ALSO have an early row, and that
@@ -4265,7 +4700,8 @@ function workingLaneItems(key) {
 function workingEarlyLaneItems(key) {
   return earlyLaneItems(key)
     .filter(it => !IbnoParked.isParked(parkedStore, it && it.label))
-    .filter(it => !isFiled503(it));   // #699, same rule as the full-report lane
+    .filter(it => !isFiled503(it))    // #699, same rule as the full-report lane
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));  // #734, same rule again
 }
 
 // Issue #673 review finding 2: every Needs Manual Review lane has an early-row
@@ -4517,6 +4953,11 @@ function renderResults({ auto, manual, dayType }, recurringMap = {}, collapseOnL
   // this report no longer carries drops off without residue, before anything
   // renders against the store.
   reconcileParked();
+  // The filing store meets the same fresh report (#734): a filed package this
+  // report no longer carries drops off without residue, before anything renders
+  // against the store. Beside reconcileParked rather than folded into it — the
+  // two stores answer different questions and have different lifetimes.
+  reconcileFiled();
   resetViewControls();
 
   // Stats
@@ -5703,8 +6144,28 @@ function loadAreaNotes() {
   areaNoteStore = SortDay.restoreNotes(toolStorage.get(AREA_NOTES_KEY, null));
 }
 
+// Returns whether the write LANDED, the same contract saveActualAreas() carries
+// and for the same reason (#716, split from #713 finding 3). This is the SECOND
+// growing store in a tool with a documented localStorage exhaustion incident
+// (auto-memory "IBNO localStorage Quota", where the symptom read as "a refresh
+// re-inputs the CSV"), so a dropped write here is not hypothetical. Its one
+// caller, applySortDayFrom, must branch on this: a note the page holds and the
+// disk does not is a record of what a package was carrying that vanishes on the
+// next reload, with nothing on screen admitting which state is real.
 function saveAreaNotes() {
-  toolStorage.set(AREA_NOTES_KEY, areaNoteStore);
+  return toolStorage.set(AREA_NOTES_KEY, areaNoteStore);
+}
+
+// The dated-note twin of warnAreaNotSaved(), on the SAME channel and with the
+// same warn:true reasoning: a record that did not persist outranks the routine
+// post-load notes, and flashGoesToNote holds a warning against them.
+//
+// It says NOT SAVED rather than "will be gone on refresh": the roll rolls the
+// note back to match disk (see applySortDayFrom), so the loss has already
+// happened by the time this is read, and naming a future tense would be a lie.
+function warnAreaNotesNotSaved() {
+  flashGoesToNote('NOT SAVED: this browser\'s storage is full, so the dated note for the areas carried ' +
+    'off the last sort day was not kept. Clear the Repeat History (Settings) to make room.', { warn: true });
 }
 
 // ─── PARKED ROWS (#698, decision #612 as amended by #613 rounds 19-20) ──────
@@ -5889,11 +6350,62 @@ function refreshAfter503Change() {
 //
 // wasFiled is the membership snapshot taken BEFORE the write, keyed by label,
 // so the re-render fires on a row LEAVING 503 as well as one entering it.
-function commit503(changed, wasFiled) {
+// commitFn is the commit function THIS write went through, and the undo below
+// is routed back through that same one. Not through a label lookup: dock flex
+// from an early commit can reach a main-report label, and it is setEarly that
+// owns whatever setEarly wrote — clearing it through the other path would meet
+// the oursToTouch guard from the wrong side.
+function commit503(changed, wasFiled, commitFn) {
   record503Changes(changed, wasFiled);
   const moved = (Array.isArray(changed) ? changed : []).some(
     label => !!wasFiled[label] !== is503Label(label));
   if (moved) refreshAfter503Change();
+  announce503Filing(changed, wasFiled, commitFn);
+}
+
+// announce503Filing(changed, wasFiled, commitFn) -> the counted trace and the
+// UNDO for a filing, spoken through the existing #goesto-note pill (#746 review
+// findings 1 and 3).
+//
+// Why this exists. Filing a 503 is a records-tier act — it keeps a package's
+// code out of OPS2 (#615) — and until this, one click did it SILENTLY: the row
+// vanished from the working list on the spot, and dock flex means a single
+// click can file several packages at a stop at once. The only way back was a
+// Clear button inside a collapsed tab. The row itself could never offer the
+// reversal, because a filed row leaves the working list by design (#699's
+// set-aside exclusion, which this does NOT relax).
+//
+// So the reversal comes to him instead of him going to find it, and it is a
+// notice rather than a modal on purpose: the ticket's whole point is one click,
+// and the bar the records tier sets here is reversibility, not friction.
+//
+// SPOKEN FOR BOTH PATHS, not just the button, because commit503 is shared by
+// commitGoesTo and commitPostSortGoesTo. Typing 503 by hand gets the same trace
+// and the same undo, and criterion 2's "the click and the keystroke produce
+// identical state" stays true of the notice too.
+//
+// It goes through flashGoesToNote unchanged, which means it inherits that
+// channel's precedence rule: an active dock-flex DRIFT WARNING suppresses it.
+// That is the right way round. A package about to be walked to the wrong belt
+// outranks an undo affordance, and the 503s tab's Clear is still there.
+function announce503Filing(changed, wasFiled, commitFn) {
+  if (typeof commitFn !== 'function') return;
+  const before = wasFiled || Object.create(null);
+  const filedNow = (Array.isArray(changed) ? changed : [])
+    .filter(label => !before[label] && is503Label(label));
+  if (!filedNow.length) return;
+  const n = filedNow.length;
+  flashGoesToNote('🚫 Filed 503 — ' + n + ' package' + (n === 1 ? '' : 's') +
+    ' at this stop, waiting in the 503s tab', {
+    action: {
+      label: 'Undo',
+      title: 'Put ' + (n === 1 ? 'this package' : 'these ' + n + ' packages') +
+        ' back in the working list by emptying the Goes To box again',
+      // Re-checked at click time: a row already cleared from the tab is left
+      // alone rather than committed over.
+      onClick: () => filedNow.forEach(label => { if (is503Label(label)) commitFn(label, ''); }),
+    },
+  });
 }
 
 // filed503Snapshot() -> which labels are filed 503 right now, taken BEFORE a
@@ -5966,9 +6478,29 @@ function applySortDayFrom(rows, opts) {
     day: day,
   });
   actualAreaStore = rolled.areas;
-  areaNoteStore = rolled.notes;
   saveActualAreas();
-  saveAreaNotes();
+  // ROLLED BACK ON A DROPPED WRITE (#716, split from #713 finding 3).
+  //
+  // Until 2026-08-21 this assigned rolled.notes and then called saveAreaNotes()
+  // with the answer thrown away, so a full origin left the page holding a dated
+  // note the disk did not have. That divergence is silent in BOTH directions:
+  // nothing warns, and the note reverts on the next reload with no trace of
+  // which state was real. saveActualAreas() is the already-fixed sibling of the
+  // same bug (PR #727) and this copies its shape.
+  //
+  // Memory follows DISK, not the other way round: on a refused write the store
+  // goes back to what is actually persisted, so the two can never disagree, and
+  // the loss is spoken instead of shown. Rolling the AREA demotion back too
+  // would be worse, not better — a carried area restored into the live store
+  // reads as FINISHED in three places at once (#621), which is the wrong-belt
+  // error class. A missing history note is a display gap; a resurrected stale
+  // area routes a package.
+  const notesBeforeRoll = areaNoteStore;
+  areaNoteStore = rolled.notes;
+  if (!saveAreaNotes()) {
+    areaNoteStore = notesBeforeRoll;
+    warnAreaNotesNotSaved();
+  }
   // The parked set follows the monotonic clock for its STAMP ONLY, and neither
   // entry point below may empty it (#730, Tyler 2026-08-19: "i would like park
   // to not be cleared. i have to manually clear each one"). A report's date is
@@ -6012,6 +6544,14 @@ function applySortDayFrom(rows, opts) {
   resolvedBarcodeSeed = null;
   resolvedBarcodeStore = SortDay.restoreDayStore(barcodeSource, day);
   saveResolvedBarcodes();
+  // The filing store (#734) rolls on the same STRICTER rule as the resolved
+  // barcodes and deliberately not on the parked set's carry-across: a new sort
+  // day clears the confirmed assignments, a same-day re-drop and an F5 keep
+  // them, and an unreadable day changes nothing. Yesterday's assignment is not
+  // evidence about today's package (ADR 0022 invariant 6), and a tracking
+  // number repeats across days. Same seed pattern again: the boot payload is
+  // consumed the first time the clock moves.
+  applyFiledSortDay(day);
 }
 
 // canPersistArea() -> whether a typed Goes To area can be given a sort day.
@@ -6163,11 +6703,200 @@ function markBarcodeDone(label, done) {
 // label ever ticked (lib/barcode-done.js's countDone scoping). Parked labels
 // are out of the working set here too (#698 review finding 2): a row waiting
 // in the Parked tab must not pad the lane's "N of M done".
+//
+// FILED ROWS STAY IN, and the parity argument with Park does NOT transfer here
+// (#734 review, item 2). This is a CARD-PROGRESS counter — "how far through the
+// paper am I" — and a filed row is BY DEFINITION one that was printed. Removing
+// exactly the rows that have cards from a count of worked cards is backwards.
+//
+// A parked row is different in kind, not merely in degree: it carries no area,
+// it was never on a sheet, so it can never carry a tick and can only ever pad
+// the denominator. That is why it leaves and a filed row does not.
+//
+// WHAT NARROWING THIS COST, measured on the real 2026-08-12 export: the note
+// read "3 of 8 done" after three ticks and VANISHED the moment those rows were
+// filed — because countDone is scoped to `labels`, so a filed row that was
+// already ticked left BOTH halves, not just the denominator. And it died on the
+// exact happy path this ticket creates: print, "Mark N as done" at print time,
+// then walk the dock ticking cards. Every ticked row is by then already filed,
+// so the note was dead for the whole batch — and it is the only thing on the
+// lane telling Tyler how far through the paper he is.
+//
+// This is the same trap workProgressLabels documents one screen down, entered
+// from the other side: a consumer narrowing a population that feeds a displayed
+// ratio has to ask ADR 0022 invariant 2 too, not only a consumer that writes a
+// tick. Both answers here are "keep the filed rows".
 function barcodeDoneSummary() {
   const labels = postSortItems.filter(earlyIsMine)
     .filter(it => !IbnoParked.isParked(parkedStore, it && it.label))
     .map(it => it.label);
   return { done: BarcodeDone.countDone(barcodeDoneStore, labels), total: labels.length };
+}
+
+// ─── THE FILING STORE: BARCODED AND CONFIRMED ASSIGNED (#734) ───────────────
+//
+// A label in here got a barcode card AND Tyler confirmed on the panel that he
+// actually assigned it. It is ADR 0022's fourth lifecycle state, and it lives
+// in its OWN localStorage key and its OWN module (lib/ibno-filed.js) for the
+// reason the ADR's consequences state outright: fold it into barcodeDoneStore
+// and a filed batch reads as SCANNED, which is invariant 2 and which would make
+// the progress bar report forty scans nobody made.
+//
+// NOTHING IN THIS BLOCK MAY READ OR WRITE barcodeDoneStore. The two stores are
+// independent by design and the only thing they share is a tracking number.
+const FILED_KEY = 'ibno_work_area_assigned';
+let filedStore = SortDay.emptyDayStore('');
+let filedSeed = null;
+
+// The seed is the raw stored payload held from boot, before any report has
+// named a sort day. restoreDayStore against an unknown day restores NOTHING, so
+// reading the key straight into the live store here would throw a whole shift's
+// filings away on every reload. applySortDayFrom consumes it the first time the
+// clock moves, which on an F5 is the early lane's own restore.
+function loadFiled() { filedSeed = toolStorage.get(FILED_KEY, null); }
+
+// THE BOOT SEED IS FOLDED IN FIRST, and that is not tidying. It is the third
+// time this exact destruction has had to be designed out of this file (#741's
+// recordResolvedBarcodes, #733's persistBarcodeDone, now this), so it is worth
+// stating in full rather than by reference:
+//
+// applyFiledSortDay consumes the seed ONLY WHEN THE CLOCK MOVES. A first load
+// after a refresh whose dates will not parse therefore early-returns out of
+// applySortDayFrom with the seed still unconsumed and filedStore still the
+// empty boot value. A write based on that empty store persists {} straight over
+// a full sort day of confirmed assignments, and the loss is INVISIBLE until the
+// next refresh reads it back — by which time the rows are back in the working
+// list with no record that they were ever assigned.
+//
+// The seed is CLEARED here too, so applyFiledSortDay cannot later re-consume a
+// stale copy and drop whatever was filed in between, and the seed's own day
+// stamp is carried onto the store, which is what the roll judges against.
+//
+// MERGES rather than replaces, the live entries winning. An UNFILE cannot be
+// lost to the merge: in the unconsumed-seed state the live store is empty, so
+// the tab renders empty and there is no seeded row on screen for Tyler to
+// unfile in the first place.
+//
+// This only stops the payload being DESTROYED. It deliberately does not make an
+// unreadable-day report DISPLAY those filings: the day store's rule is that an
+// unknown day restores nothing, and that rule is still right here.
+//
+// Returns whether the write LANDED (toolStorage.set answers false on a
+// QuotaExceededError), so a caller can speak about a refused write.
+function saveFiled() {
+  if (filedSeed !== null) {
+    const seeded = SortDay.serializeDayStore(filedSeed);
+    filedSeed = null;
+    const live = SortDay.serializeDayStore(filedStore);
+    filedStore = { day: live.day || seeded.day, items: Object.assign({}, seeded.items, live.items) };
+  }
+  return toolStorage.set(FILED_KEY, SortDay.serializeDayStore(filedStore));
+}
+
+// applyFiledSortDay(day) -> keep the filings if they belong to this sort day,
+// drop them if they do not (lib/ibno-filed.js syncSortDay owns the rule).
+//
+// Called from applySortDayFrom, so it runs only when the clock actually MOVES:
+// a same-day re-drop, which is Tyler's constant loop, never reaches it.
+//
+// This is the STRICTER of the two set-aside lifetimes and the difference is
+// deliberate. Park never clears on a roll (#730) because it is a deferral with
+// no other record anywhere. A filing is a statement about paper that was
+// printed and walked TODAY, and a tracking number repeats across days — carry
+// it forward and today's package hides behind yesterday's card.
+function applyFiledSortDay(day) {
+  const source = filedSeed !== null ? filedSeed : SortDay.serializeDayStore(filedStore);
+  filedSeed = null;
+  filedStore = IbnoFiled.syncSortDay(SortDay.serializeDayStore(source), day);
+  saveFiled();
+}
+
+function warnFiledNotSaved() {
+  flashGoesToNote('This browser’s storage is full, so these rows will not stay in Work area assigned ' +
+    'after a refresh — they will come back into the working list.', { warn: true });
+}
+
+// filedSourceItems() -> the population the ✅ Work area assigned tab and its
+// prune read: every row the page currently holds, deduped by label.
+//
+// It is filed503SourceItems' population verbatim, and for the same three
+// reasons stated there: both reports because ADR 0021 gives the main slot to
+// whichever one loaded (so a tab reading manualItems alone goes to zero for the
+// whole Post Sort interlude); the Post Sort half SHAPED and never raw, so
+// `scanBarcode` is populated and a copy from this tab emits a real barcode
+// rather than falling back to a tracking number; and resolvedItems, because a
+// CODED row moves out of manualItems and a filed row that Tyler then codes must
+// not fall out of the tab it is sitting in.
+function filedSourceItems() {
+  return IbnoParked.loadedItems([manualItems, shapedEarlyItems(), resolvedItems]);
+}
+
+function assignedRows() { return IbnoFiled.filedRows(filedSourceItems(), filedStore); }
+
+// filedSourceFor(label) -> WHICH REPORT this filing is being made from, read off
+// the row rather than off page mode flags. parkSourceFor's rule exactly: a
+// label with no row in front of us answers '', which lib/ibno-filed.js
+// normalizes to 'unknown', the source no partial report may prune.
+function filedSourceFor(label) {
+  const l = String(label == null ? '' : label).trim();
+  if (!l) return '';
+  const item = filedSourceItems().find(it => it && it.label === l);
+  if (!item) return '';
+  return item.provenance === 'early' ? IbnoFiled.SOURCE_POST_SORT : IbnoFiled.SOURCE_MAIN;
+}
+
+// reconcileFiled() -> drop the filed labels a freshly loaded MAIN report no
+// longer carries, so a filed package that stopped appearing goes WITHOUT
+// RESIDUE (#734 acceptance criterion 8).
+function reconcileFiled() {
+  filedStore = IbnoFiled.pruneToReport(filedStore, filedSourceItems());
+  saveFiled();
+}
+
+// reconcilePostSortFiled() -> the PARTIAL report's half of the same rule (#754's
+// argument, applied to filings). The Post Sort report is one filtered slice and
+// resetApp() has already emptied manualItems, so the full prune here would
+// delete every main-pull filing this slice does not happen to carry.
+function reconcilePostSortFiled() {
+  filedStore = IbnoFiled.prunePostSortToReport(filedStore, filedSourceItems());
+  saveFiled();
+}
+
+// markFiledBatch(labels) -> file a confirmed batch. THE ONLY WRITER of filed
+// state, and the reason the confirm panel exists: generation alone never files
+// a row, because a sheet can be reprinted or abandoned.
+//
+// It writes into lib/ibno-filed.js's store and NOWHERE ELSE. No archive entry,
+// no resolution, no code, and above all no barcode-done tick — marking a batch
+// barcoded must never tick scanned (ADR 0022 invariant 2).
+function markFiledBatch(labels) {
+  const list = (Array.isArray(labels) ? labels : [])
+    .map(l => String(l == null ? '' : l).trim())
+    .filter(Boolean);
+  if (!list.length) return 0;
+  const cursorLabel = workCursorLabel();
+  filedStore = IbnoFiled.fileMany(filedStore, list, { sourceOf: filedSourceFor });
+  if (!saveFiled()) warnFiledNotSaved();
+  renderEarlyLane();      // the rows leave the working list
+  updateManualBadge();    // badge, stat card and the live chip counts
+  renderSetAside();
+  restoreWorkCursor(list.indexOf(cursorLabel) === -1 ? cursorLabel : '');
+  return list.length;
+}
+
+// unfileRow(label) -> Tyler's own hand, putting one row back in the working
+// list. The tab's per-row action, and the mirror of Unpark.
+function unfileRow(label) {
+  const l = String(label == null ? '' : label).trim();
+  if (!l) return;
+  const cursorLabel = workCursorLabel();
+  filedStore = IbnoFiled.unfile(filedStore, l);
+  if (!saveFiled()) warnFiledNotSaved();
+  renderEarlyLane();
+  updateManualBadge();
+  renderSetAside();
+  restoreWorkCursor(cursorLabel);
+  flashGoesToNote('Returned ' + l + ' to the working list');
 }
 
 // ─── RESOLVED BARCODES ACROSS A RE-DROP (#741) ──────────────────────────────
@@ -6441,9 +7170,12 @@ const COLUMN_SPECS = {
   ],
 };
 
-// Which tables each layout paints. Two tables share the manual layout.
+// Which tables each layout paints. Three tables share the manual layout: the
+// two lanes, and the ✅ Work area assigned tab (#734), whose rows are the same
+// buildManualRow() rows and must therefore follow Tyler's column arrangement
+// rather than sitting in markup order beside a working list that does not.
 const COLUMN_TABLE_SELECTORS = {
-  manual: ['#manual-section table', '#other-areas-section table'],
+  manual: ['#manual-section table', '#other-areas-section table', '#set-aside-pane-assigned table'],
   ready: ['#auto-section table'],
 };
 
@@ -7168,7 +7900,7 @@ function commitGoesTo(label, raw) {
   updateSelectAreaButtons();
   // The 503 side of the commit: auto-log every filing and un-filing this write
   // touched, and move the rows between the working list and the 503s tab.
-  commit503(result.changed, was503);
+  commit503(result.changed, was503, commitGoesTo);
 }
 
 function repaintGoesTo(label) {
@@ -7725,6 +8457,11 @@ function ingestPostSortRecords(records, fileName) {
   // freshly loaded rows rather than the ones this drop replaced. A prune above
   // this point would be a prune against the PREVIOUS report.
   reconcilePostSortParked();
+  // The filing store's half of the same rule (#734), and the PROVENANCE-AWARE
+  // prune for exactly the reason above: this report is a partial population and
+  // resetApp() has already emptied manualItems, so the full prune here would
+  // delete every main-pull filing this slice does not happen to carry.
+  reconcilePostSortFiled();
   postSortStatus(postSortItems.length + ' row' + (postSortItems.length === 1 ? '' : 's') +
     ' loaded from ' + fileName + '.', false);
   renderEarlyLane();
@@ -8714,7 +9451,7 @@ function commitPostSortGoesTo(label, raw) {
   // The 503 side, identical to commitGoesTo's (#699). Note setEarly may have
   // REFUSED the write, in which case result.changed omits this label and
   // nothing is logged — which is right: a refused filing did not happen.
-  commit503(result.changed, was503);
+  commit503(result.changed, was503, commitPostSortGoesTo);
   // Mirrors commitGoesTo: keeps every "Select with area (N)" button honest.
   // Missing this left a stale count after typing here (/code-review on #642,
   // finding 8) — a Post Sort tracking label can already be showing in a
@@ -8748,6 +9485,26 @@ function flashGoesToNote(text, opts) {
   const warn = !!(opts && opts.warn);
   if (!warn && goesToNoteWarnAt && Date.now() - goesToNoteWarnAt < GOESTO_WARN_MS) return;
   el.textContent = text;
+  // #746 review finding 1/3: an optional inline control, currently the 503
+  // Undo. It is appended AFTER the textContent write on purpose — that write is
+  // what wipes the previous note's own control, so a stale Undo can never
+  // outlive the message that explained it. Nothing else about this channel
+  // changes: callers that pass no action get exactly the pill they always got.
+  const action = opts && opts.action;
+  if (action && typeof action.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'note-action';
+    btn.textContent = String(action.label || 'Undo');
+    if (action.title) btn.title = String(action.title);
+    btn.addEventListener('click', () => {
+      // One shot. The pill is dismissed first so a second click cannot re-run
+      // an undo against rows the first one already put back.
+      hideGoesToNote();
+      action.onClick();
+    });
+    el.appendChild(btn);
+  }
   el.classList.toggle('warn', warn);
   // A warning is not a status update, and a screen reader should not have to
   // wait for a polite gap to hear that a package may be on the wrong belt.
@@ -8756,11 +9513,26 @@ function flashGoesToNote(text, opts) {
   el.style.display = 'block';
   goesToNoteWarnAt = warn ? Date.now() : 0;
   clearTimeout(goesToNoteTimer);
-  goesToNoteTimer = setTimeout(() => {
-    el.style.display = 'none';
-    el.classList.remove('warn');
-    goesToNoteWarnAt = 0;
-  }, warn ? GOESTO_WARN_MS : GOESTO_NOTE_MS);
+  goesToNoteTimer = setTimeout(hideGoesToNote, warn ? GOESTO_WARN_MS : GOESTO_NOTE_MS);
+}
+
+// hideGoesToNote() -> put the pill away and drop whatever it was holding. Its
+// own function because the timeout is no longer the only thing that dismisses
+// it: an inline action dismisses it the moment it fires, and both have to clear
+// the warn state and its suppression window the same way.
+function hideGoesToNote() {
+  const el = document.getElementById('goesto-note');
+  if (!el) return;
+  clearTimeout(goesToNoteTimer);
+  el.style.display = 'none';
+  el.classList.remove('warn');
+  // The TEXT is deliberately left alone, exactly as the timeout always left it
+  // — tests and readers alike have long been able to read the last message off
+  // a hidden pill. Only the interactive part is removed, because a live button
+  // inside a display:none pill is a control nobody can see but a script can
+  // still reach.
+  el.querySelectorAll('.note-action').forEach(b => b.remove());
+  goesToNoteWarnAt = 0;
 }
 
 // ─── BARCODE ────────────────────────────────────────────────────────────────
@@ -8894,6 +9666,34 @@ function workProgressLabels() {
   // Early rows included (#698 review finding 2).
   workingLaneItems('mine').forEach(it => add(it.label));
   workingEarlyLaneItems('mine').forEach(it => add(it.label));
+  // FILED ROWS STAY IN THE POPULATION, and this is the one place the ✅ Work
+  // area assigned tab differs from Park and 503 (#734).
+  //
+  // The two working-lane readers above drop a filed row, because it has left
+  // the working LIST — it must not inflate a badge, a chip or a search note
+  // while being invisible there. The PROGRESS BAR is a different consumer
+  // asking a different question, and ADR 0022 is explicit that each consumer
+  // names its own: this one asks "of the day's packages, how many are worked
+  // and how many are scanned".
+  //
+  // Filing must NEVER MOVE THE SCANNED HALF OF THE BAR (#734 acceptance
+  // criterion 6, ADR 0022 invariant 2), and dropping filed rows here moves it
+  // even though nothing was ticked, because the bar is a RATIO: file two of
+  // four rows with one scanned and the scanned half jumps from 25% to 50%
+  // without a single package being scanned. That is the bar lying about work
+  // nobody did, which is exactly what invariant 2 exists to stop — reached
+  // through the denominator instead of the numerator. Keeping the rows in the
+  // total is what makes the guard hold.
+  //
+  // A filed row is not "done" to this bar either: it counts as WORKED because
+  // it carries an area (which it does, or no card could have printed), and it
+  // counts as scanned only if it was actually scanned. Nothing about filing
+  // touches BarcodeDone.
+  //
+  // Parked rows stay OUT, unchanged: a parked row is deferred work with no
+  // area, so it is neither worked nor scanned and would only ever drag the bar
+  // down against a package Tyler has deliberately set down.
+  assignedRows().forEach(it => add(it.label));
   return labels;
 }
 function workLabels() { return workRows().map(tr => tr.getAttribute('data-label')); }
@@ -9018,17 +9818,30 @@ function refreshWorkBar() {
   const rows = workRows();
   const tr = rows[workIndex];
   const street = tr ? workStreetOf(tr) : '';
-  // WORKED vs SCANNED (#697, #612 decision 3). Worked is "this row carries a
-  // Goes To area" — isScanned(), not get(), because a Post Sort "early" value
-  // (issue #634) has a value to show but was never confirmed against a scan on
-  // this report. Scanned is the barcode-done tick, set one package at a time:
-  // Tyler scans every package individually off the monitor, so a dock-flexed
-  // sibling is worked and is NOT scanned. One number could not say both.
+  // WORKED vs SCANNED (#697, #612 decision 3, ADR 0022's consumer table).
+  //
+  // Worked is "this row carries a Goes To area" — the **answered** state, so
+  // isAnswered(), provenance irrelevant. Scanned is the barcode-done tick, set
+  // one package at a time: Tyler scans every package individually off the
+  // monitor, so a dock-flexed sibling is worked and is NOT scanned. One number
+  // could not say both, which is why there are two halves and two predicates.
+  //
+  // This said the same words and called isScanned() until 2026-08-21 (#778).
+  // isScanned is `area && !early`, and ADR 0021 gave the Post Sort report the
+  // main slot, so every area on a normal day is written through setEarly and
+  // stamped early — the worked numerator was structurally 0 and the context
+  // line read "0 with an area" beside rows visibly carrying areas. Measured
+  // with a control on the real 2026-08-12 export: same rows with `early`
+  // stripped gave 3 worked / 38%; as shipped, 0 worked / 0%.
+  //
+  // The scanned half is untouched and must stay so: it reads BarcodeDone and
+  // nothing area-derived (ADR 0022 invariants 1 and 2). Widening isScanned to
+  // fix the worked half was never the option (invariant 7).
   //
   // Over the WHOLE working list, not the visible rows: a collapsed bucket is
   // still work to do.
   const prog = IbnoWorkLoop.progress(workProgressLabels(), {
-    isWorked: (l) => ActualArea.isScanned(actualAreaStore, l),
+    isWorked: (l) => ActualArea.isAnswered(actualAreaStore, l),
     isDone: (l) => BarcodeDone.isDone(barcodeDoneStore, l),
   });
   const ctx = document.getElementById('work-context');
@@ -9174,7 +9987,10 @@ function enterWorkLoop(copyStreet) {
   revealWorkSection();
   const labels = workLabels();
   workIndex = 0;
-  if (labels.length && ActualArea.isScanned(actualAreaStore, labels[0])) {
+  // The same cursor question nextNeedingArea asks, so the same predicate:
+  // **answered** (ADR 0022). Reading isScanned here parked the cursor on row 0
+  // on every Post Sort day even when it was already answered (#740).
+  if (labels.length && ActualArea.isAnswered(actualAreaStore, labels[0])) {
     const n = ActualArea.nextNeedingArea(actualAreaStore, labels, 0, 1);
     if (typeof n === 'number' && isFinite(n)) workIndex = n;
   }
@@ -9266,23 +10082,46 @@ function applyRestingWorkMode(opts) {
 // selected" reprinted cards already in his hand and the number on the button
 // was not the number of packages still owed one.
 //
-// The barcode-done store is read LIVE here rather than snapshotted, so a card
-// ticked off mid-batch leaves the count on the next repaint — and it is on the
-// sort-day clock (#695), so a tick from an earlier sort day can never hold
-// today's row shut. See the BARCODE SHEET TICK LIST block for the stamping.
+// The filing store is read LIVE here rather than snapshotted, so a row filed
+// mid-batch leaves the count on the next repaint — and it is on the sort-day
+// clock (#695), so a filing from an earlier sort day can never hold today's row
+// shut. See the FILING STORE block for the stamping.
 //
-// WHICH STORE, AND THE ONE THING TO RE-DECIDE WHEN #734 LANDS. ADR 0022's table
-// names this consumer's question "answered AND NOT barcoded" and puts
-// "barcoded" in the FILING store #734 will introduce. That store does not exist
-// yet, so #733 reads lib/barcode-done.js — the per-card tick — as an INTERIM
-// STAND-IN. It is sound only because markBarcodeDone is reachable from one
-// place, the printed sheet's checkbox through window.opener, so a tick cannot
-// exist without a card having been printed: NOT isDone is a strict SUPERSET of
-// NOT barcoded, and this button can over-offer a row but never hide one that
-// still needs a card. #734 must repoint this line, and must not settle it by
-// folding the two stores together (ADR 0022 invariant 2). Recorded in the ADR's
-// "as shipped" note and as a checkbox on #734, because the ADR's table is what
-// the next person reads, not this comment.
+// WHICH STORE, AND WHY IT IS THIS ONE (#734 repointing #733's stand-in).
+// ADR 0022's consumer table names this question "answered AND NOT barcoded",
+// and BARCODED is the filing store, lib/ibno-filed.js — a card was generated
+// AND Tyler confirmed on the panel that he actually assigned it.
+//
+// #733 shipped first, before that store existed, and read lib/barcode-done.js —
+// the per-card SCAN tick — as an interim stand-in. That was sound only in one
+// direction (a tick cannot exist without a card having been printed, so NOT
+// isDone was a strict SUPERSET of NOT barcoded and the button could over-offer
+// a row but never hide one still owed a card). It answered the wrong question
+// all the same, and it is exactly the #740 class: a predicate quietly answering
+// something nobody asked it. It is repointed here, and the ADR's "as shipped"
+// note is retired with it.
+//
+// IT IS NOT RESOLVED BY FOLDING THE TWO STORES TOGETHER, and that is not a
+// style preference. ADR 0022 invariant 2 forbids a filed batch reading as
+// scanned: filing is a BATCH act on one confirmation, scanning is per package
+// because Tyler scans every package individually (#697, #612 decision 3). One
+// store for both would make a forty-row filing read as forty scans and the
+// progress bar would lie. The two stores stay independent; this line reads
+// filedStore and nothing else.
+//
+// HONEST NOTE ON WHAT THE FILED TEST ACTUALLY DOES HERE, so nobody deletes it
+// on the strength of a green suite. #734 also takes a filed row OUT OF THE
+// WORKING LIST, and this function is DOM-scoped (see below), so a filed row has
+// no rendered row for the walk to reach in the first place: the isFiled test
+// below cannot currently fire in the product. What the repoint genuinely
+// changed is the OTHER half — a barcode-done tick no longer holds a row out,
+// which IS live and IS pinned (tests/ibno-select-area-barcoded-dom.test.js, "a
+// barcode-done TICK does NOT hold a row out of the batch"). The isFiled test
+// stays as the correct statement of this consumer's question, and as the thing
+// that keeps the answer right if a later ticket ever renders a filed row in a
+// lane again. Same class of deliberate, currently-unreachable guard as
+// laneBarcodeEntries' two-query ordering; the suite is silent on it, not
+// approving of its removal.
 //
 // ONE definition, read by the button's count and by the button's action, so
 // "Select with area (6)" can never select a different set than the 6 it
@@ -9336,7 +10175,7 @@ function laneRowsWithArea(cfg) {
     if (!tr.querySelector('.manual-check')) return;
     const label = tr.getAttribute('data-label');
     if (!ActualArea.get(actualAreaStore, label)) return;
-    if (BarcodeDone.isDone(barcodeDoneStore, label)) return;   // #733: card already made
+    if (IbnoFiled.isFiled(filedStore, label)) return;   // #733/#734: card made AND confirmed assigned
     out.push({ tr: tr, early: isEarlyRow(tr) });
   });
   return out;
@@ -9869,7 +10708,19 @@ function barcodeCardHtml(label, value, item, position) {
 //
 // Returns the plan (or null when no early rows were involved), so a caller can
 // react to a refusal; the DOM tests read it too.
-function printBarcodesFor(entries) {
+// `opts.onCards(cards)` (#734) fires ONCE, with the cards that ACTUALLY reached
+// the paper — never the rows that were selected. That distinction is the whole
+// contract: #667's gating refuses an early row with no resolved barcode or a
+// lookup conflict, and offering "mark as done" for a package no card was
+// printed for would file a row against a sheet that does not mention it. It
+// fires AFTER the sheet is open and never on the no-cards path, because a
+// generation that printed nothing has nothing to confirm.
+//
+// A CALLBACK rather than a changed return value, deliberately: five test files
+// and two in-tool callers read this function's `plan` return, and the confirm
+// step belongs to exactly one caller (barcodeSelected). Printing must not grow
+// a filing side effect of its own — a sheet can be reprinted or abandoned.
+function printBarcodesFor(entries, opts) {
   const list = (Array.isArray(entries) ? entries : []).map(e => (
     (e && typeof e === 'object')
       ? { label: String(e.label || ''), early: !!e.early }
@@ -10056,6 +10907,11 @@ function printBarcodesFor(entries) {
     '</body></html>';
 
   openBarcodeSheet(doc, refusalNote);
+  // The confirm hand-off (#734). Guarded, because a throw here would take the
+  // whole print action down after the sheet is already on screen.
+  if (opts && typeof opts.onCards === 'function') {
+    try { opts.onCards(cards); } catch (e) { /* the sheet is printed; the panel is not worth the action */ }
+  }
   return plan;
 }
 
@@ -10182,9 +11038,108 @@ function printBarcodeSheetOverlay() {
 // earlyWorkingItems' own comment), and the two halves resolve their barcode
 // from different places under different rules, so "which tbody was it checked
 // in" is the only honest answer to which rule applies.
+//
+// #734: the sheet still generates exactly as it did, and then the confirm panel
+// opens over the cards that reached the paper. GENERATION ALONE NEVER FILES A
+// ROW — the panel is the writer, because a sheet can be reprinted or abandoned
+// and a silently hidden package is the failure this whole ticket exists to
+// prevent.
 function barcodeSelected(lane) {
   const cfg = MANUAL_LANES.find(l => l.key === lane) || MANUAL_LANES[0];
-  printBarcodesFor(laneBarcodeEntries(cfg));
+  printBarcodesFor(laneBarcodeEntries(cfg), { onCards: openBarcodeConfirm });
+}
+
+// ─── MARK AS DONE, THE CONFIRM PANEL (#734) ─────────────────────────────────
+//
+// The step that closes Tyler's batch loop. It lists the generated batch with
+// every row PRE-CHECKED and a live "Mark N as done"; he unchecks anything he
+// did not actually assign, and those rows stay in the working list untouched.
+// Dismissing marks nothing at all.
+//
+// Why pre-checked rather than empty: the overwhelmingly common case is that he
+// assigned the whole batch he just printed. An empty panel would make the
+// normal path N clicks and the exception path 1, which is the wrong way round —
+// and a panel he has to fill in is a panel he dismisses, leaving the working
+// list padded with work he finished.
+//
+// THE PANEL'S ROWS ARE HELD IN PAGE STATE, not read back off the DOM, because
+// the tick boxes here are the record of an intent that has not been written
+// anywhere yet. Nothing is persisted until Apply.
+let barcodeConfirmBatch = [];
+
+function openBarcodeConfirm(cards) {
+  barcodeConfirmBatch = IbnoFiled.confirmBatch((Array.isArray(cards) ? cards : []).map(c => ({
+    label: c && c.label,
+    // The same store the card printed its area from, so the panel names what
+    // the paper says rather than re-deriving it and risking a disagreement.
+    area: ActualArea.get(actualAreaStore, c && c.label),
+    address: (c && c.address) || '',
+    source: filedSourceFor(c && c.label),
+  })));
+  // Nothing reached the paper, so there is nothing to confirm. printBarcodesFor
+  // does not call back on that path at all; this is the belt and braces.
+  if (!barcodeConfirmBatch.length) { dismissBarcodeConfirm(); return; }
+  renderBarcodeConfirm();
+  const panel = document.getElementById('barcode-confirm');
+  if (panel) panel.style.display = 'flex';
+}
+
+function renderBarcodeConfirm() {
+  const sub = document.getElementById('barcode-confirm-sub');
+  if (sub) {
+    sub.textContent = barcodeConfirmBatch.length + ' card' +
+      (barcodeConfirmBatch.length === 1 ? '' : 's') +
+      ' printed. Untick anything you did not actually assign — those rows stay in the working list.';
+  }
+  const list = document.getElementById('barcode-confirm-list');
+  if (list) {
+    list.innerHTML = '';
+    barcodeConfirmBatch.forEach((row, i) => {
+      const line = document.createElement('label');
+      line.className = 'bc-row';
+      line.innerHTML =
+        '<input type="checkbox" class="bc-check"' + (row.checked ? ' checked' : '') +
+          ' aria-label="mark ' + ToolHelpers.escapeHtml(row.label) + ' as done">' +
+        '<span class="bc-label">' + ToolHelpers.escapeHtml(row.label) + '</span>' +
+        '<span class="bc-area">' + ToolHelpers.escapeHtml(row.area) + '</span>';
+      // The Set, not the checkbox, is the record: this panel re-renders its own
+      // count on every change, and a tick only the DOM knew about would be lost.
+      line.querySelector('.bc-check').addEventListener('change', (e) => {
+        barcodeConfirmBatch[i].checked = !!e.target.checked;
+        updateBarcodeConfirmAction();
+      });
+      list.appendChild(line);
+    });
+  }
+  updateBarcodeConfirmAction();
+}
+
+// The LIVE count (#734 acceptance criterion 1). Disabled at zero rather than
+// silently no-oping: a button reading "Mark 0 as done" that still looks
+// clickable is a control that lies about what a click will do.
+function updateBarcodeConfirmAction() {
+  const btn = document.getElementById('barcode-confirm-apply');
+  if (!btn) return;
+  const n = barcodeConfirmBatch.filter(r => r.checked).length;
+  btn.textContent = IbnoFiled.confirmActionText(n);
+  btn.disabled = n === 0;
+}
+
+// Dismiss marks NOTHING AT ALL (#734 acceptance criterion 2). No partial write,
+// no "remember what was ticked": the batch is dropped whole.
+function dismissBarcodeConfirm() {
+  barcodeConfirmBatch = [];
+  const panel = document.getElementById('barcode-confirm');
+  if (panel) panel.style.display = 'none';
+}
+
+function applyBarcodeConfirm() {
+  const labels = barcodeConfirmBatch.filter(r => r.checked).map(r => r.label);
+  if (!labels.length) return;
+  const n = markFiledBatch(labels);
+  dismissBarcodeConfirm();
+  flashGoesToNote('Marked ' + n + ' as done — ' + (n === 1 ? 'it is' : 'they are') +
+    ' in the Work area assigned tab at the page bottom, still codeable. Nothing was counted as scanned.');
 }
 
 // laneBarcodeCardPlan(cfg) -> { entries, plan, cardCount } — how many cards a
@@ -10528,6 +11483,23 @@ function buildManualRow(item, bucket) {
     earlyParkBtn.title = 'Set aside for a later FTrack look: moves to the Parked tab at the page bottom and waits there until you unpark it, including on later sort days. It drops off on its own once a fresh report no longer has the package. Writes no record.';
     earlyParkBtn.addEventListener('click', () => togglePark(item.label));
     earlyActionTd.appendChild(earlyParkBtn);
+    // 503 is the SECOND exception, on exactly the same terms as Park (#746,
+    // #744). The non-interactivity rule above is about CODING and it stays
+    // exactly as strict: no code input, no quick-code pill, no Apply, no Done,
+    // and resolveItem still unreachable from postSortItems. Filing a 503 is not
+    // a coding decision and never calls resolveItem — it writes 503 into this
+    // row's own Goes To box through commitPostSortGoesTo, the very same path
+    // the box's own blur handler already uses on this row. None of #662's
+    // reasoning applies: nothing fabricates an item, nothing is pushed into
+    // resolvedItems, and no OPS2 code is written (a 503 keeps the package OUT
+    // of OPS2 by design, #615).
+    //
+    // It has to be here or the feature does not exist for Tyler. ADR 0021 gives
+    // the Post Sort report the main slot and issue 745 records that this is the
+    // report he works from every sort day, so a control that only rendered on
+    // Manual Review rows would be one he almost never sees — and bad addresses
+    // are exactly this report's no-street 999 population.
+    earlyActionTd.appendChild(build503Button(item));
     tr.appendChild(earlyActionTd);
   } else {
     tr.appendChild(buildActionCell(item, tr));
@@ -10660,6 +11632,13 @@ function buildActionCell(item, tr) {
   td.appendChild(applyBtn);
   td.appendChild(doneBtn);
   td.appendChild(parkBtn);
+  // 503 (#746): the bad-address flag, one click instead of three keystrokes and
+  // a blur. Last in the cell, after Park, so the coding controls Tyler reaches
+  // for on nearly every row still read first, left to right. Like Park it is
+  // not a resolution and never touches resolveItem — but unlike Park it is not
+  // even a new state: it writes 503 into this row's own Goes To box through the
+  // same commit path the keystroke uses. See build503Button.
+  td.appendChild(build503Button(item));
   return td;
 }
 
@@ -10707,6 +11686,12 @@ function markRowCoded(tr, item) {
     undo.title = 'Put this row back in the working list';
     undo.addEventListener('click', () => undoResolve(tr.getAttribute('data-label')));
     cell.appendChild(undo);
+    // #734: this cell was just emptied and rebuilt. On a row sitting in the ✅
+    // Work area assigned tab that took its "Back to list" with it, leaving a
+    // coded filed row with no reachable way back into the working list until
+    // the next full repaint. Scoped to that tbody, so a working-list row is
+    // untouched.
+    if (tr.closest && tr.closest('.assigned-body')) attachAssignedBackButton(tr);
   }
   renderCodedChip();
 }
@@ -10742,7 +11727,11 @@ function codedItemsForLane(laneKey) {
     // list AND in the 503s tab at once, while the badge, the progress bar and
     // every set-aside count excluded it — the row visibly in two places and
     // counted in neither.
-    .filter(it => !isFiled503(it));
+    .filter(it => !isFiled503(it))
+    // #734: and a coded row that was then barcoded-and-confirmed, for the same
+    // reason. It renders from resolvedItems, which the two working-lane filters
+    // above never see.
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));
 }
 
 // Every lane's coded rows, because codedHidden hides every lane's coded rows —
@@ -11467,6 +12456,11 @@ loadParked();     // seed only: applySortDayFrom dates it once a report names th
 // a decision with no other source, so #730 stopped the date clearing it; a
 // barcode is re-derivable from a lookup, so it still expires with its day.
 loadResolvedBarcodes();
+// The filing store (#734). Seed only, and rolled by applySortDayFrom on the
+// same strict rule the resolved barcodes take: a confirmed assignment is a
+// statement about paper walked TODAY, so it clears on a new sort day rather
+// than carrying the way a park does.
+loadFiled();
 // The 503 log SPANS sort days on purpose, as the parked set above does since
 // #730: the question it answers ("did anyone fix this address") is only
 // answerable on a later day. It restores straight into the live store, and applySortDayFrom
