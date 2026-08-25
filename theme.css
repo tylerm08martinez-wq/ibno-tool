@@ -139,6 +139,39 @@ html[data-theme="dark"] textarea {
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder { color: #8a8a97; }
 
+/* IBNO Coder's FILLED Goes To box (#832). The tool's own
+   `.goesto-input.has-area` — the branded border + text that says "this row is
+   answered" at a glance — is (0,2,0), and the generic dark form-field rule
+   directly above is (0,2,2). So in DARK MODE it lost the cascade outright and
+   an answered box computed byte-identically to an empty one: measured on the
+   real 289-row 2026-08-12 Post Sort export, colour #e7e7ec and border #3a3b4a
+   on both, against #c4b5fd/#c4b5fd in light. Pre-existing on main, and
+   invisible to the suite because the highlight was ONLY ever painted on commit
+   until #832 — so there was no build-path assertion to notice it.
+
+   Exactly the shape of the .code-select override below, for exactly the reason
+   issue 504 records and this file exists: theme.css loads last, so a dark value
+   put inline in the tool cannot win this. This selector is (0,4,2) — two
+   elements (html, input) and four attribute/class simple selectors
+   ([data-theme], [type], .goesto-input, .has-area) — so it outranks the (0,2,2)
+   generic rule.
+
+   THE VALUE IS HARDCODED, not var(--brand-ink), and that is deliberate. The
+   token is defined by each TOOL's own inline <style>, not by this file, so a
+   shared stylesheet reading it would be depending on something it does not
+   define — inert today, because every tool this selector can reach defines it,
+   and a latent break for any future tool that loads theme.css without one.
+   #c4b5fd is the same value ibno-coder.html gives --brand-ink in dark, and the
+   .code-select override below hardcodes for the same reason.
+
+   Only colour and border-color are restored. The rule's background
+   (var(--hover-soft)) resolves to #23242f in dark, which is what the generic
+   rule already paints, so overriding it would change nothing. */
+html[data-theme="dark"] input[type="text"].goesto-input.has-area {
+  color: #c4b5fd;
+  border-color: #c4b5fd;
+}
+
 /* IBNO Coder code override (.code-select, the 59/11 -> 34 dropdown on Closure
    Portal rows). It is a <select> styled as a purple code pill, so the generic
    dark select rule above — (0,1,2), against the tool's inline .code-select at

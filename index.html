@@ -125,6 +125,19 @@
     .btn-purple { background: #4D148C; color: white; }
     .btn-purple:hover { background: #3a0f6a; }
     .btn-success { background: #16a34a; color: white; }
+    /* #676 finding 1: the counterpart to .btn-success, for a clipboard write
+       that was REFUSED. It is not decoration — a copy button that painted
+       nothing on failure would leave a failed write indistinguishable from one
+       that never fired.
+
+       Built from the EXISTING theme variables rather than a new hardcoded hex
+       (#307/#313, pinned by tests/theme-contrast-dom.test.js's budget):
+       --danger-ink is the two-value red already defined for both themes at the
+       top of this file, and --app-bg is the page ground, which is light where
+       --danger-ink is dark and dark where it is light. The pair therefore
+       stays legible in BOTH themes without a media query — light #f0f2f5 on
+       #c0392b, dark #14151b on #f87171. */
+    .btn-fail { background: var(--danger-ink); color: var(--app-bg); }
     .btn-gray { background: #e4e4e7; color: #333; }
     .btn-gray:hover { background: #d1d1d6; }
 
@@ -276,6 +289,35 @@
        street chip and the address line, so "it worked" reads identically
        wherever you copy from. */
     .label-copy.copied, .street-chip.copied, .addr-copy.copied { background: #dcfce7; color: #15803d; }
+    /* And ONE refused-state look, on the same surfaces plus the two buttons
+       that carry their own copied styling (#676 finding 1). Every one of these
+       used to paint the copied look unconditionally, before the write had
+       resolved and with the rejection swallowed — so a refused copy looked
+       exactly like a good one. Theme VARIABLES, not new hex (see .btn-fail
+       above for why). NO auto-revert on this state: the failure look stands
+       until the surface is used again, for the reason copySelectedPostSort
+       spells out at length — a failure that erases itself on a blind clock can
+       be missed entirely.
+
+       EVERY SELECTOR HERE IS SPELLED TWICE, ONCE WITH :hover (PR #870 review).
+       Each of these surfaces has a `:hover` rule of its own further down the
+       sheet at the SAME (0,2,0) specificity, so at equal weight the later rule
+       won on source order — and the pointer is sitting ON the element that was
+       just clicked, so a refusal rendered as an ordinary hover. That defeats
+       the entire point of the state on exactly the surfaces where the
+       no-auto-revert design most needs it seen. `.copy-failed:hover` is (0,3,0)
+       and settles it. `.hs-chip .hs-copy` is likewise spelled with its parent,
+       because that neighbour is a descendant selector rather than a bare class. */
+    .label-copy.copy-failed, .label-copy.copy-failed:hover,
+    .street-chip.copy-failed, .street-chip.copy-failed:hover,
+    .addr-copy.copy-failed, .addr-copy.copy-failed:hover,
+    .street-copy.copy-failed, .street-copy.copy-failed:hover {
+      background: var(--hover-soft); color: var(--danger-ink);
+    }
+    .copy-row-btn.copy-failed, .copy-row-btn.copy-failed:hover,
+    .hs-chip .hs-copy.copy-failed, .hs-chip .hs-copy.copy-failed:hover {
+      background: var(--danger-ink); border-color: var(--danger-ink); color: var(--app-bg);
+    }
     /* Recipient / Address cell. These two rules replace the identical inline
        styles that used to be repeated in four row builders — same look, one
        definition. The address line is click-to-copy (full address); the firm
@@ -1478,11 +1520,20 @@
        --text-faint every other hint on this page uses, and that is measured
        rather than stylistic: --text-faint reads 2.67:1 on the light surface,
        under the 4.5:1 bar for body text, and "who said this" is the half of
-       the row the ticket is about. */
+       the row the ticket is about.
+
+       A LONG LIST SCROLLS INSIDE ITSELF (#858 item 3). Nothing on this panel
+       expires, so however rare a disagreement is, the list only ever grows
+       until each row is settled — and an uncapped list sits ABOVE the drop
+       zone, so a tall one pushes the thing the person came here to use off the
+       screen. The cap is on the panel rather than on the rows so the heading
+       stays part of what scrolls, and it is a vh so it is a fraction of the
+       screen rather than a guess at a row count. CLAUDE.md's standing rule:
+       tall content scrolls in its own container, never by moving the page. */
     #area-conflict-panel {
       display: none; background: var(--surface); border: 1px solid var(--border);
       border-left: 4px solid var(--danger-ink); border-radius: 8px;
-      margin-bottom: 16px; overflow: hidden;
+      margin-bottom: 16px; overflow-x: hidden; overflow-y: auto; max-height: 45vh;
     }
     .ac-head {
       padding: 9px 14px; border-bottom: 1px solid var(--border-soft);
@@ -1504,6 +1555,11 @@
     }
     .ac-side .ac-who { color: var(--text-muted); font-size: 11.5px; }
     .ac-vs { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+    /* The age (#858 item 1). --text-muted, not --text-faint, for the same
+       measured reason the author names are: --text-faint reads 2.67:1 on the
+       light surface and this is information, not decoration. Quieter than the
+       two answers by size rather than by contrast. */
+    .ac-day { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; }
     .ac-spacer { flex: 1; }
 </style>
   <link rel="stylesheet" href="theme.css">
@@ -2115,6 +2171,9 @@
         <button class="btn btn-gray" id="copy-selected-other-areas" onclick="copySelectedManual('other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
         <button class="btn btn-gray" id="select-area-other" onclick="selectRowsWithArea('other')" title="Check every row here that has a Goes To area and has not been barcoded yet — the outstanding batch, so a second click never reprints cards you already have (#733)">&#10003; Select with area, not barcoded (0)</button>
         <button class="btn btn-gray" id="barcode-selected-other-areas" onclick="barcodeSelected('other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+        <!-- ALL, not the search slice (#704). See otherAreasAllRows(). -->
+        <button class="btn btn-gray" id="copy-all-other-areas" onclick="copyAllOtherAreas()" title="Copy EVERY row in this section (tracking # or full barcode per the Copy-as toggle), one per line — the whole section, not the rows a search is currently showing">Copy all (0)</button>
+        <button class="btn btn-gray" id="barcode-all-other-areas" onclick="barcodeAllOtherAreas()" title="Print a barcode sheet for EVERY row in this section — the whole section, not the rows a search is currently showing. Read-only; it never codes a row, and a card shows an area only if you typed one.">&#9612;&#9613;&#9612; Barcode all (0)</button>
         <input type="text" class="manual-search" id="other-areas-search" placeholder="Search firm or address..." aria-label="Search other work areas">
         <select class="sort-select" id="other-areas-sort" aria-label="Sort other work areas">
           <option value="report">Report order</option>
@@ -2207,6 +2266,7 @@
         </div>
         <div class="right">
           <button class="btn btn-gray" id="copy-all-parked" onclick="copyAllParked()" title="Copy every parked row (tracking # or full barcode per the Copy-as toggle), one per line, ready for the FTrack lookup pass">Copy all (0)</button>
+          <button class="btn btn-gray" id="barcode-all-parked" onclick="barcodeAllParked()" title="Print a barcode sheet for every parked row, so the FTrack pass can be walked off paper. Read-only; it never codes a row, never unparks one, and a card shows an area only if you typed one.">&#9612;&#9613;&#9612; Barcode all (0)</button>
         </div>
       </div>
       <table>
@@ -2240,6 +2300,7 @@
         </div>
         <div class="right">
           <button class="btn btn-gray" id="copy-all-503" onclick="copyAll503()" title="Copy every 503 row (tracking # or full barcode per the Copy-as toggle), one per line, for the 503 pallet handoff">Copy all (0)</button>
+          <button class="btn btn-gray" id="barcode-all-503" onclick="barcodeAll503()" title="Print a barcode sheet for every 503 row, to walk the bad-address pallet off paper. Read-only; it never codes a row and carries no OPS2 code. A card shows an area only if you typed one, so these cards read 503 — the pallet, which is exactly where they go.">&#9612;&#9613;&#9612; Barcode all (0)</button>
         </div>
       </div>
       <div class="filter-note not-fixed-note" id="not-fixed-note" style="display:none"></div>
@@ -2639,20 +2700,33 @@ function setHistWindow(w) {
 // holds far more. An in-memory fallback covers environments without IndexedDB
 // (e.g. the jsdom test harness), so search still works there within a session.
 const ArchiveStore = (function () {
-  const DB_NAME = 'ibno_archive', STORE = 'rows', VERSION = 1;
+  // VERSION 2 adds the `seenDay` index (#855 review). It carries ONLY the rows
+  // whose INBOUND_DATE will not parse — 8.0% of a real main pull, every one of
+  // them a "No Inbound Scan" package, which is the population this tool is
+  // named for. They have no date of their own to be found by, so they are found
+  // by the day the device saw them; see IbnoArchive.seenDayOf. Entries written
+  // before this upgrade simply are not in the new index, which is the safe
+  // direction: they keep working for search and are absent from an export until
+  // the next load re-writes them.
+  const DB_NAME = 'ibno_archive', STORE = 'rows', VERSION = 2;
   let hasIDB = false;
   try { hasIDB = !!window.indexedDB; } catch (e) { hasIDB = false; }
-  const mem = new Map(); // fallback: key -> { iso, rec }
+  const mem = new Map(); // fallback: key -> { key, iso, seenDay?, rec }
 
   function openDB() {
     return new Promise(function (resolve, reject) {
       const req = window.indexedDB.open(DB_NAME, VERSION);
-      req.onupgradeneeded = function () {
+      req.onupgradeneeded = function (e) {
         const db = req.result;
-        if (!db.objectStoreNames.contains(STORE)) {
-          const os = db.createObjectStore(STORE, { keyPath: 'key' });
-          os.createIndex('iso', 'iso', { unique: false });
-        }
+        const os = db.objectStoreNames.contains(STORE)
+          ? req.transaction.objectStore(STORE)
+          : (function () {
+              const created = db.createObjectStore(STORE, { keyPath: 'key' });
+              created.createIndex('iso', 'iso', { unique: false });
+              return created;
+            })();
+        if (!os.indexNames.contains('iso')) os.createIndex('iso', 'iso', { unique: false });
+        if (!os.indexNames.contains('seenDay')) os.createIndex('seenDay', 'seenDay', { unique: false });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -2660,8 +2734,11 @@ const ArchiveStore = (function () {
   }
 
   // ── in-memory backend (fallback when IndexedDB is unavailable/blocked) ──
-  function memAdd(records, cutoff) {
-    records.forEach(function (rec) { mem.set(IbnoArchive.keyOf(rec), { iso: IbnoArchive.recordIso(rec), rec: rec }); });
+  function memAdd(records, cutoff, seenDay) {
+    records.forEach(function (rec) {
+      const entry = IbnoArchive.archiveEntry(rec, seenDay);
+      mem.set(entry.key, entry);
+    });
     for (const [k, v] of mem) if (v.iso < cutoff) mem.delete(k);
   }
   function memSearch(q, cap) {
@@ -2671,13 +2748,13 @@ const ArchiveStore = (function () {
   }
 
   // ── IndexedDB backend ──
-  async function idbAdd(records, cutoff) {
+  async function idbAdd(records, cutoff, seenDay) {
     const db = await openDB();
     try {
       await new Promise(function (resolve, reject) {
         const tx = db.transaction(STORE, 'readwrite');
         const os = tx.objectStore(STORE);
-        records.forEach(function (rec) { os.put({ key: IbnoArchive.keyOf(rec), iso: IbnoArchive.recordIso(rec), rec: rec }); });
+        records.forEach(function (rec) { os.put(IbnoArchive.archiveEntry(rec, seenDay)); });
         os.index('iso').openCursor(IDBKeyRange.upperBound(cutoff, true)).onsuccess = function (e) {
           const cur = e.target.result; if (cur) { os.delete(cur.primaryKey); cur.continue(); }
         };
@@ -2699,6 +2776,42 @@ const ArchiveStore = (function () {
         };
       });
     } finally { db.close(); }
+    return out;
+  }
+  // recordsForDay(day) -> every record this device holds for ONE sort day
+  // (#855). This is what the Day Export's seen-rows are built from; see
+  // IbnoArchive.seenRowsForDay.
+  //
+  // TWO POINT RANGES, NEVER A SCAN, AND THAT IS A LOAD-BEARING DETAIL. The
+  // archive holds thirty days; the export wants one. Walking the store instead
+  // of seeking the index turned a click that returns in a third of a second on
+  // a real 21,584-row archive into one that does not return at all on any
+  // human timescale. `iso` finds the dateable rows, `seenDay` finds the
+  // undateable ones — both by equality, so neither walks a day it was not
+  // asked for.
+  async function idbRecordsForDay(day) {
+    const db = await openDB();
+    const out = [];
+    try {
+      await new Promise(function (resolve, reject) {
+        const tx = db.transaction(STORE, 'readonly');
+        const os = tx.objectStore(STORE);
+        let left = 2;
+        const done = function () { if (--left === 0) resolve(); };
+        ['iso', 'seenDay'].forEach(function (name) {
+          os.index(name).openCursor(IDBKeyRange.only(day)).onsuccess = function (e) {
+            const cur = e.target.result;
+            if (cur) { out.push(cur.value.rec); cur.continue(); } else done();
+          };
+        });
+        tx.onerror = function () { reject(tx.error); };
+      });
+    } finally { db.close(); }
+    return out;
+  }
+  function memRecordsForDay(day) {
+    const out = [];
+    for (const v of mem.values()) if (IbnoArchive.entrySeenOnDay(v, day)) out.push(v.rec);
     return out;
   }
   async function idbCount() {
@@ -2725,19 +2838,31 @@ const ArchiveStore = (function () {
 
   // Each op tries IndexedDB; if it throws (file:// blocked, private mode, etc.)
   // we permanently fall back to the in-memory store so search still works.
-  async function addAll(records, today) {
+  //
+  // ONLY A FAILED WRITE MOVES THE STORE, AND THAT DISTINCTION IS NEW (#855
+  // review). Every op used to latch `hasIDB` off on any throw, reads included —
+  // which quietly split the store in two: the rows were in IndexedDB, one
+  // failed `count()` sent every later WRITE to an empty Map, and the export
+  // then read one half while the loads filled the other. It is observable:
+  // breaking reads for a single export and healing them again left the next
+  // export permanently on `0 report rows`, on a device whose archive was full.
+  //
+  // A write that fell back genuinely relocates the data, so it latches. A read
+  // that failed says nothing about where the data lives, so it does not —
+  // it reports the failure instead (see recordsForDay) or returns what it can.
+  async function addAll(records, today, seenDay) {
     const cutoff = IbnoArchive.cutoffIso(today);
-    if (hasIDB) { try { return await idbAdd(records, cutoff); } catch (e) { hasIDB = false; } }
-    memAdd(records, cutoff);
+    if (hasIDB) { try { return await idbAdd(records, cutoff, seenDay); } catch (e) { hasIDB = false; } }
+    memAdd(records, cutoff, seenDay);
   }
   async function search(query, cap) {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return [];
-    if (hasIDB) { try { return await idbSearch(q, cap); } catch (e) { hasIDB = false; } }
+    if (hasIDB) { try { return await idbSearch(q, cap); } catch (e) { return memSearch(q, cap); } }
     return memSearch(q, cap);
   }
   async function count() {
-    if (hasIDB) { try { return await idbCount(); } catch (e) { hasIDB = false; } }
+    if (hasIDB) { try { return await idbCount(); } catch (e) { return mem.size; } }
     return mem.size;
   }
   async function clear() {
@@ -2745,10 +2870,31 @@ const ArchiveStore = (function () {
     if (hasIDB) { try { return await idbClear(); } catch (e) { hasIDB = false; } }
   }
 
-  return { addAll: addAll, search: search, count: count, clear: clear };
+  // Day-scoped read. The day rule and the dedupe are applied ONCE, in
+  // IbnoArchive, so both backends answer identically and a Node test pins the
+  // rule rather than this wiring.
+  //
+  // A FAILED READ IS NOT AN EMPTY DAY, and this returns { rows, failed } rather
+  // than a bare array so the caller can tell them apart. It also does NOT latch
+  // hasIDB off the way the write path does: on a hosted build the in-memory Map
+  // is empty, so one transient read error would turn every Day Export for the
+  // rest of the session into a silent "0 report rows" reported as success.
+  // Falling back to a store that cannot have the answer is worse than saying so.
+  async function recordsForDay(day) {
+    const d = String(day || '').trim();
+    if (!d) return { rows: [], failed: false };
+    if (hasIDB) {
+      try { return { rows: IbnoArchive.seenRowsForDay(await idbRecordsForDay(d), d), failed: false }; }
+      catch (e) { return { rows: [], failed: true }; }
+    }
+    return { rows: IbnoArchive.seenRowsForDay(memRecordsForDay(d), d), failed: false };
+  }
+
+  return { addAll: addAll, search: search, count: count, clear: clear,
+           recordsForDay: recordsForDay };
 })();
 
-// ─── WHAT THIS DEVICE HAS SEEN THIS SESSION (#795) ──────────────────────────
+// ─── WHAT THIS DEVICE HAS SEEN (#795, MADE TO SURVIVE AN F5 BY #855) ────────
 //
 // The Day Export has to carry "the report rows the exporting device saw", and
 // the report it saw them on is GONE by the time the export is taken: the Post
@@ -2757,57 +2903,90 @@ const ArchiveStore = (function () {
 // takes the main slot and replaces the rows on screen. Reading `lastRows` at
 // export time would therefore carry the SMALLEST pull of the day and lose
 // exactly the packages the Admin resolved early — the hole the whole ticket is
-// about, reproduced inside the fix.
+// about, reproduced inside the fix. That refusal stands (#795, #855).
 //
-// So every load ACCUMULATES here, deduped by IbnoArchive.keyOf (tracking +
-// inbound date + scan time), which is the same identity the archive itself
-// uses, so a row cannot be counted twice however many times it is re-pulled.
+// #795 answered it with an in-memory accumulator, and #855 is the receipt for
+// what that cost: an F5, a tab close or a browser restart emptied it, so the
+// export then carried only what had loaded since. No DECISION was ever lost —
+// areas, park, filed and done are all localStorage-backed — but a device that
+// refreshed handed over fewer archive records than it held.
 //
-// IN MEMORY AND NOT PERSISTED, and that is a deliberate limit rather than an
-// oversight. A day's accumulation is thousands of records; localStorage is
-// already the quota trap that presents as "a refresh re-inputs the CSV" (see
-// snapshotParkedRows), and a second IndexedDB store would duplicate the archive
-// that already exists. The cost is that an F5 resets this to whatever loads
-// afterwards — the export is still honest about what it holds, it just holds
-// less. Exporting before refreshing is the workaround; persisting it is a
-// follow-up, not this ticket.
-let seenRecords = [];
-const seenRecordKeys = Object.create(null);
+// THE ARCHIVE ALREADY IS THE PERSISTENT STORE, SO THERE IS NO SECOND ONE.
+// ArchiveStore is IndexedDB, keyed by the same IbnoArchive.keyOf identity
+// (tracking + inbound date + scan time) and pruned to the same 30-day window,
+// and every load already writes to it. The export reads it back for ONE sort
+// day (ArchiveStore.recordsForDay → IbnoArchive.seenRowsForDay) instead of
+// keeping a parallel copy alive in a variable. Two defects go with the
+// accumulator: the sort-day roll can no longer fold yesterday's rows into
+// today's file, because the read is day-scoped by construction; and an import
+// no longer feeds a local accumulator, because there is none.
+//
+// ON A file:// ORIGIN IT IS NO WORSE THAN THE ACCUMULATOR WAS, WHICH IS THE
+// WHOLE CLAIM THERE. IndexedDB is blocked, ArchiveStore falls back permanently
+// to its in-memory Map, and an F5 clears that Map exactly as it cleared the
+// accumulator — the same rows, same session lifetime, now day-scoped. The
+// durability is bought on a real origin, and the cage PC has one: it loads the
+// hosted HTTPS build (#792, confirmed 2026-08-23), so its IndexedDB is genuine
+// persistent storage and a refreshed Admin still hands over the whole day.
 
-// noteSeenRecords(records) -> fold a load's records into the accumulator.
-// Takes RECORDS rather than rows so both report paths can feed it: the main
-// report through IbnoArchive.recordsFromRows, the Post Sort report through
-// PostSortScans' own keyed records, which already carry PKG_LABEL_XREF,
-// INBOUND_DATE and IB_SCAN_TIME under the canonical names.
-function noteSeenRecords(records) {
-  (Array.isArray(records) ? records : []).forEach(function (rec) {
-    if (!rec || typeof rec !== 'object') return;
-    const key = IbnoArchive.keyOf(rec);
-    if (seenRecordKeys[key]) return;
-    seenRecordKeys[key] = true;
-    seenRecords.push(rec);
-  });
+// THE WRITE IS FIRE-AND-FORGET AND THE READ IS AWAITED, SO THE TWO HAVE TO BE
+// TIED TOGETHER. Every caller below starts a transaction and does not wait for
+// it; `noteSeenRecords` used to be synchronous, so nothing needed to. Now that
+// the export READS the archive, pressing Day Export while the last load is
+// still committing would produce a partial file and report it as success —
+// which is this ticket's own failure mode, arriving through the back door. So
+// the most recent ingest is remembered and the export awaits it.
+//
+// It never rejects: a failed archive write is already swallowed below (the
+// archive is best-effort and must not block coding), and a rejection here would
+// only turn that into an unhandled one.
+let lastArchiveWrite = Promise.resolve();
+
+// archiveSeenDay(records, hint) -> the sort day a load's rows count as SEEN on.
+// The report's OWN majority inbound date, exactly as the sort-day clock reads
+// it (lib/sort-day.js), so the 8.0% of rows with no inbound date of their own
+// are stamped with the day their 92% of dateable siblings name. The hint is for
+// a caller that knows better than the rows do — a Day Export import, whose
+// envelope states the day it is of.
+function archiveSeenDay(records, hint) {
+  return SortDay.sortDayOf(records) || String(hint || '') || currentSortDay || '';
 }
 
 // Fold a freshly parsed file's rows into the archive. Called on every load.
 async function ingestArchive(rows) {
   const records = IbnoArchive.recordsFromRows(rows);
-  noteSeenRecords(records);
-  try { await ArchiveStore.addAll(records, new Date()); renderSearchCount(); }
-  catch (e) { /* archive is best-effort; never block coding on it */ }
+  const write = (async function () {
+    try { await ArchiveStore.addAll(records, new Date(), archiveSeenDay(records)); renderSearchCount(); }
+    catch (e) { /* archive is best-effort; never block coding on it */ }
+  })();
+  lastArchiveWrite = write;
+  await write;
 }
 
 // ingestArchiveRecords(records) -> the same fold, for a caller that already
-// holds RECORDS rather than raw rows. The Day Export import is the one such
-// caller: its rows arrive as records and must reach the archive UNCONDITIONALLY
-// (#795) — a package the Admin already finished has to leave a record here even
-// though it never enters the working list.
-async function ingestArchiveRecords(records) {
+// holds RECORDS rather than raw rows. Two callers now:
+//
+//   the Day Export import — its rows arrive as records and must reach the
+//   archive UNCONDITIONALLY (#795): a package the Admin already finished has to
+//   leave a record here even though it never enters the working list.
+//
+//   the POST SORT load (#855) — and that one is new. The Post Sort report is
+//   the daily driver under ADR 0021 and never reaches applySnapshot, so its
+//   rows used to feed the export's accumulator and NOTHING ELSE: they never
+//   entered the 30-day archive at all. With the accumulator gone the archive is
+//   the only store the export can read, so the daily driver's rows have to be
+//   in it — which is also what the archive says it is for ("EVERY row of EVERY
+//   CSV loaded over time"). The visible consequence is that Search Data now
+//   finds Post Sort rows and its count grows on a Post Sort day.
+async function ingestArchiveRecords(records, dayHint) {
   const list = Array.isArray(records) ? records : [];
   if (!list.length) return;
-  noteSeenRecords(list);
-  try { await ArchiveStore.addAll(list, new Date()); renderSearchCount(); }
-  catch (e) { /* archive is best-effort; never block coding on it */ }
+  const write = (async function () {
+    try { await ArchiveStore.addAll(list, new Date(), archiveSeenDay(list, dayHint)); renderSearchCount(); }
+    catch (e) { /* archive is best-effort; never block coding on it */ }
+  })();
+  lastArchiveWrite = write;
+  await write;
 }
 
 function toggleSearch() {
@@ -2817,8 +2996,17 @@ function toggleSearch() {
   if (!open) renderSearch();
 }
 
+// THE WARNING NAMES THE DAY EXPORT BECAUSE THIS BUTTON NOW EMPTIES IT (#855).
+// The archive stopped being only the search index the day the export started
+// reading its seen-rows out of it. A confirm that still said "search data"
+// would be true and misleading at once: the next Day Export would carry zero
+// report rows and announce it as success, and the person who cleared it would
+// have had no way to know that was the trade.
 async function clearSearchData() {
-  if (!confirm('Clear all saved search data (every row from every CSV loaded so far)?')) return;
+  if (!confirm('Clear all saved search data — every row from every report loaded so far?\n\n' +
+    'This is ALSO where the Day Export reads the report rows it hands over, so ' +
+    'today\'s export will carry none of them until a report is loaded again. ' +
+    'Take the Day Export first if today\'s handover has not gone out yet.')) return;
   await ArchiveStore.clear();
   renderSearch();
 }
@@ -3206,7 +3394,7 @@ function renderHotspots(hotspots) {
       '<span class="hs-area">' + esc(h.area) + '</span>' +
       '<span class="hs-count">&times;' + h.count + '</span>' +
       '<button class="hs-copy" title="Copy this area\'s tracking #s" ' +
-        'onclick="event.stopPropagation();copyHotspotArea(' + JSON.stringify(h.area).replace(/"/g, '&quot;') + ')">&#128203;</button>' +
+        'onclick="event.stopPropagation();copyHotspotArea(' + JSON.stringify(h.area).replace(/"/g, '&quot;') + ',this)">&#128203;</button>' +
     '</span>';
   });
   if (histAreaFilter) html += '<button class="hs-clear" onclick="filterHotspot(null)">clear filter</button>';
@@ -3218,13 +3406,127 @@ function filterHotspot(area) {
   renderHistory();
 }
 
+// ─── HONEST COPY FEEDBACK (#676 finding 1) ───────────────────────────────────
+//
+// EVERY clipboard write on this page goes through here.
+//
+// Eleven call sites used to be spelled:
+//
+//   ToolHelpers.copyText(text).catch(() => {});
+//   btn.textContent = '✓ Copied!';
+//
+// — the success painted SYNCHRONOUSLY, one line later, before the write had
+// resolved, with the rejection swallowed by a bare catch. A refused clipboard
+// write was then indistinguishable from a good one: Tyler clicks Copy Coded,
+// the browser refuses, the button says "✓ Copied!", and he pastes the PREVIOUS
+// batch into OPS2 believing it is this one. Records-tier: the wrong tracking
+// numbers get entered against real packages.
+//
+// Three surfaces on this page already answered "did the copy happen?" honestly
+// — copySelectedPostSort (#635 finding 7), copyFlaggedLookupBatch, and
+// setAsideCopyWrite (#760). This is their shape, factored out ONCE rather than
+// respelled eleven more times, so all fourteen answer it identically.
+//
+// Two details carry over from those three and are the reason this is a shared
+// function rather than eleven edits:
+//
+//   THE ELEMENT IS RE-RESOLVED INSIDE THE CALLBACK. .then()/.catch() fire on a
+//     later turn of the event loop, and several of these tables rebuild
+//     themselves in between. `where` is therefore a FUNCTION returning the
+//     element, not the element itself, so the feedback — the entire point —
+//     cannot land on a detached node. The two callers whose element cannot be
+//     re-queried (a chip inside a row, with no id of its own) hand back the
+//     captured node guarded on .isConnected, which is the same guarantee
+//     arrived at from the other side.
+//
+//   NO AUTO-REVERT ON THE FAILURE PATH. Success states clear themselves after
+//     a moment; failure states do not. copySelectedPostSort's own catch block
+//     carries the full argument — a failure that erases itself on a blind
+//     clock can be missed entirely on a machine that stutters, and "a failure
+//     must not read as success" generalizes to "a failure must not read as
+//     NOTHING HAPPENED" either. Each failure state below stands until its
+//     surface is used again or its table repaints.
+//
+// The empty-text guard is deliberate and load-bearing (#750 review finding 1):
+// clipboard.writeText('') CLEARS the clipboard and the execCommand fallback
+// copies an empty textarea, so writing nothing is worse than writing the wrong
+// thing. Callers that can produce an empty value already guard themselves; this
+// is the backstop.
+const COPY_FAIL_TEXT = 'Copy failed';
+const COPY_FAIL_NOTE = 'Could not copy to the clipboard — try again. Nothing was copied, ' +
+  'so the clipboard still holds whatever it held before.';
+
+// copyWithFeedback(text, onCopied, onFailed) -> the write, with the success
+// painted ONLY on resolve and a visible failure state on reject. Returns the
+// promise so a caller can chain, and never rejects onward: the failure has
+// already been SHOWN, and an unhandled rejection would add nothing but noise.
+function copyWithFeedback(text, onCopied, onFailed) {
+  const value = String(text == null ? '' : text);
+  if (!value) return Promise.resolve(false);
+  // THE PAGE MAY BE GONE by the time these fire. They run on a later turn of
+  // the event loop, and every one of them re-resolves its element through
+  // `document` — which is exactly the right discipline while the page is still
+  // there, and a TypeError the moment it is not (a tab closed mid-copy; in the
+  // DOM harness, a jsdom window torn down on the line after the click). The
+  // same gate that makes "the node may be detached" safe has to cover "the
+  // document may be detached" too.
+  const pageIsGone = () => typeof document === 'undefined' || !document;
+  return ToolHelpers.copyText(value).then(() => {
+    if (pageIsGone()) return true;
+    if (onCopied) onCopied();
+    return true;
+  }, () => {
+    if (pageIsGone()) return false;
+    if (onFailed) onFailed();
+    return false;
+  });
+}
+
+// copyButtonFeedback(getBtn, successText, successClass) -> the handler pair for
+// the five .btn surfaces, which all share one shape: flash a success label for
+// a moment, then re-derive the idle one. `restore` is passed rather than a
+// saved label for the reason copyAutoTable already documented — a chip clicked
+// during the flash must not be undone when the timer fires.
+function copyButtonFeedback(getBtn, successText, restore) {
+  return {
+    onCopied: () => {
+      const btn = getBtn();
+      if (!btn) return;
+      btn.textContent = successText;
+      btn.className = 'btn btn-success';
+      setTimeout(() => { const live = getBtn(); if (live) restore(live); }, 2000);
+    },
+    onFailed: () => {
+      const btn = getBtn();
+      if (btn) { btn.textContent = COPY_FAIL_TEXT; btn.className = 'btn btn-fail'; }
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    },
+  };
+}
+
 // Copy an area's recurring tracking #s (+ times seen) as a belt hand-off worklist.
-function copyHotspotArea(area) {
+// `btn` is the chip's own 📋 button, handed in so a refusal has somewhere
+// visible to land — this surface lives in Repeat History, far from the
+// #goesto-note pill under the working list.
+function copyHotspotArea(area, btn) {
   const recurring = IbnoRules.historyRows(loadHistory(), histWindow, new Date()).filter(r => r.timesSeen >= 2);
   const lines = recurring.filter(r => histAreaOf(r) === area)
     .map(r => r.tracking + '\t×' + r.timesSeen + '\t' + (r.category || ''));
   if (!lines.length) return;
-  ToolHelpers.copyText('Repeat hotspot — ' + area + ' (' + lines.length + ')\n' + lines.join('\n')).catch(() => {});
+  const live = () => (btn && btn.isConnected ? btn : null);
+  if (btn) { btn.classList.remove('copy-failed'); btn.title = "Copy this area's tracking #s"; }
+  copyWithFeedback('Repeat hotspot — ' + area + ' (' + lines.length + ')\n' + lines.join('\n'),
+    () => {
+      const el = live(); if (!el) return;
+      el.textContent = '✓';
+      setTimeout(() => { const b = live(); if (b) b.innerHTML = '&#128203;'; }, 1200);
+    },
+    () => {
+      const el = live(); if (!el) return;
+      el.textContent = '✕';
+      el.classList.add('copy-failed');
+      el.title = COPY_FAIL_NOTE;
+    });
 }
 
 function buildHistoryRow(r, inToday) {
@@ -3460,16 +3762,25 @@ function compareBySort(a, b, table) {
 }
 
 function sortSelectValue(table) {
-  // Same fallback chain as IbnoSort.resolveState (#707/#714), for the same
-  // reason: a table registered in NEITHER map used to crash here on `st.key`.
-  // The lib-side guard moved that crash into this file rather than removing it
-  // (#717). Unreachable today — defaultSorts registers every table the page
-  // sorts — but #690 renames sections in the markup, and a rename that misses
-  // defaultSorts should degrade to "no sort chosen" instead of throwing on a
-  // sort click at a table name that looks correct in the HTML. Blank key on
-  // purpose: no <option> carries an empty value, so the dropdown shows nothing
-  // chosen rather than an order the table is not actually in.
-  const st = sortState[table] || defaultSorts[table] || { key: '', dir: 'asc' };
+  // THE fallback chain, not a copy of it (#817). A table registered in NEITHER
+  // map used to crash here on `st.key`; #717 fixed that by re-spelling the lib's
+  // three rungs inline, because lib/ibno-sort.js exported neither resolveState
+  // nor its constant. It exports both now, so the page asks rather than copies —
+  // changing the lib's fallback can no longer leave the dropdown and the
+  // comparator disagreeing about how an unregistered table sorts. Still
+  // unreachable today (defaultSorts registers every table the page sorts), but
+  // #690 renames sections in the markup, and a rename that misses defaultSorts
+  // degrades to "no sort chosen" instead of throwing on a sort click at a table
+  // name that looks correct in the HTML. The lib's blank key is what makes that
+  // read right here: no <option> carries an empty value, so the dropdown lands
+  // on nothing chosen rather than an order the table is not actually in.
+  // sortState is passed as a GETTER, matching sortComparator at :3440 and for the
+  // same reason: resetViewControls() reassigns the binding wholesale. Reading it
+  // through a closure is correct wherever this context object ends up — including
+  // hoisted out of this function, which is exactly the tidy-up the queued
+  // ibno-coder.html work invites and which no test could catch (PR #868 review,
+  // finding 3).
+  const st = IbnoSort.resolveState({ sortState: () => sortState, defaultSorts: defaultSorts }, table);
   if (st.key === 'time' && st.dir === 'asc') return 'time-asc';
   return st.key;
 }
@@ -3710,16 +4021,86 @@ function updateExpressSection() {
 // Counted by UNIQUE LABEL across both reports, the same rule every other count
 // on this page uses, so the line and the cards never disagree by the size of
 // the overlap.
+// otherAreasAllRows() -> the section's WHOLE population, one item per unique
+// label, full-report rows first and the early rows that add a label after.
+//
+// ONE ACCESSOR FOR THE COUNT AND FOR THE ACTIONS (#704 AC5). The badge, "Copy
+// all" and "Barcode all" all read this, so the number on a button is
+// structurally the number of rows that button acts on — the round-26
+// chip-says-4-shows-2 class cannot be reached by any of the three drifting
+// from the others, because there is nothing to drift from.
+//
+// "ALL" MEANS THE SECTION, NOT THE SEARCH SLICE. This section has a search box
+// that the Parked and 503s tabs do not, so "all" had a second possible
+// meaning here for the first time. It keeps the meaning the other Set aside
+// "Copy all" buttons already have and that Tyler settled on #789 — every row —
+// and the button counts and titles say so out loud. The search's own
+// "showing X of Y" note is what keeps the filtered-out rows traced.
+function otherAreasAllRows() {
+  const seen = new Set();
+  const out = [];
+  [workingLaneItems('other'), workingEarlyLaneItems('other')].forEach(list => {
+    list.forEach(it => {
+      const label = it && it.label;
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push(it);
+    });
+  });
+  return out;
+}
+
 function updateOtherAreasLine() {
-  const labels = new Set();
-  workingLaneItems('other').forEach(it => labels.add(it.label));
-  workingEarlyLaneItems('other').forEach(it => labels.add(it.label));
-  const n = labels.size;
+  const rows = otherAreasAllRows();
+  const n = rows.length;
   const badge = document.getElementById('other-areas-badge');
   if (badge) badge.textContent = n;
+  const copyBtn = document.getElementById('copy-all-other-areas');
+  if (copyBtn) { copyBtn.textContent = 'Copy all (' + n + ')'; copyBtn.disabled = n === 0; }
+  const barcodeBtn = document.getElementById('barcode-all-other-areas');
+  if (barcodeBtn) {
+    barcodeBtn.innerHTML = '&#9612;&#9613;&#9612; Barcode all (' + n + ')';
+    barcodeBtn.disabled = n === 0;
+  }
   const section = document.getElementById('other-areas-section');
   if (section) section.style.display = n ? 'block' : 'none';
   if (!n) collapseOtherAreas();
+}
+
+// Copy all / Barcode all for Other work areas (#704, spec #690 story 27).
+//
+// Both go through the SAME shared helpers the three Set aside tabs use —
+// setAsideCopyBatch / setAsideCopySkipNote / setAsideCopyWrite for the copy,
+// printBarcodesFor for the sheet — so this section cannot drift from them on
+// the two questions that matter: whether the clipboard actually took the batch
+// (#760), and whether a card may print an area at all (the typed-area-only
+// rule, which lives in IbnoBarcodeSheet.cardArea and is reached only through
+// printBarcodesFor).
+function copyAllOtherAreas() {
+  const rows = otherAreasAllRows();
+  if (!rows.length) return;
+  const batch = setAsideCopyBatch(rows);
+  const btn = document.getElementById('copy-all-other-areas');
+  if (!batch.lines.length) {
+    if (btn) {
+      btn.textContent = '0 copied';
+      setTimeout(() => { updateOtherAreasLine(); }, 1200);
+    }
+    setAsideCopySkipNote(batch.skipped);
+    return;
+  }
+  setAsideCopyWrite('copy-all-other-areas', batch.lines);
+  setAsideCopySkipNote(batch.skipped);
+}
+
+// NO CONFIRM PANEL, for the same reason barcodeAllAssigned opens none: the
+// panel (#734) is the writer of the filing store, and it belongs to the one
+// act that changes state — "Barcode selected" on the working list. A whole-
+// section reprint must never file a section.
+function barcodeAllOtherAreas() {
+  const rows = otherAreasAllRows();
+  if (!rows.length) return;
+  printBarcodesFor(rows.map(it => ({ label: it.label, early: it.provenance === 'early' })));
 }
 
 // The line opens on click and closes again; the toolbar and the table below it
@@ -4256,6 +4637,22 @@ function renderSetAside() {
   }
   const copyBtn = document.getElementById('copy-all-parked');
   if (copyBtn) copyBtn.textContent = 'Copy all (' + n + ')';
+  // #704: same count, same population, same render pass as the badge and the
+  // rows below — the three cannot disagree about how many parked rows exist.
+  //
+  // NOT DISABLED AT ZERO, matching the "Copy all" it sits beside. The two
+  // buttons in ONE toolbar are the pairing a reader actually compares, and a
+  // live "Copy all (0)" next to a greyed "Barcode all (0)" reads as a broken
+  // control rather than an empty tab. Both actions early-return on an empty
+  // population, so at zero the button is inert either way.
+  //
+  // The ✅ Work area assigned tab DOES disable its pair, and that is left
+  // exactly as #734 shipped it: changing a pre-existing button's affordance is
+  // not this ticket, and each toolbar is at least self-consistent.
+  const parkedBarcodeBtn = document.getElementById('barcode-all-parked');
+  if (parkedBarcodeBtn) {
+    parkedBarcodeBtn.innerHTML = '&#9612;&#9613;&#9612; Barcode all (' + n + ')';
+  }
   render503Tab(rows503, notFixed);
   renderAssignedTab(rowsAssigned);
   // CLEARED BEFORE the zero early-return below, never after it. The clear used
@@ -4370,6 +4767,13 @@ function render503Tab(rows, notFixed) {
   }
   const copyBtn = document.getElementById('copy-all-503');
   if (copyBtn) copyBtn.textContent = 'Copy all (' + n + ')';
+  // #704: read off `rows`, the same array the tbody below is drawn from. Not
+  // disabled at zero, for the same reason as the Parked tab's — see the note on
+  // barcode-all-parked in renderSetAside().
+  const barcodeBtn = document.getElementById('barcode-all-503');
+  if (barcodeBtn) {
+    barcodeBtn.innerHTML = '&#9612;&#9613;&#9612; Barcode all (' + n + ')';
+  }
 
   // The passive done signal (#615 point 2, #690 story 18). Still coming back
   // means the address update did not happen; quiet means presumed done, and
@@ -4793,6 +5197,23 @@ function copyAll503() {
   setAsideCopySkipNote(batch.skipped);
 }
 
+// Barcode all, the 503 pallet walked off paper (#704, spec #690 story 27).
+//
+// Through printBarcodesFor like every other barcode action, so the #667/#683
+// gating, the #700 bands, the tick handling and the #704 scan mode are the
+// same paper. It writes NOTHING: a 503 row is already filed by its Goes To box
+// reading 503 (lib/ibno-503.js), so there is no second state for a reprint to
+// set, and no confirm panel — the panel files rows, and these are filed.
+//
+// The cards read 503 in 30px, and that is correct rather than a leak: 503 went
+// into the Goes To box as a keystroke, so it carries `typed` provenance and is
+// the area Tyler decided. The pallet IS where the package goes.
+function barcodeAll503() {
+  const rows = filed503Rows();
+  if (!rows.length) return;
+  printBarcodesFor(rows.map(it => ({ label: it.label, early: it.provenance === 'early' })));
+}
+
 // A parked row keeps its per-row chips (barcode, FTrack, street copy): the
 // whole point of the tab is that the FTrack look happens FROM here. Barcode
 // all is the sheet ticket's, not this one (#698 scope).
@@ -5099,6 +5520,22 @@ function copyAllParked() {
   setAsideCopySkipNote(batch.skipped);
 }
 
+// Barcode all, the FTrack pass walked off paper (#704, spec #690 story 27).
+//
+// Same population as Copy all above — every parked row, both groups — so the
+// sheet and the clipboard list can never be different sets.
+//
+// PARK WRITES NO RECORD, and printing keeps that true. This unparks nothing,
+// files nothing and opens no confirm panel: a parked row is one Tyler cannot
+// answer yet, so the card carries a DASH where the area goes (nothing was
+// typed) and sends the package back to a human, which is exactly the state the
+// row is in.
+function barcodeAllParked() {
+  const rows = IbnoParked.parkedRows(parkedDrawItems(), parkedStore);
+  if (!rows.length) return;
+  printBarcodesFor(rows.map(it => ({ label: it.label, early: it.provenance === 'early' })));
+}
+
 function updateManualBadge() {
   // The badge and the Needs Review card describe the MERGED section: the whole
   // working list, both services. The demoted remainder is counted by its own
@@ -5170,6 +5607,41 @@ function toggleManualGroup(bucket) {
 // The tbody a control lives in — the lane scope for every per-lane query.
 function laneBody(el) { return el && el.closest('tbody'); }
 
+// ─── DELIBERATE SELECTION (#676 finding 2) ───────────────────────────────────
+//
+// bulkApply sweeps a bucket after coding it, unchecking every row the
+// data-bulk gate deliberately skipped (QA-Intercept / Invalid HazMat) so the
+// skip is visible rather than silent (#605). That sweep could not tell WHERE a
+// check came from, so it also cleared rows Tyler had checked ON PURPOSE — the
+// concrete case being "✓ Select with area, not barcoded", which checks the
+// exact rows he is about to print barcode cards for, several of which are
+// intercepts. He selects six, codes the flagged rows in the same bucket, and
+// the selection he built is gone with no signal at all. That is the same
+// silent-loss class #605 exists to prevent, arriving from the other side.
+//
+// A row therefore records whether ITS check was deliberate:
+//
+//   DELIBERATE .. a real click on the checkbox (its own 'change' event, which
+//                 a programmatic .checked assignment never fires), a
+//                 shift-click range, or "Select with area" — a NAMED subset
+//                 the user asked for by name and whose size is printed on the
+//                 button.
+//   NOT ........ a bucket header's or band header's select-all, which means
+//                 "everything in this bucket", and whose sweep-back is the
+//                 whole point of #605.
+//
+// The mark rides on the ROW rather than in a Set, because it has to survive
+// exactly as long as the check it describes and nothing longer: a row that
+// leaves the DOM takes it with it. renderManualSectionRows carries it across a
+// rebuild alongside the check itself, in one place, so the two can never drift.
+const DELIBERATE_ATTR = 'userChecked';
+function markDeliberate(tr, on) {
+  if (!tr || !tr.dataset) return;
+  if (on) tr.dataset[DELIBERATE_ATTR] = '1';
+  else delete tr.dataset[DELIBERATE_ATTR];
+}
+function isDeliberate(tr) { return !!(tr && tr.dataset && tr.dataset[DELIBERATE_ATTR]); }
+
 function buildGroupHeaderRow(g, count) {
   const tr = document.createElement('tr');
   tr.className = 'manual-group-row';
@@ -5194,6 +5666,11 @@ function buildGroupHeaderRow(g, count) {
       if (!rowMatchesQuery(row, q)) return;   // one shared predicate (#673 finding 8)
       const cb = row.querySelector('.manual-check');
       if (cb) { cb.checked = all.checked; row.classList.toggle('row-checked', all.checked); }
+      // A select-all means "everything in this bucket", which is precisely NOT
+      // a deliberate pick of this row, so it never sets the mark (#676 finding
+      // 2) — and unchecking clears any mark a previous hand-click left, because
+      // the row is not selected at all any more.
+      if (!all.checked) markDeliberate(row, false);
       // #703: this header now sweeps EARLY rows too, because they sit in this
       // bucket alongside the full-report ones. An early row's checked state is
       // NOT the checkbox — it is postSortChecked, the Set the paste-to-lookup
@@ -5352,7 +5829,10 @@ function buildBandHeaderRow(bucketKey, band, opts) {
     const rows = RowRangeSelect.scopeRows(body, {
       match: (tr2) => tr2.dataset.bucket === bucketKey && tr2.dataset.band === band.key,
     });
-    RowRangeSelect.applyRange(rows, all.checked, applyRangeRowSelection);
+    // NOT deliberate (#676 finding 2, PR #870 review): a band select-all means
+    // "everything in this band", the same as a bucket header's select-all, so
+    // the #605 sweep must still release the rows it swept in.
+    RowRangeSelect.applyRange(rows, all.checked, rowSelectionApplier(false));
     updateBulkButtons();
     updatePostSortCopyButton();   // the early half has its own button (#703)
   });
@@ -5570,13 +6050,22 @@ function copySelectedManual(lane) {
   // contain an early row by construction. The early lane's own bulk copy is
   // copySelectedPostSort, which has passed { noFallback: true } since #635.
   const lines = checked.map(tr => copyValueFor(tr.dataset.label, tr.dataset.barcode));
-  ToolHelpers.copyText(lines.join('\n')).catch(() => {});
-  const btn = document.getElementById(cfg.copyBtn);
-  if (btn) {
-    const prev = btn.textContent;
-    btn.textContent = '✓ Copied ' + lines.length;
-    setTimeout(() => { updateBulkButtons(); }, 1200);
-  }
+  // #676 finding 1: the count used to be painted here, one line below the
+  // write and before it had resolved, with the rejection swallowed — so a
+  // refused write still read "✓ Copied 12".
+  const live = () => document.getElementById(cfg.copyBtn);
+  copyWithFeedback(lines.join('\n'),
+    () => {
+      const btn = live();
+      if (!btn) return;
+      btn.textContent = '✓ Copied ' + lines.length;
+      setTimeout(() => { updateBulkButtons(); }, 1200);
+    },
+    () => {
+      const btn = live();
+      if (btn) btn.textContent = COPY_FAIL_TEXT;
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    });
 }
 
 // Code every checked row in a bucket with the bucket's code, immediately.
@@ -5615,7 +6104,15 @@ function bulkApply(bucket, code, body) {
   // Track IDs to Full Barcode lookup. That is the #669 finding-3 failure class
   // the deleted togglePostSortSelectAll was hardened against, arriving through
   // a different door.
-  scope.querySelectorAll('tr[data-label][data-bucket="' + bucket + '"]:not([data-bulk="' + code + '"]) .manual-check:checked')
+  //
+  // #676 FINDING 2: :not([data-user-checked]) exempts a DELIBERATE check — one
+  // Tyler made by clicking the box, shift-dragging a range, or asking for
+  // "Select with area, not barcoded". The sweep exists to release what a
+  // SELECT-ALL swept in; releasing a selection he built on purpose, with no
+  // signal, is the same silent loss viewed from the other side. See
+  // markDeliberate() for where the mark comes from and why a select-all never
+  // sets it.
+  scope.querySelectorAll('tr[data-label][data-bucket="' + bucket + '"]:not([data-bulk="' + code + '"]):not([data-user-checked]) .manual-check:checked')
     .forEach(cb => {
       cb.checked = false;
       const tr = cb.closest('tr[data-label]');
@@ -5939,11 +6436,20 @@ function renderManualSectionRows() {
   // truth (see buildManualRow); restoring them here as well would be a second
   // writer for the same state.
   const carriedChecked = new Set();
+  // ...and, alongside it, WHICH of those checks were deliberate (#676 finding
+  // 2). Captured in the same walk and restored in the same one below, so the
+  // mark cannot outlive or fall behind the check it describes.
+  const carriedDeliberate = new Set();
   MANUAL_LANES.forEach(lane => {
     const body = document.getElementById(lane.tbody);
     if (!body) return;
     body.querySelectorAll(FULL_ROW_SEL + ' .manual-check:checked')
-      .forEach(cb => { const tr = cb.closest('tr[data-label]'); if (tr) carriedChecked.add(tr.dataset.label); });
+      .forEach(cb => {
+        const tr = cb.closest('tr[data-label]');
+        if (!tr) return;
+        carriedChecked.add(tr.dataset.label);
+        if (isDeliberate(tr)) carriedDeliberate.add(tr.dataset.label);
+      });
   });
   const { bodies, open } = openLanes(MANUAL_LANES.map(l => l.tbody),
     tr => ({ label: tr.dataset.label }));
@@ -6101,6 +6607,7 @@ function renderManualSectionRows() {
         if (!carriedChecked.has(tr.dataset.label)) return;
         const cb = tr.querySelector('.manual-check');
         if (cb) { cb.checked = true; tr.classList.add('row-checked'); }
+        if (carriedDeliberate.has(tr.dataset.label)) markDeliberate(tr, true);
       });
     });
   }
@@ -6395,11 +6902,10 @@ function copyRepeatTable() {
     return label + '\t' + e.timesSeen + '\t' + e.inboundDates.join(' ');
   });
   if (!lines.length) return;
-  ToolHelpers.copyText(lines.join('\n')).catch(() => {});
-  const btn = document.getElementById('copy-repeat-btn');
-  btn.textContent = '✓ Copied!';
-  btn.className = 'btn btn-success';
-  setTimeout(() => { btn.textContent = 'Copy All'; btn.className = 'btn btn-purple'; }, 2000);
+  // #676 finding 1: success on resolve only, a visible failure on reject.
+  const fb = copyButtonFeedback(() => document.getElementById('copy-repeat-btn'), '✓ Copied!',
+    (btn) => { btn.textContent = 'Copy All'; btn.className = 'btn btn-purple'; });
+  copyWithFeedback(lines.join('\n'), fb.onCopied, fb.onFailed);
 }
 
 function downloadRepeatTable() {
@@ -6565,20 +7071,62 @@ function attachLabelCopy(tr, label, barcode, opts) {
     // reason gets said out loud.
     const value = copyValueFor(label, barcode, opts);
     if (!value) return;
-    ToolHelpers.copyText(value).catch(() => {});
-    span.classList.add('copied');
-    span.title = 'Copied!';
-    setTimeout(() => { span.classList.remove('copied'); span.title = 'Click to copy'; }, 1200);
+    // #676 finding 1: the green "Copied!" highlight used to be applied
+    // unconditionally, one line after the write, with the rejection swallowed.
+    // The row is rebuilt by any repaint, so the span is guarded on isConnected
+    // rather than re-queried — it has no id to re-query BY, and a detached node
+    // is the one thing that would silently swallow the feedback again.
+    span.classList.remove('copy-failed');
+    const live = () => (span.isConnected ? span : null);
+    copyWithFeedback(value,
+      () => {
+        const el = live(); if (!el) return;
+        el.classList.add('copied');
+        el.title = 'Copied!';
+        setTimeout(() => {
+          const s = live();
+          if (s) { s.classList.remove('copied'); s.title = 'Click to copy'; }
+        }, 1200);
+      },
+      () => {
+        const el = live(); if (!el) return;
+        el.classList.add('copy-failed');
+        el.title = COPY_FAIL_NOTE;
+        flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+      });
   });
 }
 
 function copyRowBtn(e) {
   const btn = e.currentTarget;
   const text = btn.dataset.label + '\t' + btn.dataset.code;
-  ToolHelpers.copyText(text).catch(() => {});
-  btn.textContent = '✓';
-  btn.classList.add('copied');
-  setTimeout(() => { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 1500);
+  // #676 finding 1. Same isConnected guard as attachLabelCopy, for the same
+  // reason: a per-row button has no id of its own.
+  //
+  // THE TITLE IS RESET ALONGSIDE THE CLASS (PR #870 review). The failure path
+  // writes COPY_FAIL_NOTE into it and the success path never touched it, so a
+  // copy that later worked kept hovering "Could not copy to the clipboard" over
+  // a button that had just copied. copyHotspotArea already resets both; this is
+  // the same reset, spelled the same way.
+  btn.classList.remove('copy-failed');
+  btn.title = 'Copy row';
+  const live = () => (btn.isConnected ? btn : null);
+  copyWithFeedback(text,
+    () => {
+      const el = live(); if (!el) return;
+      el.textContent = '✓';
+      el.classList.add('copied');
+      setTimeout(() => {
+        const b = live();
+        if (b) { b.textContent = '⎘'; b.classList.remove('copied'); }
+      }, 1500);
+    },
+    () => {
+      const el = live(); if (!el) return;
+      el.textContent = '✕';
+      el.classList.add('copy-failed');
+      el.title = COPY_FAIL_NOTE;
+    });
 }
 
 // ─── MANUAL RESOLVE ───────────────────────────────────────────────────────────
@@ -7339,6 +7887,10 @@ function stateOf(item) {
 // cross a unit number.
 
 const ACTUAL_AREA_KEY = 'ibno_actual_area';
+// The receipt that the #722 provenance migration has ALREADY RUN on this
+// device. It exists so the migration is a one-time event and not a standing
+// behaviour — see loadActualAreas for what goes wrong without it.
+const AREA_PROVENANCE_MIGRATED_KEY = 'ibno_area_provenance_migrated';
 let actualAreaStore = {};
 
 // ─── THE SORT-DAY CLOCK (#695, decision record #621) ────────────────────────
@@ -8519,7 +9071,44 @@ function loadActualAreas() {
   // window) is deliberately gone, it kept a three-week-old area as a live
   // value while resetting nothing at a new sort, which is the defect #621
   // recorded.
-  actualAreaStore = ActualArea.restore(toolStorage.get(ACTUAL_AREA_KEY, null));
+  //
+  // ONE OF THE TWO LEGACY BOUNDARIES (#722). Every entry on disk from before
+  // the `typed` marker existed carries no provenance at all, and areaProvenance
+  // Of now dashes an entry with none — so without this adoption the upgrade
+  // would silently blank areas Tyler already paid an FRO lookup for, on the one
+  // surface where a blank costs him the lookup twice. adoptLegacyTyped is a
+  // named step at exactly this boundary rather than a stamp inside restore();
+  // lib/actual-area.js states why in full.
+  //
+  // IT RUNS ONCE PER DEVICE, EVER, AND THE RECEIPT IS WHAT MAKES THAT TRUE.
+  // The first cut of #722 adopted on EVERY load, which is a migration in name
+  // and a standing launderer in fact: an entry with no provenance dashed on its
+  // card until the next F5 and printed afterwards. The independent review
+  // measured it on the real 2026-07-08 export (Control A2b — inject, reload,
+  // print): 36 of 46 report work areas back on cards, byte-identical to shipped
+  // main. A guard that expires at the next refresh is not a guard.
+  //
+  // PERSIST BOTH OR NEITHER, and the order is load-bearing. The adopted store
+  // is written FIRST and the receipt only when that write landed. Setting the
+  // receipt against a store still markerless on disk would dash every one of
+  // Tyler's real areas on the next reload — the exact failure this migration
+  // exists to prevent, caused by the thing meant to prevent it. A dropped write
+  // (a full origin, #716) therefore leaves no receipt and the migration simply
+  // retries next load, which is the direction that costs nothing.
+  //
+  // Note what the receipt makes true of the STORE, not just of this function:
+  // saveActualAreas serializes the WHOLE store, so a single adopted row reaching
+  // disk carries every other adopted row with it. That is why the write here is
+  // the migration's completion and not a housekeeping detail.
+  const stored = toolStorage.get(ACTUAL_AREA_KEY, null);
+  if (toolStorage.get(AREA_PROVENANCE_MIGRATED_KEY, false)) {
+    // Already migrated. From here an entry carrying no provenance is not legacy
+    // data — it is a value nobody can account for, and it dashes.
+    actualAreaStore = ActualArea.restore(stored);
+    return;
+  }
+  actualAreaStore = ActualArea.adoptLegacyTyped(stored);
+  if (saveActualAreas()) toolStorage.set(AREA_PROVENANCE_MIGRATED_KEY, true);
 }
 
 // Returns whether the write LANDED. Every caller that a human just typed into
@@ -8566,6 +9155,41 @@ function warnRolledAreasNotSaved(notesAlsoDropped) {
 
 function actualAreaOf(item) {
   return ActualArea.get(actualAreaStore, item && item.label);
+}
+
+// ─── THE FILLED-BOX HIGHLIGHT (#832) ────────────────────────────────────────
+//
+// hasAreaClass(label) -> ' has-area' when this row's Goes To box is FILLED,
+// '' when it is empty. Every path that EMITS a .goesto-input calls this, so
+// the class is derived from the store at render time rather than bolted on
+// afterwards by repaintGoesTo().
+//
+// WHY IT EXISTS. repaintGoesTo() runs ON COMMIT, and until this ticket it was
+// the ONLY thing that ever added the class. A box filled by any other path —
+// the load-time dock-flex reflow (#739/#827), or a plain re-render restoring a
+// stored area — showed its value with no highlight until somebody typed into
+// it. The data was right; the at-a-glance "this row is answered" signal was
+// missing on exactly the rows that got their answer for free, which is the
+// dock-flex case a supervisor scans a band of rows to confirm.
+//
+// WHICH PREDICATE, AND WHY IT IS THAT ONE (ADR 0022). The question this class
+// answers is "is this box filled", which is ADR 0022's **answered** state:
+// ActualArea.isAnswered(store, label) — an area is present, provenance
+// irrelevant. It is deliberately NOT isScanned() (that asks "confirmed against
+// a scan on the report this tool runs", and would leave every Post Sort row
+// unhighlighted, since setEarly stamps `early: true` — #740/#778's failure
+// wearing a stylesheet), NOT isTyped() (that asks "is this value accounted
+// for", the barcode card's question), and NOT isAuto()/isEarly() (those drive
+// the .same-addr and .early-tag tags, which say HOW the box was filled and are
+// rendered separately, beside it).
+//
+// It cannot drift from the value the box shows: get() answers "what goes in
+// the box" and isAnswered() answers "is there an answer", and lib/actual-area.js
+// states outright that the two are provenance-blind and agree by construction.
+// repaintGoesTo() reads the same predicate, so the build path and the commit
+// path cannot answer this differently — which is the whole point of the ticket.
+function hasAreaClass(label) {
+  return ActualArea.isAnswered(actualAreaStore, label) ? ' has-area' : '';
 }
 
 // Every row the working list is currently showing, as the { label, address }
@@ -9444,7 +10068,8 @@ function goesToCell(item, opts) {
   // The cross-day dated note (#702). areaNoteToShow decides; this only paints.
   const noteHtml = areaNoteHtml(item && item.label, v);
   return '<td class="goesto-cell' + (noteHtml ? ' has-note' : '') + '">' +
-    '<input type="text" class="goesto-input" maxlength="' + ActualArea.MAX_LEN + '"' +
+    '<input type="text" class="goesto-input' + hasAreaClass(item && item.label) + '"' +
+    ' maxlength="' + ActualArea.MAX_LEN + '"' +
     ' value="' + ToolHelpers.escapeHtml(v) + '"' +
     ' data-label="' + ToolHelpers.escapeHtml(item.label) + '"' +
     ' placeholder="—" aria-label="Actual work area for ' + ToolHelpers.escapeHtml(item.label) + '"' +
@@ -9606,7 +10231,14 @@ function repaintGoesTo(label) {
   // both, and a write in one must repaint the other's box too.
   document.querySelectorAll('.goesto-input[data-label="' + cssAttrEscape(label) + '"]').forEach(el => {
     if (document.activeElement !== el || el.value !== value) el.value = value;
-    el.classList.toggle('has-area', !!value);
+    // THE SAME PREDICATE THE BUILD PATH USES (#832). goesToCell emits the class
+    // from hasAreaClass() -> ActualArea.isAnswered; this names it too, so a box
+    // painted on commit and a box painted on a rebuild cannot disagree about
+    // whether it is filled. (`!!value` gave the same answer — get() and
+    // isAnswered() are both provenance-blind and agree by construction — but
+    // leaving the two sites reading different things is how the drift this
+    // ticket fixes started.)
+    el.classList.toggle('has-area', ActualArea.isAnswered(actualAreaStore, label));
     // The tags are rendered by goesToCell at build time, but propagation
     // changes a row's provenance without rebuilding it, so keep them in step
     // here too.
@@ -10235,9 +10867,12 @@ function ingestPostSortRecords(records, fileName) {
   // What this device SAW, for the Day Export (#795). The Post Sort report is
   // the daily driver (ADR 0021) and it never reaches applySnapshot, so without
   // this line the export would carry no rows at all on the path a normal day
-  // takes. It feeds the accumulator only — the archive's own ingest is
-  // unchanged, so nothing about Tyler's 30-day search moves here.
-  noteSeenRecords(records);
+  // takes. It used to feed an in-memory accumulator and nothing else; #855
+  // routes it to the 30-day ARCHIVE, which is now where the export reads its
+  // seen-rows from and which every other report path already writes to. Fire
+  // and forget, exactly like applySnapshot's ingestArchive call: the archive is
+  // best-effort and must never block or delay the lane rendering below.
+  ingestArchiveRecords(records);
   postSortItems = PostSortLane.buildPostSortLane(records);
   // Under ADR 0021 the Post Sort report IS the loaded report, so it sets the
   // sort day exactly like a main-report load does (#695). Its rows carry
@@ -11616,11 +12251,26 @@ document.addEventListener('click', function (e) {
   e.stopPropagation();
   const addr = el.dataset.addr || '';
   if (!addr) return;
-  ToolHelpers.copyText(addr).catch(() => {});
-  el.classList.add('copied');
-  const prevTitle = el.title;
-  el.title = 'Copied!';
-  setTimeout(() => { el.classList.remove('copied'); el.title = prevTitle; }, 1200);
+  // #676 finding 1: the "Copied!" state used to be painted unconditionally.
+  const prevTitle = el.classList.contains('copy-failed') ? 'Click to copy the full address' : el.title;
+  el.classList.remove('copy-failed');
+  const live = () => (el.isConnected ? el : null);
+  copyWithFeedback(addr,
+    () => {
+      const node = live(); if (!node) return;
+      node.classList.add('copied');
+      node.title = 'Copied!';
+      setTimeout(() => {
+        const n = live();
+        if (n) { n.classList.remove('copied'); n.title = prevTitle; }
+      }, 1200);
+    },
+    () => {
+      const node = live(); if (!node) return;
+      node.classList.add('copy-failed');
+      node.title = COPY_FAIL_NOTE;
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    });
 });
 
 
@@ -11804,7 +12454,14 @@ function restoreWorkCursor(label) {
 function copyRowStreet(tr) {
   const street = workStreetOf(tr);
   if (!street) return '';
-  ToolHelpers.copyText(street).catch(() => {});
+  // #676 finding 1. This one has no button of its own — it fires as a side
+  // effect of landing on a row — so the refusal is spoken on the shared pill,
+  // AS A WARNING for the reason setAsideCopyWrite documents: a plain note is
+  // suppressed for 8s after any warning, and this page fires warnings
+  // routinely, so a plain note here would sometimes never appear at all.
+  // Success stays silent, exactly as before: the paste into FRO is the
+  // confirmation, and a pill on every row would be noise.
+  copyWithFeedback(street, null, () => flashGoesToNote(COPY_FAIL_NOTE, { warn: true }));
   return street;
 }
 
@@ -12235,6 +12892,12 @@ function selectRowsWithArea(lane) {
     const cb = tr.querySelector('.manual-check');
     cb.checked = true;
     tr.classList.add('row-checked');
+    // DELIBERATE (#676 finding 2). This button selects a NAMED subset whose
+    // size is printed on it — the rows Tyler is about to print barcode cards
+    // for — so a bulk apply in the same bucket must not quietly throw the
+    // selection away. Unlike a select-all, "everything" is not what was asked
+    // for here.
+    markDeliberate(tr, true);
     if (early) {
       postSortChecked.add(tr.getAttribute('data-label'));
       touchedEarly = true;
@@ -12305,12 +12968,54 @@ const rangeSelectAnchors = RowRangeSelect.createAnchors();
 // checkbox, it is that Set, because the DOM holds only the rows the disposition
 // fold left visible and is rebuilt on every render. Without it a range would
 // look right on screen and be gone on the next repaint.
-function applyRangeRowSelection(entry, checked) {
+// `deliberate` is REQUIRED and is never inferred (#676 finding 2, PR #870
+// review). This hook has TWO callers and they mean opposite things by the same
+// act:
+//
+//   onManualCheckRangeClick .. a shift-click range, which is as deliberate as
+//                              the two clicks that bound it -> true
+//   buildBandHeaderRow ....... the band header's select-all, which means
+//                              "everything in this band" and is exactly the
+//                              blanket selection the #605 sweep exists to
+//                              release -> false
+//
+// The first cut marked unconditionally and only had the shift-click in mind.
+// The band header reuses this hook on purpose (see its own comment on why it
+// must not re-derive membership), so every band select-all silently became
+// deliberate and its rows were exempted from the sweep — reopening #605 through
+// the one caller nobody was looking at, while the contract comment on
+// markDeliberate promised the opposite. Reproduced on the real July export:
+// every row a band select-all had checked was still checked after the Apply,
+// instead of being released.
+//
+// NO ROW COUNT IS QUOTED HERE ON PURPOSE. The magnitude is entirely a property
+// of how many rows the band happens to hold on the day, so it is not a fact
+// about this defect and it does not reproduce — an earlier review round put it
+// at 33; re-measured on the same named export it is 1 in band `85032` and 2
+// across all `area` bands, because those bands hold 3 rows in total. The SHAPE
+// reproduces unambiguously and is what the fix is aimed at. Four more issues
+// are queued against this file, and an unverified number sitting in a comment
+// is read as measured by whoever arrives next.
+//
+// It is a positional argument rather than a default because a default is what
+// let the second caller in: a new caller of this hook must now SAY which kind
+// of selection it is, and rowSelectionApplier() below is the only way to spell
+// it.
+function applyRangeRowSelection(entry, checked, deliberate) {
   entry.tr.classList.toggle('row-checked', checked);
+  markDeliberate(entry.tr, checked && deliberate === true);
   if (isEarlyRow(entry.tr)) {
     if (checked) postSortChecked.add(entry.tr.dataset.label);
     else postSortChecked.delete(entry.tr.dataset.label);
   }
+}
+
+// rowSelectionApplier(deliberate) -> the (entry, checked) hook lib/row-range-
+// select.js calls, with the caller's intent bound in. lib/row-range-select.js
+// invokes onRow with exactly two arguments, so the third cannot be threaded
+// through it — it has to be closed over here.
+function rowSelectionApplier(deliberate) {
+  return (entry, checked) => applyRangeRowSelection(entry, checked, deliberate);
 }
 
 function onManualCheckRangeClick(e) {
@@ -12326,7 +13031,7 @@ function onManualCheckRangeClick(e) {
     scopeEl: body,
     id: tr.getAttribute('data-label'),
     shiftKey: !!e.shiftKey,
-    onRow: applyRangeRowSelection,
+    onRow: rowSelectionApplier(true),   // a shift-click range IS deliberate (#676 finding 2)
   });
   if (res.kind !== 'range') return;      // a plain click only moved the anchor
   // Shift-clicking drags a text selection across the rows on the way. Clear it,
@@ -12464,9 +13169,22 @@ document.addEventListener('click', e => {
   e.stopPropagation();
   const street = btn.dataset.street || '';
   if (!street) return;
-  ToolHelpers.copyText(street).catch(() => {});
-  btn.classList.add('copied');
-  setTimeout(() => btn.classList.remove('copied'), 900);
+  // #676 finding 1. The cursor/focus work below is deliberately NOT moved into
+  // the callback: it is what the CLICK does, and it must happen on the click
+  // whether or not the clipboard cooperates. Only the "it copied" paint waits
+  // for the real outcome.
+  btn.classList.remove('copy-failed');
+  const liveBtn = () => (btn.isConnected ? btn : null);
+  copyWithFeedback(street,
+    () => {
+      const el = liveBtn(); if (!el) return;
+      el.classList.add('copied');
+      setTimeout(() => { const b = liveBtn(); if (b) b.classList.remove('copied'); }, 900);
+    },
+    () => {
+      const el = liveBtn(); if (el) el.classList.add('copy-failed');
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    });
   const tr = btn.closest('tr[data-label]');
   if (!tr) return;
   const inWorkableLane = !!tr.closest('.manual-body');
@@ -12500,11 +13218,34 @@ function streetChip(item) {
 function copyStreetChip(btn) {
   const street = btn.dataset.street || '';
   if (!street) return;
-  ToolHelpers.copyText(street).catch(() => {});
+  // #676 finding 1. `prev` is captured BEFORE the write and before any failure
+  // state is cleared, so a second click during a failure still restores the
+  // chip's idle label rather than the word "failed".
+  //
+  // The title is reset alongside the class (PR #870 review) — same stale-tooltip
+  // fix as copyRowBtn's. It is RE-DERIVED from data-street, the same source
+  // streetChip() built it from, rather than replayed from a saved copy that
+  // could itself be the failure text.
+  btn.classList.remove('copy-failed');
+  btn.title = 'Copy street only: ' + street;
   const prev = btn.innerHTML;
-  btn.innerHTML = '&#10003; Copied';
-  btn.classList.add('copied');
-  setTimeout(() => { btn.innerHTML = prev; btn.classList.remove('copied'); }, 1200);
+  const live = () => (btn.isConnected ? btn : null);
+  copyWithFeedback(street,
+    () => {
+      const el = live(); if (!el) return;
+      el.innerHTML = '&#10003; Copied';
+      el.classList.add('copied');
+      setTimeout(() => {
+        const b = live();
+        if (b) { b.innerHTML = prev; b.classList.remove('copied'); }
+      }, 1200);
+    },
+    () => {
+      const el = live(); if (!el) return;
+      el.classList.add('copy-failed');
+      el.title = COPY_FAIL_NOTE;
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    });
 }
 
 function barcodeChip(item) {
@@ -12612,7 +13353,8 @@ function openBarcodeDialog(label) {
         ' No barcode is drawn and none will print (#683) — a Code 128 of a tracking number does not scan.</div>'
       : '') +
     '<label class="barcode-area-label">Goes to' +
-      '<input type="text" id="barcode-area-input" class="goesto-input big" maxlength="' + ActualArea.MAX_LEN + '"' +
+      '<input type="text" id="barcode-area-input" class="goesto-input big' + hasAreaClass(item && item.label) + '"' +
+      ' maxlength="' + ActualArea.MAX_LEN + '"' +
       ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
     '</label>' +
     '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
@@ -12690,7 +13432,8 @@ function openEarlyBarcodeDialog(label) {
     '<div class="barcode-stage">' + svg + '</div>' +
     '<div class="barcode-value mono">' + ToolHelpers.escapeHtml(value) + '</div>' +
     '<label class="barcode-area-label">Goes to' +
-      '<input type="text" id="barcode-area-input" class="goesto-input big" maxlength="' + ActualArea.MAX_LEN + '"' +
+      '<input type="text" id="barcode-area-input" class="goesto-input big' + hasAreaClass(item && item.label) + '"' +
+      ' maxlength="' + ActualArea.MAX_LEN + '"' +
       ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
     '</label>' +
     '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
@@ -12721,6 +13464,10 @@ function syncBarcodeDialogArea(label) {
   if (!input) return;
   const v = ActualArea.get(actualAreaStore, barcodeDialogLabel);
   if (document.activeElement !== input) input.value = v;
+  // The filled-box highlight, kept in step with the store the same way the row
+  // inputs are (#832). It is NOT covered by repaintGoesTo: this field carries
+  // no data-label, so that function's selector has never matched it.
+  input.classList.toggle('has-area', ActualArea.isAnswered(actualAreaStore, barcodeDialogLabel));
 }
 
 function closeBarcodeDialog() {
@@ -12744,11 +13491,28 @@ function printBarcodeDialog() {
 // to misread. If that ever changes, the value arrives with a provenance this
 // function does not name, and IbnoBarcodeSheet.cardArea fails it closed to the
 // dash — which is the right answer either way.
+//
+// IT ENDS IN '' AND NOT IN 'typed' (#722), AND THAT ONE LINE IS THE TICKET.
+// Until then hand-typed was the ABSENCE of both other markers, so this ended in
+// a `return 'typed'` catch-all and anything that reached the actual-area store
+// — by any route, from any writer — was labelled hand-typed and printed in
+// 30px type on paper a package handler walks a package by. The /verify of #720
+// proved it: Control A2 injected the report's own work area straight into the
+// store with cardArea's allowlist fully intact, and the cards printed
+// `302, 999, 999, 999`. The live protection was the store separation, never the
+// allowlist, whose 'carried' branch was unreachable BY CONSTRUCTION.
+//
+// `typed` is now an explicit marker written by ActualArea.set (see that
+// module's store header), so an entry nobody can account for names no
+// provenance, this returns '', and cardArea dashes it. A future writer that
+// puts a report-supplied, suggested (#625) or carried area into the store gets
+// a dash and a human, instead of a belt number and a walk.
 function areaProvenanceOf(label) {
   if (!ActualArea.get(actualAreaStore, label)) return '';
   if (ActualArea.isEarly(actualAreaStore, label)) return 'early';
   if (ActualArea.isAuto(actualAreaStore, label)) return 'auto';
-  return 'typed';
+  if (ActualArea.isTyped(actualAreaStore, label)) return 'typed';
+  return '';
 }
 
 // barcodeCardHtml(label, value, item, position) -> ONE card on the print sheet: the
@@ -12985,17 +13749,35 @@ function printBarcodesFor(entries, opts) {
         { position: c.position, of: c.of }))
       .join('');
     if (!group.banded) return cardsHtml;
+    // ✓ GROUP DONE (#704, prototype round 27 item 2). One click finishes the
+    // whole stop; a second click unticks it; the individual boxes still work.
+    // Screen only — on paper the band is ticked card by card with a pen.
+    //
+    // It carries NO state of its own. The click sets each of the band's own
+    // done-boxes and dispatches their ordinary change event, so a band tick and
+    // N card ticks are the same N writes through the same one path — there is
+    // no band-level "done" anywhere for the lane behind it to disagree with.
     return '<section class="band">' +
-      '<div class="band-head">' + ToolHelpers.escapeHtml(group.label) +
+      '<div class="band-head">' +
+        '<button type="button" class="group-done" aria-pressed="false">&#10003; Group done</button>' +
+        '<span class="band-text">' + ToolHelpers.escapeHtml(group.label) +
         (group.street ? ' &middot; ' + ToolHelpers.escapeHtml(group.street) : '') +
-        ' &mdash; one FRO lookup covers these</div>' +
+        ' &mdash; one FRO lookup covers these</span></div>' +
       cardsHtml + '</section>';
   }).join('');
   // How many of THIS sheet's cards are already ticked, so a re-print of a
   // part-worked batch opens showing the progress rather than "0 of N".
-  const doneOnSheet = BarcodeDone.countDone(
-    barcodeDoneStore,
-    list.map(e => e.label).filter(l => cardHtml.indexOf('data-label="' + l + '"') !== -1));
+  //
+  // DERIVED FROM THE PLAN, NOT FROM THE REQUEST (#704 AC5). This used to count
+  // `list` (what was asked for) filtered by a substring search of the emitted
+  // markup — two different populations reconciled by string matching, which is
+  // the round-26 chip-says-4-shows-2 class waiting to happen on the one number
+  // Tyler uses to answer "did I lose a page?". IbnoBarcodeSheet.sheetProgress
+  // walks `sheet.groups`, the exact structure the renderer above walked, so the
+  // header cannot count anything the paper does not carry.
+  const progress = IbnoBarcodeSheet.sheetProgress(
+    sheet, (l) => BarcodeDone.isDone(barcodeDoneStore, l));
+  const doneOnSheet = progress.done;
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
     // Same opt-out as the on-screen stage: a print window on a dark-mode machine
     // must not be auto-darkened before it reaches the printer.
@@ -13043,6 +13825,45 @@ function printBarcodesFor(entries, opts) {
     '.card.done{opacity:0.45}' +
     '.card.done .area{text-decoration:line-through}' +
     '#done-count{font-weight:800}' +
+    // ─── the toolbar and ✓ Group done (#704) ──────────────────────────────
+    // Both are SCREEN controls on a document whose whole point is to be
+    // printed, so both disappear under @media print below. Named colors again,
+    // for the same reason the bands use them.
+    '.sheet-tools{display:flex;align-items:center;gap:10px;margin:0 0 12px}' +
+    '#scan-toggle{font:inherit;font-size:13px;font-weight:700;padding:8px 14px;' +
+      'border:2px solid rebeccapurple;border-radius:8px;background:white;' +
+      'color:rebeccapurple;cursor:pointer}' +
+    '#scan-toggle[aria-pressed="true"]{background:rebeccapurple;color:white}' +
+    '.tools-note{font-size:11.5px}' +
+    '.band-head{display:flex;align-items:center;gap:10px}' +
+    '.group-done{font:inherit;font-size:11.5px;font-weight:800;padding:4px 10px;' +
+      'border:2px solid rebeccapurple;border-radius:14px;background:white;' +
+      'color:rebeccapurple;cursor:pointer;flex:none}' +
+    '.group-done[aria-pressed="true"]{background:rebeccapurple;color:white}' +
+    // ─── SCAN MODE (#704, prototype rounds 24-25) ─────────────────────────
+    // One large tick-able column. The card itself is the target, so the whole
+    // card gets the pointer and a visible press state; the box stays as the
+    // precise control for anyone who wants it.
+    'body.scan .card{padding:20px 16px 16px;cursor:pointer;border-width:2px}' +
+    'body.scan .area{font-size:46px}' +
+    'body.scan .val{font-size:14px}' +
+    'body.scan .addr{font-size:14px}' +
+    'body.scan .tick{top:12px;right:14px;font-size:13px}' +
+    'body.scan .done-box{width:34px;height:34px}' +
+    // A named color, like every other color in this document: the sheet is
+    // deliberately outside the tool's theme, and saying so in words is what
+    // keeps that obvious to the next reader.
+    'body.scan .card:active{background:gainsboro}' +
+    // Same-street groups stay PROMINENT while scanning (round 25): a filled
+    // banner in 22px type that stays pinned while the group scrolls, so the
+    // pair that walks together still reads as a pair on a phone screen.
+    'body.scan .band{border-left-width:10px;padding-top:0}' +
+    'body.scan .band-head{position:sticky;top:0;z-index:2;background:rebeccapurple;' +
+      'color:white;font-size:22px;padding:10px 12px;margin:0 -10px 10px;' +
+      'border-radius:6px}' +
+    'body.scan .group-done{background:white;color:rebeccapurple;font-size:14px;padding:6px 14px}' +
+    'body.scan .group-done[aria-pressed="true"]{background:black;color:white;border-color:white}' +
+    'body.scan .pos{font-size:14px;padding:3px 10px}' +
     '@media print{' +
       'body{margin:0}h1{display:none}' +
       // On paper the checkbox has to be an EMPTY BOX to tick with a pen, so
@@ -13069,14 +13890,48 @@ function printBarcodesFor(entries, opts) {
       '.band{border-color:black;margin-left:4px;margin-right:4px}' +
       '.band-head{color:black}' +
       '.pos{color:black;border-color:black}' +
+      // #704: the screen-only controls leave the paper, and SCAN MODE leaves
+      // it too. A sheet printed while scan mode is on must not spend a page on
+      // every card — the mode is how the sheet is worked on a phone, not a
+      // second layout to print. Every scan rule is undone here explicitly
+      // rather than by unsetting the class, because the class is what the
+      // reader sees in the DOM and a print that silently disagreed with the
+      // screen would be its own surprise.
+      '.sheet-tools,.group-done{display:none}' +
+      'body.scan .card{padding:10px 12px;border-width:1px;cursor:auto}' +
+      'body.scan .area{font-size:30px}' +
+      'body.scan .val{font-size:12px}' +
+      'body.scan .addr{font-size:11px}' +
+      'body.scan .band{border-left-width:7px;padding-top:8px}' +
+      'body.scan .band-head{position:static;background:none;color:black;' +
+        'font-size:13px;padding:0;margin:0 0 8px}' +
+      'body.scan .pos{font-size:11px;padding:1px 7px}' +
+      'body.scan .done-box{width:26px;height:26px}' +
     '}' +
     '</style></head><body><h1>IBNO barcodes — ' + ToolHelpers.escapeHtml(ToolHelpers.isoDate()) +
     // The count is the number of cards ACTUALLY on the sheet, never the number
     // of rows asked for (issue #667): with a refusal in the selection those
     // two differ, and a header promising 6 over a 4-card sheet is the exact
     // "did I lose a page?" ambiguity the refusal message exists to remove.
-    ' (' + cards.length + ') — <span id="done-count">' + doneOnSheet + '</span> of ' +
-    cards.length + ' done</h1>' + cardHtml +
+    //
+    // #704: it is now `progress.cards`, read off the SAME plan walk that
+    // produced the markup, rather than `cards.length` read off the list handed
+    // to the planner. The two agree today — planSheetBands drops only a null
+    // card, which no caller here produces — and that is precisely why the
+    // divergence would be silent if one ever appeared.
+    ' (' + progress.cards + ') — <span id="done-count">' + doneOnSheet + '</span> of ' +
+    progress.cards + ' done</h1>' +
+    // ─── the sheet's own toolbar (#704) ──────────────────────────────────
+    // Screen only. SCAN MODE is the sheet's second way of being worked: off
+    // the monitor it is a printable grid to read; on the dock it is a phone in
+    // one hand and a package in the other, and a 22px checkbox is not the
+    // target. Scan mode makes every card one large tap — card-click ticks —
+    // and pushes the same-street banners up to a size that registers while
+    // walking (round 25: "hard to tell the Butler pair goes together").
+    '<div class="sheet-tools">' +
+      '<button type="button" id="scan-toggle" aria-pressed="false">&#128241; Scan mode</button>' +
+      '<span class="tools-note" id="scan-note">grid &mdash; tick the boxes</span>' +
+    '</div>' + cardHtml +
     // ─── the sheet's own tick handling (2026-08-14) ───────────────────────
     // Inline, in the sheet's document, because this window is written by
     // document.write and has no other script of its own.
@@ -13090,14 +13945,83 @@ function printBarcodesFor(entries, opts) {
     // still print correctly — losing the sync is an inconvenience, losing the
     // sheet mid-shift is not acceptable.
     '<script>(function(){' +
+    // ─── SCAN MODE (#704) ────────────────────────────────────────────────
+    // A class on <body> and nothing else: every difference is CSS above, so
+    // the cards, their labels, their ticks and their bands are the SAME
+    // elements in both modes. A mode that re-rendered would be a second sheet
+    // able to disagree with the first about what is on it.
+    'var scan=false;' +
+    'var tgl=document.getElementById("scan-toggle");' +
+    'var note=document.getElementById("scan-note");' +
+    'function setScan(on){scan=!!on;document.body.classList.toggle("scan",scan);' +
+      'if(tgl)tgl.setAttribute("aria-pressed",scan?"true":"false");' +
+      'if(note)note.textContent=scan' +
+        '?"scan mode \\u2014 tap a card to tick it":"grid \\u2014 tick the boxes";}' +
+    'if(tgl)tgl.addEventListener("click",function(){setScan(!scan);});' +
+    // ─── ✓ GROUP DONE, and the card tap ──────────────────────────────────
+    // Both are expressed as ordinary ticks of the ordinary boxes: set
+    // `checked`, then dispatch the SAME change event a finger on the box
+    // fires. So there is exactly one code path from "a thing was ticked" to
+    // "the lane behind this sheet knows", and group-done cannot become a
+    // second, quieter one.
+    'function tick(box,on){if(!box||box.checked===!!on)return;box.checked=!!on;' +
+      'box.dispatchEvent(new Event("change",{bubbles:true}));}' +
+    'function refreshGroupButtons(){' +
+      'Array.prototype.forEach.call(document.querySelectorAll(".band"),function(band){' +
+        'var btn=band.querySelector(".group-done");if(!btn)return;' +
+        'var boxes=band.querySelectorAll(".done-box");' +
+        'var done=band.querySelectorAll(".done-box:checked").length;' +
+        'var all=boxes.length>0&&done===boxes.length;' +
+        'btn.setAttribute("aria-pressed",all?"true":"false");' +
+        'btn.textContent=(all?"\\u2713 Group done ":"\\u2713 Group done ")+"("+done+" of "+boxes.length+")";' +
+      '});}' +
+    'document.addEventListener("click",function(e){' +
+      'var btn=e.target&&e.target.closest?e.target.closest(".group-done"):null;' +
+      'if(btn){' +
+        'var band=btn.closest(".band");if(!band)return;' +
+        'var boxes=band.querySelectorAll(".done-box");' +
+        'var done=band.querySelectorAll(".done-box:checked").length;' +
+        // An EMPTY band never reads as done, so one click can never untick a
+        // band it had nothing to say about (lib bandToggleTarget's rule, and
+        // the same rule here because this document cannot load the lib).
+        'var target=!(boxes.length>0&&done===boxes.length);' +
+        'Array.prototype.forEach.call(boxes,function(b){tick(b,target);});' +
+        'return;}' +
+      // The card tap. SCAN MODE ONLY: in grid mode the sheet is being read off
+      // a monitor and a stray click on a card must not silently mark a package
+      // handled. Clicks that land on the box or its label are left alone —
+      // the control fires its own change and handling it twice would tick and
+      // immediately untick.
+      'if(!scan)return;' +
+      'if(e.target&&e.target.closest&&e.target.closest(".tick"))return;' +
+      'var card=e.target&&e.target.closest?e.target.closest(".card"):null;' +
+      'if(!card)return;' +
+      'var box=card.querySelector(".done-box");' +
+      'if(box)tick(box,!box.checked);' +
+    '});' +
     'document.addEventListener("change",function(e){' +
       'var box=e.target;' +
       'if(!box||!box.classList||!box.classList.contains("done-box"))return;' +
       'var card=box.closest(".card");' +
       'if(card)card.classList.toggle("done",box.checked);' +
-      'var n=document.querySelectorAll(".done-box:checked").length;' +
+      // COUNTED THE WAY THE HEADER WAS FIRST WRITTEN, which is by unique LABEL
+      // and not by ticked box. IbnoBarcodeSheet.sheetProgress de-duplicates,
+      // because the tick is per PACKAGE: one tracking number printed on two
+      // pieces of card is one thing done, and counting it twice would let the
+      // numerator exceed the denominator on a sheet nobody finished.
+      //
+      // Counting boxes agrees with that TODAY — planSheetBands gives every card
+      // its own label and no real caller passes a label twice — and "agrees
+      // today" is exactly the shape this ticket removed a few lines up, where
+      // the header counted the request list instead of the plan. Same rule,
+      // stated the same way, in both places.
+      'var seen={},n=0;' +
+      'Array.prototype.forEach.call(document.querySelectorAll(".done-box:checked"),' +
+        'function(b){var k=b.dataset.label||"";' +
+          'if(k&&!seen[k]){seen[k]=1;n++;}});' +
       'var out=document.getElementById("done-count");' +
       'if(out)out.textContent=n;' +
+      'refreshGroupButtons();' +
       // The tool window this sheet reports back to. window.opener when the
       // sheet got its own page; window.parent when pop-ups were blocked and it
       // is living in the in-page overlay's iframe instead (#700). Ticks have to
@@ -13106,6 +14030,10 @@ function printBarcodesFor(entries, opts) {
       'try{if(host&&!host.closed&&host.markBarcodeDone){' +
         'host.markBarcodeDone(box.dataset.label,box.checked);}}catch(err){}' +
     '});' +
+    // The group buttons open showing the ticks a re-print carried across, for
+    // the same reason the header count does: "(0 of 2)" over two ticked cards
+    // is the sheet disagreeing with itself.
+    'refreshGroupButtons();' +
     '})();<\/script>' +
     '</body></html>';
 
@@ -13745,7 +14673,14 @@ function buildManualRow(item, bucket) {
   // checked once rows can be folded out of the DOM (#658 review finding 2).
   const cb = tr.querySelector('.manual-check');
   cb.addEventListener('click', e => e.stopPropagation());
-  cb.addEventListener('change', () => { tr.classList.toggle('row-checked', cb.checked); updateBulkButtons(); });
+  // A 'change' event on this checkbox only ever comes from a real interaction —
+  // .checked assigned as a property fires nothing — so this is exactly where a
+  // DELIBERATE check is recorded (#676 finding 2).
+  cb.addEventListener('change', () => {
+    tr.classList.toggle('row-checked', cb.checked);
+    markDeliberate(tr, cb.checked);
+    updateBulkButtons();
+  });
   if (isEarly) {
     cb.checked = postSortChecked.has(label);
     // Issue #669 review finding 9: setting .checked as a property (not a user
@@ -14180,11 +15115,11 @@ function copyResolvedTable() {
     .map(i => copyValueFor(i.label, i.scanBarcode) + '\t' + i.code);
   if (!lines.length) return;
   const text = lines.join('\n');
-  ToolHelpers.copyText(text).catch(() => {});
-  const btn = document.getElementById('copy-resolved-btn');
-  btn.textContent = '✓ Copied!';
-  btn.className = 'btn btn-success';
-  setTimeout(() => { btn.textContent = 'Copy Coded'; btn.className = 'btn btn-purple'; }, 2000);
+  // #676 finding 1. This is the OPS2 clipboard: a refused write that still read
+  // "✓ Copied!" is how an older batch gets pasted against this sort's packages.
+  const fb = copyButtonFeedback(() => document.getElementById('copy-resolved-btn'), '✓ Copied!',
+    (btn) => { btn.textContent = 'Copy Coded'; btn.className = 'btn btn-purple'; });
+  copyWithFeedback(text, fb.onCopied, fb.onFailed);
 }
 
 function downloadResolvedTable() {
@@ -14213,19 +15148,18 @@ function copyAutoTable(lane) {
   const lines = autoExportPairs(lane).map(p => copyValueFor(p[0], barcodeByLabel[p[0]]) + '\t' + p[1]);
   if (!lines.length) return;
   const text = lines.join('\n');
-  ToolHelpers.copyText(text).catch(() => {});
   // ONE Copy All on the merged section (#696), so there is one button to flash.
   // The `lane` argument still narrows what is EXPORTED (autoExportPairs keeps
   // the per-service split), which is a different question from which button
   // the user pressed — the express-only button it used to look up is gone with
   // the express section, and looking up a dead id here threw on a null button.
-  const btn = document.getElementById('copy-btn');
-  if (!btn) return;
-  btn.textContent = '✓ Copied!';
-  btn.className = 'btn btn-success';
-  // Restore by RE-DERIVING the label rather than by replaying a saved one: a
-  // chip clicked during the flash must not be undone two seconds later.
-  setTimeout(() => { btn.className = 'btn btn-purple'; updateReadyExportLabels(); }, 2000);
+  //
+  // #676 finding 1: the flash waits for the write's real outcome now. Restore
+  // still RE-DERIVES the label rather than replaying a saved one — a chip
+  // clicked during the flash must not be undone two seconds later.
+  const fb = copyButtonFeedback(() => document.getElementById('copy-btn'), '✓ Copied!',
+    (btn) => { btn.className = 'btn btn-purple'; updateReadyExportLabels(); });
+  copyWithFeedback(text, fb.onCopied, fb.onFailed);
 }
 
 
@@ -14374,24 +15308,88 @@ function dayExportDay() {
 // module holds it. The ticks are the one that needs assembling: in memory they
 // are a bare { [label]: true } map with the sort day held beside them in
 // barcodeDoneDay, so the day store the envelope wants is built here.
-function buildDayExportText() {
-  return DayExport.stringify(DayExport.build({
+//
+// THE SEEN-ROWS ARE READ, NOT ACCUMULATED, AND THAT IS WHY THIS IS ASYNC
+// (#855). They come out of the 30-day archive scoped to this file's own day,
+// so they survive an F5 on a real origin instead of resetting with the page.
+// The read is awaited rather than raced: a Day Export that quietly carried
+// zero rows because IndexedDB had not answered yet is the same silent hole
+// this whole line of tickets exists to close.
+async function buildDayExportText() {
+  const day = dayExportDay();
+  // The last load's archive transaction first (see lastArchiveWrite): a file
+  // taken mid-commit would be short a few hundred rows and say nothing about it.
+  //
+  // LOAD-BEARING, AND THE WINDOW IT COVERS IS NARROW ENOUGH TO BE WORTH NAMING.
+  // IndexedDB orders a readonly transaction behind a readwrite one on the same
+  // store — but only once that readwrite transaction EXISTS. While the ingest
+  // is still awaiting its own openDB() there is nothing to order against, so an
+  // export clicked in that gap opens first, creates its readonly transaction
+  // first, and reads a store the day's rows have not reached yet. It then
+  // reports "0 report rows" as routine success, which is this ticket's own
+  // failure mode arriving through the back door.
+  //
+  // THE GAP IS WIDEST ON THE DAY THIS SHIPS. The v1 -> v2 upgrade runs inside
+  // the first openDB() on every existing device, making that first open
+  // materially slower than the export's later one; and ingestPostSortRecords is
+  // fire-and-forget, so the lane renders and the button is live while a 2,868-
+  // or 21,584-row put loop is still in flight.
+  //
+  // Pinned by "A DAY EXPORT CLICKED WHILE THE INGEST IS STILL OPENING ITS
+  // DATABASE IS NOT SHORT OF ROWS", which skews the write's open a few
+  // milliseconds behind the read's; deleting this line takes that export to
+  // zero rows. An earlier version of this comment claimed the guard could not
+  // matter and was untested — that was wrong, and it was wrong because the
+  // harness gave both opens identical latency, which hides the only window
+  // where the ordering guarantee does not apply.
+  try { await lastArchiveWrite; } catch (e) { /* never rejects; belt and braces */ }
+  let rows = [], readFailed = false;
+  try {
+    const got = await ArchiveStore.recordsForDay(day);
+    rows = got.rows; readFailed = got.failed;
+  } catch (e) { rows = []; readFailed = true; }
+  return { readFailed: readFailed, text: DayExport.stringify(DayExport.build({
     areas: actualAreaStore,
     parked: parkedStore,
     filed: filedStore,
     done: { day: barcodeDoneDay, items: barcodeDoneStore },
-    rows: seenRecords,
+    rows: rows,
     by: deviceName,
-    day: dayExportDay(),
-  }));
+    day: day,
+  })), rows: rows.length };
 }
 
 function dayExportFilename() {
   return 'ibno-day-export-' + dayExportDay() + '.json';
 }
 
-function downloadDayExport() {
-  ToolHelpers.downloadTSV(dayExportFilename(), buildDayExportText(), 'application/json');
+// THE BUTTON IS ASYNC NOW, WHICH COSTS IT THREE THINGS IT USED TO GET FREE.
+// An `onclick` handler discards a rejected promise, so a throw would leave no
+// file and no message; two impatient clicks would produce two downloads; and a
+// read that takes a moment used to be a call that returned in a third of a
+// second. So: one at a time, the button says it is working, and every failure
+// path ends in a visible status rather than in the console.
+let dayExportInFlight = false;
+
+async function downloadDayExport() {
+  if (dayExportInFlight) return;
+  dayExportInFlight = true;
+  const btn = document.getElementById('day-export-btn');
+  if (btn) btn.disabled = true;
+  showDayExportStatus('Building the Day Export…');
+  let built;
+  try {
+    built = await buildDayExportText();
+  } catch (e) {
+    showDayExportStatus('NOT SAVED: the Day Export could not be built (' +
+      ((e && e.message) || e) + '). Nothing was written; try again, and if it ' +
+      'repeats, say so before relying on today\'s handover.', true);
+    return;
+  } finally {
+    dayExportInFlight = false;
+    if (btn) btn.disabled = false;
+  }
+  ToolHelpers.downloadTSV(dayExportFilename(), built.text, 'application/json');
   const n = Object.keys(ActualArea.serialize(actualAreaStore)).length;
   // Stated rather than silent, for the same reason the import is: a button that
   // looks like it worked and produced an empty file is how a day goes missing.
@@ -14405,11 +15403,21 @@ function downloadDayExport() {
   if (parkedN) extras.push(parkedN + ' parked');
   if (filedN) extras.push(filedN + ' barcoded');
   if (doneN) extras.push(doneN + ' scanned');
-  extras.push(seenRecords.length + ' report row' + (seenRecords.length === 1 ? '' : 's'));
+  extras.push(built.rows + ' report row' + (built.rows === 1 ? '' : 's'));
+  // A READ THAT FAILED IS NOT A DAY WITH NO ROWS. Reporting "0 report rows" as
+  // routine success is how a handover goes missing quietly, which is the whole
+  // subject of this feature — so the one case where the number cannot be
+  // trusted says so, out loud, on the same line.
+  const rowsWarning = built.readFailed
+    ? ' — WARNING: the 30-day archive could not be read, so the report rows in ' +
+      'this file are INCOMPLETE. Save it if you need the work areas, but take ' +
+      'another export after a refresh before treating it as the day\'s record.'
+    : '';
   showDayExportStatus('Saved ' + dayExportFilename() + ' — ' + n + ' work area' +
     (n === 1 ? '' : 's') + ', ' + extras.join(', ') +
     (deviceName ? ' from ' + deviceName : '') +
-    '. Send it by work email or the station folder.');
+    '. Send it by work email or the station folder.' + rowsWarning,
+    built.readFailed);
 }
 
 // ─── WORK AREA DISAGREEMENTS (#796, PRD #790 stories 28-29) ─────────────────
@@ -14463,6 +15471,20 @@ function renderAreaConflicts() {
   // a name should be reads as a rendering bug instead of as information.
   const who = (name) => esc(name || 'unnamed device');
   const rows = open.map(function (c) {
+    // HOW LONG THIS HAS BEEN WAITING (#858 item 1). Nothing here expires, which
+    // is correct and is exactly why the age has to be on screen: without it a
+    // disagreement from six weeks ago reads identically to one from this
+    // morning, and the panel is sorted by package rather than by age. The date
+    // is the SORT DAY it first appeared on — AreaConflicts.dayLabel owns the
+    // "no day, no age" rule — and deliberately carries no time of day, because
+    // a clock on this row is the first step toward someone reading clock order
+    // as a reason to move a package. It informs a human; nothing reads it.
+    const day = AreaConflicts.dayLabel(c);
+    const age = day
+      ? '<span class="ac-day" title="The sort day this disagreement first appeared. ' +
+        'It stays here until you settle it &mdash; nothing on this panel expires.">first seen ' +
+        esc(day) + '</span>'
+      : '';
     return '<div class="ac-row" data-conflict-key="' + esc(c.key) + '">' +
       '<span class="ac-label">' + esc(c.label) + '</span>' +
       '<span class="ac-side"><b>' + esc(c.local) + '</b> ' +
@@ -14470,6 +15492,7 @@ function renderAreaConflicts() {
       '<span class="ac-vs">VS</span>' +
       '<span class="ac-side"><b>' + esc(c.incoming) + '</b> ' +
         '<span class="ac-who">&mdash; ' + who(c.by) + '</span></span>' +
+      age +
       '<span class="ac-spacer"></span>' +
       '<button class="btn btn-gray ac-settle" data-conflict-key="' + esc(c.key) + '" ' +
         'onclick="settleAreaConflict(this.getAttribute(\'data-conflict-key\'))" ' +
@@ -14619,6 +15642,30 @@ function dayExportAddressMap(records) {
   return out;
 }
 
+// dayExportWithAdoptedAreas(env) -> the same envelope with its INCOMING work
+// areas adopted (#722), or the envelope EXACTLY AS GIVEN when it is not one.
+//
+// The pass-through is the point. lib/day-export.js's merge refuses an envelope
+// whose `areas` is missing, null or an array (DayExportMalformedError), and
+// ActualArea.adoptLegacyTyped normalises every one of those to {} — so wrapping
+// the envelope unconditionally would hand merge a well-formed object and make
+// its own fail-closed guard unreachable. The import would then land nothing,
+// silently, instead of refusing out loud.
+//
+// That is the SHAPE OF #722 ITSELF — a guard disarmed by an upstream normaliser
+// rather than by anyone deciding to remove it — which is why it is fixed here
+// even though it is unreachable today: the only caller passes a validated
+// DayExport.parse result. Found by the independent review of PR #865.
+//
+// The envelope is COPIED, never mutated, so the caller's parsed object is left
+// as it arrived.
+function dayExportWithAdoptedAreas(env) {
+  if (!env || typeof env !== 'object' || Array.isArray(env)) return env;
+  const areas = env.areas;
+  if (!areas || typeof areas !== 'object' || Array.isArray(areas)) return env;
+  return Object.assign({}, env, { areas: ActualArea.adoptLegacyTyped(areas) });
+}
+
 // importDayExport(env) -> fold the other device's day into this one's.
 //
 // SAFE AGAINST THE THING TYLER DOES CONSTANTLY, which is re-dropping the report,
@@ -14642,13 +15689,29 @@ function importDayExport(env) {
     // The sort-day CLOCK is the day an incoming entry has to match — see
     // lib/day-export.js on why an off-day area is skipped rather than imported,
     // and why PARK is the one store that is not judged against it.
+    // THE SECOND LEGACY BOUNDARY (#722), AND IT IS ONE-SIDED ON PURPOSE.
+    //
+    // The other device may still be running a build from before the `typed`
+    // marker, and its areas are real work the Admin typed — so a markerless
+    // INCOMING entry is adopted as typed exactly as a markerless entry on this
+    // device's own disk is at load.
+    //
+    // ONLY THE INCOMING SIDE. The first cut of #722 adopted the merge RESULT,
+    // on the reasoning that this device's store had already been adopted at
+    // load and the step was therefore the same either way. It is not: imports
+    // recur all through a sort, so adopting the result re-launders anything
+    // markerless that appeared in the LOCAL store since the page loaded, and
+    // the window is the whole session rather than the boot instant. Found by
+    // the independent review of this PR, which reproduced it with a markerless
+    // local 999 and an unrelated incoming export. The envelope is copied rather
+    // than mutated so the caller's parsed object is left as it arrived.
     result = DayExport.merge({
       areas: actualAreaStore,
       day: currentSortDay,
       parked: parkedStore,
       filed: filedStore,
       done: { day: barcodeDoneDay, items: barcodeDoneStore },
-    }, env);
+    }, dayExportWithAdoptedAreas(env));
   } catch (err) {
     refuseDayExport(err);
     return;
@@ -14688,7 +15751,10 @@ function importDayExport(env) {
   // reappear as work on this screen. The archive is best-effort and async, the
   // same as every other load's ingest, so it is deliberately not awaited: a
   // slow IndexedDB must not hold up the answers that already landed.
-  ingestArchiveRecords(result.rows);
+  // The day hint is the ENVELOPE's day, not this device's clock. An imported
+  // row with no inbound date of its own belongs to the day the file is of —
+  // stamping it with today would move another day's work into today's export.
+  ingestArchiveRecords(result.rows, env && env.day);
   // The set-aside tabs and the working list both move when park, filing or the
   // ticks change, and the same trio markFiledBatch calls is what repaints them.
   if (result.parkedAdded || result.filedAdded || result.doneAdded) {
@@ -14829,8 +15895,26 @@ function dayExportImportSummary(result, env, localDay, filed503, surfaced) {
     // The #794 clause, unchanged, plus WHERE TO LOOK. A count with no pointer
     // is the shape of message a person reads once and never acts on, and the
     // whole point of this ticket is that a human looks at these.
+    //
+    // THE POINTER COUNTS WHAT IS ACTUALLY BELOW (#858 item 2). The number in
+    // front of "disagreed" is the FILE's — how many disagreements the import
+    // carried — and it is right. The panel, though, lists only the ones still
+    // waiting on a human: settle one and re-drop the same file and the file
+    // still carries three while the list holds two. Saying "3 ... listed below"
+    // over a list of two is the count-disagrees-with-the-screen class, and the
+    // reader who counts the rows and finds one missing has no way to tell a
+    // suppressed row from a lost one.
+    //
+    // So when they differ the sentence names BOTH numbers. Dropping to just
+    // "2 listed below" would be honest about the list and would quietly lose
+    // the fact that the file carried three, which is the thing the person needs
+    // when the two files they were sent are not the same file.
     const waiting = s.opened + s.held;
-    const tail = waiting ? ' (listed below to settle)'
+    const tail = waiting
+      ? (waiting < result.conflicts.length
+          ? ' (' + waiting + ' of ' + result.conflicts.length + ' listed below to settle, ' +
+            'the rest already settled)'
+          : ' (listed below to settle)')
       : (s.suppressed ? ' (already settled)' : '');
     parts.push(result.conflicts.length + ' disagreed and YOUR value was kept' + tail);
   }
