@@ -2734,10 +2734,15 @@ const ArchiveStore = (function () {
   }
 
   // ── in-memory backend (fallback when IndexedDB is unavailable/blocked) ──
+  //
+  // A WRITE MERGES INTO WHAT IS ALREADY THERE (#878). The two reports carry
+  // different columns for the same scan, so replacing the stored entry blanked
+  // every column the incoming report does not have — 25 of them on 2,695 real
+  // rows a day. IbnoArchive.mergeEntry owns the rule; both backends only apply
+  // it, so they cannot drift.
   function memAdd(records, cutoff, seenDay) {
-    records.forEach(function (rec) {
-      const entry = IbnoArchive.archiveEntry(rec, seenDay);
-      mem.set(entry.key, entry);
+    IbnoArchive.archiveEntries(records, seenDay).forEach(function (entry) {
+      mem.set(entry.key, IbnoArchive.mergeEntry(mem.get(entry.key), entry));
     });
     for (const [k, v] of mem) if (v.iso < cutoff) mem.delete(k);
   }
@@ -2748,16 +2753,41 @@ const ArchiveStore = (function () {
   }
 
   // ── IndexedDB backend ──
+  // READ-THEN-MERGE-THEN-PUT, INSIDE ONE TRANSACTION (#878). A bare put
+  // replaced the stored record, and the two reports do not carry the same
+  // columns, so the ADR-0021 daily driver blanked 25 real columns on 2,695 of
+  // its 2,868 rows every time it loaded after the main pull. The get is per
+  // ROW BEING WRITTEN — one seek on the primary key, not a scan of the 30-day
+  // store — and it shares the write's transaction, so nothing can slip in
+  // between the read and the put.
+  //
+  // THE PRUNE STARTS ONLY ONCE EVERY PUT IS QUEUED, and that ordering is
+  // load-bearing now that it was not before. The puts used to be issued
+  // synchronously ahead of the cursor; they are now issued from inside each
+  // get's onsuccess, so a prune opened first could delete an out-of-window row
+  // and have this load's merged put re-insert it a moment later — silently
+  // re-admitting a row past the 30-day window.
   async function idbAdd(records, cutoff, seenDay) {
     const db = await openDB();
     try {
       await new Promise(function (resolve, reject) {
         const tx = db.transaction(STORE, 'readwrite');
         const os = tx.objectStore(STORE);
-        records.forEach(function (rec) { os.put(IbnoArchive.archiveEntry(rec, seenDay)); });
-        os.index('iso').openCursor(IDBKeyRange.upperBound(cutoff, true)).onsuccess = function (e) {
-          const cur = e.target.result; if (cur) { os.delete(cur.primaryKey); cur.continue(); }
+        const entries = IbnoArchive.archiveEntries(records, seenDay);
+        let pending = entries.length;
+        const prune = function () {
+          os.index('iso').openCursor(IDBKeyRange.upperBound(cutoff, true)).onsuccess = function (e) {
+            const cur = e.target.result; if (cur) { os.delete(cur.primaryKey); cur.continue(); }
+          };
         };
+        entries.forEach(function (entry) {
+          const got = os.get(entry.key);
+          got.onsuccess = function () {
+            os.put(IbnoArchive.mergeEntry(got.result, entry));
+            if (--pending === 0) prune();
+          };
+        });
+        if (!entries.length) prune();
         tx.oncomplete = function () { resolve(); };
         tx.onerror = function () { reject(tx.error); };
       });
@@ -5634,6 +5664,23 @@ function laneBody(el) { return el && el.closest('tbody'); }
 // exactly as long as the check it describes and nothing longer: a row that
 // leaves the DOM takes it with it. renderManualSectionRows carries it across a
 // rebuild alongside the check itself, in one place, so the two can never drift.
+//
+// #871: "one place" is one FUNCTION, not one loop. renderManualSectionRows
+// carries the mark in TWO walks — a full-report one beside the check, and an
+// early one that carries the mark alone because postSortChecked already owns
+// that row's check. Both live in that function, so they still cannot drift
+// apart; what they must not do is diverge on WHICH provenances get carried,
+// which is precisely the hole this ticket closed.
+//
+// #871 REVIEW FINDING 1: a repaint is not the only thing an EARLY row's mark
+// has to survive. Its CHECK lives in postSortChecked, which outlives the DOM
+// entirely, so a fold / unfold — or anything else that takes the row out of the
+// DOM and brings it back — returned it checked but unmarked. The mark therefore
+// ALSO lives in postSortDeliberate, written and cleared line-for-line beside
+// postSortChecked; buildManualRow's early branch restores it from there. Read
+// postSortDeliberate's declaration for why that is not a second writer for the
+// check, and why inheriting postSortChecked's clear discipline exactly is what
+// keeps the resurrection hazard this comment warns about closed.
 const DELIBERATE_ATTR = 'userChecked';
 function markDeliberate(tr, on) {
   if (!tr || !tr.dataset) return;
@@ -5684,6 +5731,11 @@ function buildGroupHeaderRow(g, count) {
       if (isEarlyRow(row)) {
         if (all.checked) postSortChecked.add(row.dataset.label);
         else postSortChecked.delete(row.dataset.label);
+        // #871: the deliberate half, mirroring markDeliberate(row, false)
+        // above. Checking through a select-all never SETS the mark (that is
+        // the whole of #676 finding 2), so this only ever clears — an
+        // un-check through the header releases the row entirely, mark and all.
+        if (!all.checked) postSortDeliberate.delete(row.dataset.label);
       }
     });
     updateBulkButtons();
@@ -5775,10 +5827,24 @@ function distinctStopsIn(rows) {
 }
 
 // bandModeFor(table) -> 'zip', 'isp', or null when this table's current sort
-// does not band. Same fallback chain as sortSelectValue/IbnoSort.resolveState,
-// for the same reason (#707/#714/#717).
+// does not band. THE fallback chain, not a copy of it (#869) — the same seam
+// sortSelectValue took in #868, for the same reason (#707/#714/#717).
+//
+// This was the page's THIRD copy of the chain, and the only one that had already
+// drifted: its inline fallback was `{ key: '' }`, with no `dir`, against the
+// lib's `FALLBACK_SORT` of `{ key: '', dir: 'asc' }`. The drift was not
+// observable — this function reads `.key`, decides band-or-not, and returns a
+// STRING or null, so `dir` never left the line it was missing from — which is
+// exactly why nothing caught it. Routing through the lib makes that
+// unobservability permanent rather than lucky: a later reader of `st.dir` here
+// gets the lib's 'asc' instead of `undefined`.
+//
+// sortState is passed as a GETTER for the same reason sortSelectValue passes one
+// (PR #868 review, finding 3): resetViewControls() reassigns the binding
+// wholesale, so a context object hoisted out of this function would otherwise
+// freeze a state the page has already replaced.
 function bandModeFor(table) {
-  const st = sortState[table] || defaultSorts[table] || { key: '' };
+  const st = IbnoSort.resolveState({ sortState: () => sortState, defaultSorts: defaultSorts }, table);
   return IbnoBandGroup.isBandMode(st.key) ? st.key : null;
 }
 
@@ -6117,7 +6183,14 @@ function bulkApply(bucket, code, body) {
       cb.checked = false;
       const tr = cb.closest('tr[data-label]');
       if (tr) tr.classList.remove('row-checked');
-      if (tr && isEarlyRow(tr)) postSortChecked.delete(tr.dataset.label);
+      if (tr && isEarlyRow(tr)) {
+        postSortChecked.delete(tr.dataset.label);
+        // #871: same line, same place. The selector above already excludes
+        // :not([data-user-checked]), so a row reaching here is by construction
+        // not deliberate — this keeps the two stores stepping together rather
+        // than relying on that being true forever.
+        postSortDeliberate.delete(tr.dataset.label);
+      }
     });
   // Reset the bucket header's own select-all too. It lives in tr.manual-group-row
   // (no data-label / data-bucket), so the sweep above can never reach it, and a
@@ -6440,6 +6513,25 @@ function renderManualSectionRows() {
   // 2). Captured in the same walk and restored in the same one below, so the
   // mark cannot outlive or fall behind the check it describes.
   const carriedDeliberate = new Set();
+  // ...and the EARLY rows' deliberate marks, in their OWN set (#871).
+  //
+  // The walk below is FULL_ROW_SEL — `tr[data-label]:not([data-provenance=
+  // "early"])` — so before this ticket an early row's mark was simply dropped
+  // on every repaint, while its CHECK came back from postSortChecked. That
+  // asymmetry is the whole defect: the sweep in bulkApply is NOT scoped to
+  // FULL_ROW_SEL (it is `tr[data-label][data-bucket=...]`, which reaches early
+  // rows on purpose — see #703 review finding 1 there), so a repaint left a
+  // deliberately-checked early row looking blanket-checked and the next sweep
+  // would release it. Exactly what #676 finding 2's exemption exists to stop,
+  // one provenance over.
+  //
+  // A SEPARATE set, and a separate restore, because the two halves are NOT the
+  // same job. carriedChecked deliberately excludes early rows: postSortChecked
+  // is the single source of truth for an early row's CHECK and a second writer
+  // here would be the bug in the other direction. The MARK has no such owner —
+  // nothing but the row itself carries it — so carrying it costs no second
+  // writer, and the restore below writes the mark and never the check.
+  const carriedEarlyDeliberate = new Set();
   MANUAL_LANES.forEach(lane => {
     const body = document.getElementById(lane.tbody);
     if (!body) return;
@@ -6449,6 +6541,11 @@ function renderManualSectionRows() {
         if (!tr) return;
         carriedChecked.add(tr.dataset.label);
         if (isDeliberate(tr)) carriedDeliberate.add(tr.dataset.label);
+      });
+    body.querySelectorAll(EARLY_ROW_SEL + ' .manual-check:checked')
+      .forEach(cb => {
+        const tr = cb.closest('tr[data-label]');
+        if (tr && isDeliberate(tr)) carriedEarlyDeliberate.add(tr.dataset.label);
       });
   });
   const { bodies, open } = openLanes(MANUAL_LANES.map(l => l.tbody),
@@ -6608,6 +6705,26 @@ function renderManualSectionRows() {
         const cb = tr.querySelector('.manual-check');
         if (cb) { cb.checked = true; tr.classList.add('row-checked'); }
         if (carriedDeliberate.has(tr.dataset.label)) markDeliberate(tr, true);
+      });
+    });
+  }
+  // The early half of that restore (#871). Separate loop, and it writes ONLY
+  // the mark: buildManualRow has already restored this row's checkbox from
+  // postSortChecked, which stays that state's single writer.
+  //
+  // Gated on the checkbox actually coming back checked, so the mark can never
+  // outlive the check it describes — the same "exactly as long as the check and
+  // nothing longer" contract markDeliberate states. If the fold, a search or a
+  // resolve means the row is not rendered at all, there is nothing to restore
+  // it onto and it is correctly forgotten.
+  if (carriedEarlyDeliberate.size) {
+    MANUAL_LANES.forEach(lane => {
+      const body = document.getElementById(lane.tbody);
+      if (!body) return;
+      body.querySelectorAll(EARLY_ROW_SEL).forEach(tr => {
+        if (!carriedEarlyDeliberate.has(tr.dataset.label)) return;
+        const cb = tr.querySelector('.manual-check');
+        if (cb && cb.checked) markDeliberate(tr, true);
       });
     });
   }
@@ -10155,7 +10272,14 @@ function attachGoesToInput(tr, item) {
 function commitGoesTo(label, raw) {
   // No readable sort day means no expiry date, so the write is refused out
   // loud and the box snaps back to whatever is really stored.
-  if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
+  //
+  // BOTH surfaces snap back, not just the row's (#876). The refusal can arrive
+  // from the barcode dialog's own field — that field's blur handler is this
+  // function — and repaintGoesTo cannot reach it, so the dialog used to keep
+  // the refused text on screen while the row behind it reverted. A refused
+  // value left showing is the exact failure canPersistArea speaks out loud to
+  // prevent: the supervisor reads an area that will never survive a refresh.
+  if (!canPersistArea(raw)) { repaintAreaSurfaces(label); return; }
   const items = manualAddressPairs();
   // What ONE typed area is allowed to cover, computed before the write
   // (lib/ibno-work-loop.js). Unit-exact: the stop key requires a house number
@@ -10300,6 +10424,29 @@ function repaintGoesTo(label) {
     cell.classList.toggle('has-note', !!line);
   });
   if (workModeOn) refreshWorkBar();
+}
+
+// repaintAreaSurfaces(label) -> repaint EVERY surface that shows this row's
+// area (#876). There are TWO, and they are painted by different functions:
+//
+//   the ROW inputs — repaintGoesTo, which matches on '.goesto-input[data-label]'
+//   the BARCODE DIALOG's own field — syncBarcodeDialogArea, which that selector
+//     has never matched, because the dialog's field carries no data-label
+//
+// Every path that changes a stored area has to touch both, and until this
+// ticket that was REMEMBERED rather than structural: the commit paths call the
+// two of them by hand, and the `!canPersistArea` refusal branches called only
+// the first — so an undated report snapped the row's box back while the dialog
+// kept showing the text that was just refused. This exists so a refusal path
+// (and any new path) can name one thing instead of remembering two.
+//
+// Deliberately NOT retrofitted onto the successful commit paths in this
+// ticket. Those already call both, but with the row repaint EARLY (before the
+// spread notice and the 503 hand-off) and the dialog sync LATE, and collapsing
+// that ordering is a separate change with its own blast radius.
+function repaintAreaSurfaces(label) {
+  repaintGoesTo(label);
+  syncBarcodeDialogArea(label);
 }
 
 // Attribute-selector escaping: a tracking number is digits in practice, but a
@@ -10531,6 +10678,30 @@ let postSortShowAll = false;
 // count he had confirmed. Keyed by label so it survives the innerHTML
 // rebuild, same as the old DOM harvest did (#635 finding 4).
 let postSortChecked = new Set();
+// The DELIBERATE half of that same selection (#871 review finding 1).
+//
+// postSortChecked survives the DOM; the row's `data-user-checked` mark does
+// not. renderManualSectionRows carries the mark across a REPAINT by capturing
+// it off the pre-rebuild DOM, which is exactly right for a FULL-report row —
+// that row's check is DOM-captured in the same walk, so mark and check live and
+// die together. For an EARLY row the two halves have different lifetimes: the
+// check comes back from postSortChecked even when the row was not in the DOM to
+// be captured from, so the mark has to come from somewhere with the SAME
+// lifetime or it is silently lost. Measured on the real 2026-08-12 Post Sort
+// pull: Show all -> hand click a fold-only row -> fold -> Show all returned the
+// row `checked=true userChecked=undefined`, indistinguishable from a blanket
+// select-all, which is the #871 defect one door over.
+//
+// THIS SET IS NOT A SECOND WRITER FOR THE CHECK. postSortChecked stays the sole
+// record of WHETHER an early row is checked; this one records only whether that
+// check was deliberate (ADR 0022: each consumer asks its own question, and
+// these are two questions). Every line that writes or clears postSortChecked
+// has a line here beside it, and nothing writes here that does not — inheriting
+// that clear discipline verbatim is what keeps the resurrection hazard
+// markDeliberate's own comment warns about closed: a fresh drop empties both,
+// so re-dropping a report whose labels match yesterday's cannot resurrect
+// either half of a selection.
+let postSortDeliberate = new Set();
 // Stale-read guard for the async parse (same pattern as handleMergeFile's
 // mergeSeq): a second drop started while an earlier one is still resolving
 // must not let the earlier read's rows/status land after the newer one's.
@@ -10754,6 +10925,7 @@ function handlePostSortFile(file) {
   // times a shift (#610), so this is the common path, not the edge case.
   postSortShowAll = false;
   postSortChecked = new Set();
+  postSortDeliberate = new Set();   // #871: cleared wherever the check it describes is
   const seq = ++postSortSeq; // guards a stale read from landing after a newer drop or a clear
   // A fresh Post Sort report load changes postSortItems entirely, so any
   // barcode-lookup read still in flight from before this load must not be
@@ -11113,6 +11285,7 @@ function clearPostSortLane() {
   // — and only a full page reload undid it.
   postSortShowAll = false;
   postSortChecked = new Set();
+  postSortDeliberate = new Set();   // #871: cleared wherever the check it describes is
   const input = document.getElementById('post-sort-file-input');
   if (input) input.value = '';
   postSortStatus('', false);
@@ -11309,6 +11482,13 @@ function onPostSortCheck(cb) {
   if (label) {
     if (cb.checked) postSortChecked.add(label);
     else postSortChecked.delete(label);
+    // #871: a 'change' event on this box only ever comes from a real
+    // interaction, so this IS the deliberate hand click — the same act the
+    // sibling listener records on the row as data-user-checked. Recording it
+    // here as well is what lets the mark come back for a row that was folded
+    // out of the DOM in between, exactly as the check itself does.
+    if (cb.checked) postSortDeliberate.add(label);
+    else postSortDeliberate.delete(label);
   }
   updatePostSortCopyButton();
 }
@@ -11670,6 +11850,13 @@ function renderEarlyLane() {
   const liveLabels = new Set(postSortItems.map(it => it.label));
   Array.from(previouslyChecked).forEach(label => {
     if (!liveLabels.has(label)) previouslyChecked.delete(label);
+  });
+  // #871: the deliberate half is pruned by the SAME rule, in the same place. A
+  // label the new postSortItems no longer has cannot be checked, so it must not
+  // stay recorded as deliberately checked either — the mark never outlives the
+  // check it describes.
+  Array.from(postSortDeliberate).forEach(label => {
+    if (!liveLabels.has(label)) postSortDeliberate.delete(label);
   });
   // Disposition fold (2026-08-13, issue #651 follow-up; carried into the
   // merged lane by #662, unmodified). The lane renders one row per Post Sort
@@ -12037,7 +12224,10 @@ function attachPostSortGoesToInput(tr, item) {
 // a code, category, or disposition; it is Goes To only.
 function commitPostSortGoesTo(label, raw) {
   // Same refusal as commitGoesTo: an unstamped entry would outlive every sort.
-  if (!canPersistArea(raw)) { repaintGoesTo(label); return; }
+  // And the same both-surfaces snap-back (#876): this lane's barcode dialog
+  // (openEarlyBarcodeDialog) commits through here too, so the dialog field has
+  // to revert with the row or it keeps the refused text.
+  if (!canPersistArea(raw)) { repaintAreaSurfaces(label); return; }
   // Every row a typed area is allowed to answer for. BOTH lanes, because the
   // same tracking label and the same stop can be on screen in either: ADR 0021
   // gives one report the main slot, but a Post Sort row and a Manual Review row
@@ -12900,6 +13090,10 @@ function selectRowsWithArea(lane) {
     markDeliberate(tr, true);
     if (early) {
       postSortChecked.add(tr.getAttribute('data-label'));
+      // #871: and the deliberate half, beside it. markDeliberate(tr, true) two
+      // lines up puts the mark on the ROW; this is the copy that survives the
+      // row leaving the DOM, exactly as postSortChecked does for the check.
+      postSortDeliberate.add(tr.getAttribute('data-label'));
       touchedEarly = true;
     }
   });
@@ -13007,6 +13201,11 @@ function applyRangeRowSelection(entry, checked, deliberate) {
   if (isEarlyRow(entry.tr)) {
     if (checked) postSortChecked.add(entry.tr.dataset.label);
     else postSortChecked.delete(entry.tr.dataset.label);
+    // #871: the deliberate half, under the SAME condition the row's own mark
+    // is written with one line up — so a band header's blanket range (
+    // deliberate === false) records no deliberateness here either.
+    if (checked && deliberate === true) postSortDeliberate.add(entry.tr.dataset.label);
+    else postSortDeliberate.delete(entry.tr.dataset.label);
   }
 }
 
@@ -13462,11 +13661,26 @@ function syncBarcodeDialogArea(label) {
   if (!barcodeDialogLabel || String(label) !== barcodeDialogLabel) return;
   const input = document.getElementById('barcode-area-input');
   if (!input) return;
-  const v = ActualArea.get(actualAreaStore, barcodeDialogLabel);
-  if (document.activeElement !== input) input.value = v;
-  // The filled-box highlight, kept in step with the store the same way the row
-  // inputs are (#832). It is NOT covered by repaintGoesTo: this field carries
-  // no data-label, so that function's selector has never matched it.
+  // ONE GUARD, ONE DECISION (#876). The value and the filled-box highlight are
+  // two halves of one statement — "this box holds this area" — so they are
+  // decided together or not at all.
+  //
+  // WHAT THE GUARD IS FOR. A dialog whose field has focus is a field somebody
+  // is typing into, and overwriting it mid-keystroke would take their work
+  // away. So this returns and leaves the field alone.
+  //
+  // WHY THE CLASS IS INSIDE IT NOW. It used to sit outside, and a store change
+  // arriving while the field was focused flipped `has-area` while the text on
+  // screen stayed exactly where the person left it — an EMPTY box wearing the
+  // highlight that means "answered", which is #832's drift arriving by the
+  // other door. It is reachable, not theoretical: the field takes focus the
+  // moment the dialog opens, and a dropped Day Export (ADR-0023 item 4) writes
+  // areas without ever touching focus.
+  //
+  // The highlight is NOT covered by repaintGoesTo: this field carries no
+  // data-label, so that function's selector has never matched it (#832).
+  if (document.activeElement === input) return;
+  input.value = ActualArea.get(actualAreaStore, barcodeDialogLabel);
   input.classList.toggle('has-area', ActualArea.isAnswered(actualAreaStore, barcodeDialogLabel));
 }
 
@@ -13945,6 +14159,29 @@ function printBarcodesFor(entries, opts) {
     // still print correctly — losing the sync is an inconvenience, losing the
     // sheet mid-shift is not acceptable.
     '<script>(function(){' +
+    // ─── THE GROUP-DONE RULE, CARRIED AND NOT RESTATED (#873) ────────────
+    // This document cannot <script src> lib/ibno-barcode-sheet.js (see that
+    // module's bandRuleSource comment for why), and until #873 the band rule
+    // was therefore written out a second time a few lines below, with a
+    // comment pointing at the lib and nothing pinning the two together — so
+    // an edit to the lib fixed nothing here and the suite stayed green.
+    //
+    // Now the lib's OWN function objects are serialized into this script, so
+    // `bandDoneState` and `bandToggleTarget` below are the lib's, not a copy
+    // of them. Spliced first, because everything after it may call them.
+    IbnoBarcodeSheet.bandRuleSource() +
+    // The adapter, and the only thing this document decides for itself: how a
+    // band ELEMENT reads as the { cards } / isDone pair the rule takes. Every
+    // .done-box carries its own data-label (the card writes both), which is
+    // what makes the mapping total — pinned by a test, because a box the rule
+    // could not see would be a package the band silently stopped counting.
+    'function bandGroup(band){return {cards:Array.prototype.map.call(' +
+      'band.querySelectorAll(".done-box"),function(b){' +
+        'return {card:{label:b.dataset.label||""}};})};}' +
+    'function bandIsDone(band){var m={};' +
+      'Array.prototype.forEach.call(band.querySelectorAll(".done-box"),function(b){' +
+        'if(b.checked&&b.dataset.label)m[b.dataset.label]=1;});' +
+      'return function(l){return !!m[l];};}' +
     // ─── SCAN MODE (#704) ────────────────────────────────────────────────
     // A class on <body> and nothing else: every difference is CSS above, so
     // the cards, their labels, their ticks and their bands are the SAME
@@ -13969,23 +14206,24 @@ function printBarcodesFor(entries, opts) {
     'function refreshGroupButtons(){' +
       'Array.prototype.forEach.call(document.querySelectorAll(".band"),function(band){' +
         'var btn=band.querySelector(".group-done");if(!btn)return;' +
-        'var boxes=band.querySelectorAll(".done-box");' +
-        'var done=band.querySelectorAll(".done-box:checked").length;' +
-        'var all=boxes.length>0&&done===boxes.length;' +
-        'btn.setAttribute("aria-pressed",all?"true":"false");' +
-        'btn.textContent=(all?"\\u2713 Group done ":"\\u2713 Group done ")+"("+done+" of "+boxes.length+")";' +
+        // The button's pressed state and its "(N of M)" are the SAME reading
+        // of the band the click acts on, so the label can never describe a
+        // band the toggle would treat differently.
+        'var st=bandDoneState(bandGroup(band),bandIsDone(band));' +
+        'btn.setAttribute("aria-pressed",st.allDone?"true":"false");' +
+        'btn.textContent="\\u2713 Group done "+"("+st.done+" of "+st.total+")";' +
       '});}' +
     'document.addEventListener("click",function(e){' +
       'var btn=e.target&&e.target.closest?e.target.closest(".group-done"):null;' +
       'if(btn){' +
         'var band=btn.closest(".band");if(!band)return;' +
-        'var boxes=band.querySelectorAll(".done-box");' +
-        'var done=band.querySelectorAll(".done-box:checked").length;' +
-        // An EMPTY band never reads as done, so one click can never untick a
-        // band it had nothing to say about (lib bandToggleTarget's rule, and
-        // the same rule here because this document cannot load the lib).
-        'var target=!(boxes.length>0&&done===boxes.length);' +
-        'Array.prototype.forEach.call(boxes,function(b){tick(b,target);});' +
+        // THE rule — the lib's function, spliced in above, not a restatement
+        // of it. A fully ticked band unticks; anything else, including an
+        // EMPTY band, ticks, so one click can never untick a band it had
+        // nothing to say about.
+        'var target=bandToggleTarget(bandGroup(band),bandIsDone(band));' +
+        'Array.prototype.forEach.call(band.querySelectorAll(".done-box"),' +
+          'function(b){tick(b,target);});' +
         'return;}' +
       // The card tap. SCAN MODE ONLY: in grid mode the sheet is being read off
       // a monitor and a stray click on a card must not silently mark a package
@@ -14692,6 +14930,19 @@ function buildManualRow(item, bucket) {
     // row Tyler already confirmed, until he clicks something else on it.
     // Sync the class directly here to match.
     tr.classList.toggle('row-checked', cb.checked);
+    // #871: restore the DELIBERATE mark from the store that shares the check's
+    // lifetime. renderManualSectionRows' capture/restore pair carries the mark
+    // across a REPAINT, which is enough for a full-report row because its check
+    // is captured from the same DOM. An early row's check comes back from
+    // postSortChecked even when there was no row in the DOM to capture from —
+    // a fold, a search, a disposition change — so without this line the row
+    // returns checked-but-unmarked and reads as a blanket select-all.
+    //
+    // Gated on the checkbox actually being checked, so the mark can never
+    // outlive the check it describes (markDeliberate's own contract), and it
+    // writes ONLY the mark: the line above is still postSortChecked's, and it
+    // stays the sole writer of whether this row is checked.
+    if (cb.checked && postSortDeliberate.has(label)) markDeliberate(tr, true);
     cb.addEventListener('change', () => onPostSortCheck(cb));
     attachPostSortGoesToInput(tr, item);
   } else {
@@ -15595,7 +15846,27 @@ function recordAreaConflicts(result, day) {
   areaConflictStore = rec.store;
   const landed = saveAreaConflicts();
   renderAreaConflicts();
-  return { opened: rec.opened.length, held: rec.held, suppressed: rec.suppressed, landed: landed };
+  // `waiting` IS THE PANEL'S ROW COUNT, NOT THIS IMPORT'S (#881).
+  //
+  // opened/held/suppressed are all per-import and stay that way — the summary
+  // still needs to say what THIS file carried. But the panel outlives the
+  // import: nothing here expires, so a disagreement left unsettled from an
+  // earlier file is still on screen, still waiting, and still counted by the
+  // panel's own heading. `opened + held` would count only this file's share of
+  // those rows, which is how the sentence beside the list ended up naming a
+  // different number from the list itself.
+  //
+  // Read from the store AFTER the record lands and through the same
+  // AreaConflicts.open() that renderAreaConflicts() draws from, so the two
+  // cannot drift: one function answers "what is on the panel", and both the
+  // heading and the sentence ask it.
+  return {
+    opened: rec.opened.length,
+    held: rec.held,
+    suppressed: rec.suppressed,
+    waiting: AreaConflicts.openCount(areaConflictStore),
+    landed: landed,
+  };
 }
 
 function showDayExportStatus(message, warn) {
@@ -15850,12 +16121,14 @@ function importDayExport(env) {
 // #796 ADDED THE FIFTH ARGUMENT AND CHANGED NOTHING ELSE. `surfaced` is what
 // recordAreaConflicts() did with this import's disagreements — how many are
 // newly on screen, how many were already there, and how many a human had
-// already settled. It only ever EXTENDS the conflict clause that #794 already
+// already settled — plus, since #881, `waiting`: how many rows the panel is
+// actually drawing, which is the larger set whenever an earlier file left a
+// disagreement unsettled. It only ever EXTENDS the conflict clause that #794 already
 // wrote; the sort-day filter, the NOTHING IMPORTED sentence and every other
 // number are untouched, and the argument is optional so a caller that does not
 // pass it gets exactly the old wording.
 function dayExportImportSummary(result, env, localDay, filed503, surfaced) {
-  const s = surfaced || { opened: 0, held: 0, suppressed: 0, landed: true };
+  const s = surfaced || { opened: 0, held: 0, suppressed: 0, waiting: 0, landed: true };
   const from = (env && env.by) ? ' from ' + env.by : '';
   const day = (env && env.day) ? ' (' + env.day + ')' : '';
 
@@ -15896,26 +16169,38 @@ function dayExportImportSummary(result, env, localDay, filed503, surfaced) {
     // is the shape of message a person reads once and never acts on, and the
     // whole point of this ticket is that a human looks at these.
     //
-    // THE POINTER COUNTS WHAT IS ACTUALLY BELOW (#858 item 2). The number in
-    // front of "disagreed" is the FILE's — how many disagreements the import
-    // carried — and it is right. The panel, though, lists only the ones still
-    // waiting on a human: settle one and re-drop the same file and the file
-    // still carries three while the list holds two. Saying "3 ... listed below"
-    // over a list of two is the count-disagrees-with-the-screen class, and the
-    // reader who counts the rows and finds one missing has no way to tell a
-    // suppressed row from a lost one.
+    // THE POINTER COUNTS WHAT IS ACTUALLY BELOW (#858 item 2, corrected #881).
+    // The number in front of "disagreed" is the FILE's — how many disagreements
+    // the import carried — and it is right, and it is information no other
+    // surface carries (the panel heading only ever knows the open total). It
+    // stays.
     //
-    // So when they differ the sentence names BOTH numbers. Dropping to just
-    // "2 listed below" would be honest about the list and would quietly lose
-    // the fact that the file carried three, which is the thing the person needs
-    // when the two files they were sent are not the same file.
-    const waiting = s.opened + s.held;
-    const tail = waiting
-      ? (waiting < result.conflicts.length
-          ? ' (' + waiting + ' of ' + result.conflicts.length + ' listed below to settle, ' +
-            'the rest already settled)'
-          : ' (listed below to settle)')
-      : (s.suppressed ? ' (already settled)' : '');
+    // THE SECOND NUMBER IS THE PANEL'S, AND THE TWO ARE NOT A RATIO (#881).
+    // #858 item 2 made the pointer `opened + held` — this import's still-open
+    // share — and phrased it as "N of M listed below". That closed the common
+    // case and left the general one open, because the panel outlives the
+    // import: nothing expires, so a disagreement left unsettled from an EARLIER
+    // file is still rendered below. Import one conflict, settle nothing, import
+    // a file carrying two, and "2 ... (listed below to settle)" sat over three
+    // rows. Worded as a ratio it can go frankly absurd — four rows below a file
+    // that carried two would read "4 of 2".
+    //
+    // So the two facts are said as two facts. The file's total keeps its own
+    // clause; the pointer says the panel's real open count (`s.waiting`, read
+    // through the same AreaConflicts.open() the panel draws from); and what the
+    // file carried that was ALREADY SETTLED gets its own clause rather than
+    // being implied by the arithmetic between them. Nothing #858 item 2 put on
+    // screen is lost — the file's count, the settled count and the list's count
+    // are all still said — but no sentence claims a row is settled when it is
+    // merely from another file.
+    const below = Number(s.waiting) || 0;
+    const bits = [];
+    if (s.suppressed) {
+      bits.push(s.suppressed + (s.suppressed === 1 ? ' of them was' : ' of them were') +
+        ' already settled');
+    }
+    if (below) bits.push(below + ' waiting below to settle');
+    const tail = bits.length ? ' (' + bits.join('; ') + ')' : '';
     parts.push(result.conflicts.length + ' disagreed and YOUR value was kept' + tail);
   }
   if (result.staleSkipped) {
