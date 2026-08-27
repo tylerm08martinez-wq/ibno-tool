@@ -1143,6 +1143,27 @@
       border: 1px solid var(--border-soft);
     }
 
+    /* Author tag (issue #886): WHO answered this row, shown only when that
+       someone is not this device. Under the 999 Desk (ADR-0023) an Admin works
+       the same Flagged Work Area list, so without this an assigned row reads as
+       Tyler's own and he re-opens a package already handled — the
+       typed-but-not-yet-scanned window the Post Sort report cannot prune.
+
+       Same token pattern as .early-tag above — theme tokens only, no hardcoded
+       color and no separate dark rule, so theme.css cannot cascade over it.
+       --brand-ink rather than --text-muted because, like .new-tag, this is a
+       "look here, not yours" mark rather than a caveat on the value.
+
+       text-transform is deliberately NOT uppercase: this holds a person's
+       name, and the other pills in this cell hold fixed labels. */
+    .by-tag {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em;
+      background: var(--hover-soft); color: var(--brand-ink); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+      max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
     /* "New since the last drop" tag (issue #735): this package arrived on the
        report drop just made and was not on the drop before it. Same token
        pattern as .early-tag above — theme tokens only, no hardcoded color, so
@@ -1712,9 +1733,9 @@
 
     <hr class="settings-divider">
     <label for="device-name-input">This device's name</label>
-    <div class="hint-text">Optional, typed once. Every work area typed on this device is recorded against this name, so a repeated wrong-belt pattern can be traced back to a person. Plain text — no staff list is stored or sent anywhere. Leave it blank and nothing is recorded; the tool works exactly as it does today.</div>
+    <div class="hint-text">Optional, typed once. Every work area typed on this device is recorded against this name, so a repeated wrong-belt pattern can be traced back to a person. Plain text — no staff list is stored or sent anywhere. Leave it blank and nothing is recorded; the tool works exactly as it does today. <strong>Set it once and leave it.</strong> Renaming re-attributes nothing: rows already answered keep the old name and will show it as someone else's until they are typed again.</div>
     <div class="sync-fields">
-      <input type="text" id="device-name-input" class="sync-field" placeholder="e.g. Cage PC" maxlength="40" autocomplete="off" spellcheck="false">
+      <input type="text" id="device-name-input" class="sync-field" placeholder="e.g. Marisol" maxlength="40" autocomplete="off" spellcheck="false">
     </div>
     <div class="settings-actions">
       <button class="btn btn-purple" id="save-device-name" onclick="saveDeviceName()">Save device name</button>
@@ -2642,6 +2663,31 @@ function saveDeviceName() {
     saved = !normalizeDeviceName(toolStorage.get(DEVICE_NAME_KEY, ''));
   }
   if (saved) deviceName = next;
+  // REPAINT, on the same reasoning as saveSettings above (found in review of PR
+  // #909). Both paths that draw the author pill — goesToCell() at row-build time
+  // and repaintGoesTo() on commit — read `deviceName` AT PAINT TIME, so without
+  // this the rows on screen keep answering to the OLD name until an unrelated
+  // commit or a re-drop happens to repaint them.
+  //
+  // The clearing direction is the one that matters. ActualArea.otherBy's
+  // contract is that an unnamed device claims nothing, because it cannot know a
+  // row is not its own. Leaving already-painted pills up after the name is
+  // cleared has the page asserting exactly what that contract forbids.
+  if (saved) {
+    // renderEarlyLane() ALONE — it delegates the row render to
+    // renderManualSectionRows() itself (#703 review finding 3), so calling both
+    // rebuilt every lane twice per save.
+    //
+    // AND THE WORK CURSOR IS CARRIED ACROSS IT, same as refreshAfter503Change
+    // and togglePark. A rebuild tears down the tbody, and .work-active lives on
+    // a row inside it — without this, saving a name in Settings mid-sort wipes
+    // the highlight while the bar still reads its position, so the cursor is
+    // somewhere the screen no longer says. Found in re-review of PR #909, in a
+    // repaint added to fix a different finding from the same review.
+    const cursorLabel = workCursorLabel();
+    renderEarlyLane();
+    restoreWorkCursor(cursorLabel);
+  }
   status.textContent = saved ? (next ? '✓ Saved' : '✓ Cleared') : '⚠ Not saved';
   // Show back exactly what is now stored, trimming and cap included.
   document.getElementById('device-name-input').value = deviceName;
@@ -6412,11 +6458,54 @@ function rowMatchesQuery(tr, q) {
 // clone, and the clone is used rather than string-subtracting the note's text
 // out of tr.textContent, which would also strip a legitimate match that
 // happened to read the same.
+//
+// .by-tag JOINS THE NOTE HERE (#886, found in review of PR #909). The author
+// pill holds a PERSON'S NAME, which is a remark about who answered the row, not
+// a field of the package — and unlike the fixed tokens `same addr` and `early`
+// it is arbitrary text the user types. Station names and street names collide:
+// an admin named Guadalupe makes every row she assigned match a search for the
+// Guadalupe corridor, and the bucket header's select-all runs this same
+// predicate, so those rows get CHECKED. An early row swept in also lands in
+// postSortChecked, which the paste-to-lookup copy loop reads. Same
+// over-selection, same bulk action, same records-tier tool as the note.
+// WHY THE STRIP CLONES ONE CELL AND NOT THE ROW. Both excluded marks live in
+// the Goes To cell, and cloning the whole row to drop them cost 10x the fast
+// path — measured on the real 2,868-row export with all 112 rendered rows
+// carrying a pill: 2.3ms -> 23ms per keystroke in jsdom, and this runs on every
+// keystroke over every row in the lane.
+//
+// That cost profile changed with #886. The note's own comment reasoned that a
+// cross-day repeat is RARE, so almost every row took the fast path. Under the
+// 999 Desk an Admin-worked day is exactly the day when most rows carry an
+// author, so the slow path became the common one. Found in review of PR #909.
+//
+// NOT CACHED ON THE ROW, deliberately. A stored string has to be invalidated by
+// every in-place mutation that changes row text — coding, badges, chips, the
+// note itself — and a missed invalidation makes search silently fail to match a
+// row that is right there. That is a worse failure than a slow keystroke in a
+// tool whose search feeds a bulk select-all.
+//
+// The whole-row clone is kept as a fallback for the case this optimisation
+// assumes away: a mark rendered outside the Goes To cell. Nothing does that
+// today, and if something starts, correctness must not depend on noticing.
 function rowSearchText(tr) {
-  if (!tr.querySelector('.area-note')) return tr.textContent.toLowerCase();
-  const clone = tr.cloneNode(true);
-  clone.querySelectorAll('.area-note').forEach(n => n.remove());
-  return clone.textContent.toLowerCase();
+  const marks = tr.querySelectorAll('.area-note, .by-tag');
+  if (!marks.length) return tr.textContent.toLowerCase();
+  const cell = tr.querySelector('.goesto-cell');
+  const allInCell = cell && Array.prototype.every.call(marks, (n) => cell.contains(n));
+  if (!allInCell) {
+    const clone = tr.cloneNode(true);
+    clone.querySelectorAll('.area-note, .by-tag').forEach(n => n.remove());
+    return clone.textContent.toLowerCase();
+  }
+  const cellClone = cell.cloneNode(true);
+  cellClone.querySelectorAll('.area-note, .by-tag').forEach(n => n.remove());
+  let out = '';
+  for (let i = 0; i < tr.children.length; i++) {
+    const td = tr.children[i];
+    out += (td === cell) ? cellClone.textContent : td.textContent;
+  }
+  return out.toLowerCase();
 }
 
 // manualLaneEmptyMessage(laneKey) -> the "this lane has nothing in it" line,
@@ -10191,6 +10280,10 @@ function goesToCell(item, opts) {
   // shared buildManualRow() row builder (issue #662), which reuses this
   // exact function with opts.noPropagate: true for an early row.
   const early = v && ActualArea.isEarly(actualAreaStore, item && item.label);
+  // WHO answered it (#886), when that is not this device. Render-only: the
+  // reader is ActualArea.otherBy and no predicate on this page gains a read of
+  // `by`. An unnamed device shows nothing — see otherBy's header.
+  const byName = v ? ActualArea.otherBy(actualAreaStore, item && item.label, deviceName) : '';
   const title = o.earlyLane
     ? 'Where this package actually goes. Typing here also fills any other row at the SAME address that is still empty — it never overwrites a confirmed area.'
     : 'Where this package actually goes. Typing here also fills any other review row at the SAME address.';
@@ -10205,6 +10298,7 @@ function goesToCell(item, opts) {
     ' title="' + ToolHelpers.escapeHtml(title) + '">' +
     (auto ? '<span class="same-addr" title="Filled automatically because another package shares this exact address">same addr</span>' : '') +
     (early ? '<span class="early-tag" title="Pre-filled by the Post Sort early lane — not yet confirmed by a scan on this report">early</span>' : '') +
+    (byName ? '<span class="by-tag" title="' + ToolHelpers.escapeHtml('Answered by ' + byName + ', not on this device') + '">' + ToolHelpers.escapeHtml(byName) + '</span>' : '') +
     noteHtml +
     '</td>';
 }
@@ -10410,6 +10504,23 @@ function repaintGoesTo(label) {
       cell.appendChild(etag);
     } else if (!early && etag) {
       etag.remove();
+    }
+    // The author pill (#886). Repainted here for the same reason .early-tag is:
+    // typing in this box commits through ActualArea.set with THIS device's `by`,
+    // so a row that showed the Admin's name must lose it the moment Tyler takes
+    // the answer over — otherwise the pill outlives the fact it reports.
+    let btag = cell.querySelector('.by-tag');
+    const byNow = value ? ActualArea.otherBy(actualAreaStore, label, deviceName) : '';
+    if (byNow) {
+      if (!btag) {
+        btag = document.createElement('span');
+        btag.className = 'by-tag';
+        cell.appendChild(btag);
+      }
+      btag.title = 'Answered by ' + byNow + ', not on this device';
+      btag.textContent = byNow;
+    } else if (btag) {
+      btag.remove();
     }
     // The cross-day dated note (#702). Repainted here and not only at build
     // time because AGREEMENT is what makes it disappear: the supervisor types
