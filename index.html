@@ -2973,13 +2973,25 @@ const ArchiveStore = (function () {
 let lastArchiveWrite = Promise.resolve();
 
 // archiveSeenDay(records, hint) -> the sort day a load's rows count as SEEN on.
-// The report's OWN majority inbound date, exactly as the sort-day clock reads
-// it (lib/sort-day.js), so the 8.0% of rows with no inbound date of their own
-// are stamped with the day their 92% of dateable siblings name. The hint is for
-// a caller that knows better than the rows do — a Day Export import, whose
-// envelope states the day it is of.
+//
+// A CALLER THAT STATES THE DAY IS BELIEVED, THEN THE ROWS, THEN THE PAGE. The
+// precedence itself lives in IbnoArchive.seenDayFor with the reasoning; this is
+// only the wiring that names the three candidates. In short: the hint's one
+// caller is the Day Export import, whose envelope states the day it is of and
+// is scoped to that day by construction, so it really does know better than its
+// own rows can. Without a hint the answer is the report's OWN majority inbound
+// date, exactly as the sort-day clock reads it (lib/sort-day.js), so the 8.0%
+// of rows with no inbound date of their own are stamped with the day their 92%
+// of dateable siblings name.
+//
+// #879 REVERSED THIS, and the reversal is the ticket: the rows used to be
+// consulted first, which contradicted the comment that sat above it. Only the
+// import passes a hint, so nothing else moved — see tests/ibno-archive.test.js
+// (seenDayFor) and the Day Export DOM test for both call sites.
+//
+// No device clock in any branch: `currentSortDay` is the loaded report's day.
 function archiveSeenDay(records, hint) {
-  return SortDay.sortDayOf(records) || String(hint || '') || currentSortDay || '';
+  return IbnoArchive.seenDayFor(hint, SortDay.sortDayOf(records), currentSortDay);
 }
 
 // Fold a freshly parsed file's rows into the archive. Called on every load.
