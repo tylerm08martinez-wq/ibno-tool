@@ -1755,6 +1755,21 @@
       <button class="btn btn-purple" onclick="saveSyncSettings()">Save sync settings</button>
       <span id="sync-settings-status">&#10003; Saved</span>
     </div>
+
+    <hr class="settings-divider">
+    <label>999 Desk area sync (live, between desks)</label>
+    <div class="hint-text">Optional, and <strong>separate from the Repeat History sync above on purpose</strong> — its own private data-only repo and its own token, so neither one can reach the other's data. Publishes the work areas you type today and picks up the other desk's, marked with their name. <strong>Areas only.</strong> Filed rows and Park never travel on this loop. Needs <em>This device's name</em> above to be set: an unnamed device neither publishes nor reads, because an area it cannot attribute would land in a Goes To box looking like your own work.</div>
+    <div class="sync-fields">
+      <input type="password" id="desk-token" class="sync-field" placeholder="GitHub token (fine-grained, Contents R/W, this repo only)" autocomplete="off" spellcheck="false">
+      <input type="text" id="desk-owner" class="sync-field" placeholder="Repo owner" autocomplete="off" spellcheck="false">
+      <input type="text" id="desk-repo" class="sync-field" placeholder="Repo name (e.g. ibno-desk-areas)" autocomplete="off" spellcheck="false">
+      <input type="text" id="desk-branch" class="sync-field" placeholder="Branch (e.g. main)" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="settings-actions">
+      <button class="btn btn-purple" onclick="saveDeskSettings()">Save 999 Desk sync</button>
+      <span id="desk-settings-status">&#10003; Saved</span>
+      <span id="desk-sync-status" class="ibno-sync-status" title="999 Desk area sync status"></span>
+    </div>
   </div>
 </div>
 
@@ -2550,6 +2565,7 @@
 <script src="lib/scan-codes.js"></script>
 <script src="lib/ibno-sync.js"></script>
 <script src="lib/sync-controller.js"></script>
+<script src="lib/remote-areas.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
@@ -2572,6 +2588,25 @@ function toggleSettings() {
     document.getElementById('flagged-areas-input').value = FLAGGED_WORK_AREAS.join('\n');
     document.getElementById('device-name-input').value = deviceName;
     fillSyncSettings();
+    // The desk channel's fields, on the same terms as the Repeat History's
+    // above — and this call is not cosmetic (#918 review finding 1). Without
+    // it, reopening Settings renders four BLANK desk fields, so the panel
+    // reports a configured channel as unconfigured; then any click on "Save
+    // 999 Desk sync" — including after editing something unrelated in the same
+    // panel — reads those blanks, switches the channel off and DESTROYS THE
+    // PAT, which is a credential the Admin has to be re-issued in person.
+    fillDeskSettings();
+  } else {
+    // Closing: both pills, not just the Repeat History's (finding 8). The desk
+    // pill is refreshed by saveDeskSettings, so it went stale only when the
+    // panel was opened and closed without saving — but that is the case where
+    // it is most likely to be wrong, since the user was in there looking at the
+    // channel. (Until #918's round-two finding 3 that sentence said "via
+    // saveSettings", which is what made the bug easy to miss: saveSettings'
+    // refresh is SyncController's, and it does not know about the device-name
+    // gate. Both paths now go through refreshDeskSyncStatus.)
+    refreshSyncStatus();
+    refreshDeskSyncStatus();
   }
   panel.style.display = open ? 'none' : 'block';
 }
@@ -2687,6 +2722,18 @@ function saveDeviceName() {
     const cursorLabel = workCursorLabel();
     renderEarlyLane();
     restoreWorkCursor(cursorLabel);
+    // THE DEVICE NAME IS THE 999 DESK CHANNEL'S OFF SWITCH, IN BOTH DIRECTIONS
+    // (#918 round-three finding 5). deskPublishReady() has always required it,
+    // and round one made deskReadReady() require it too — so this button turns
+    // the channel on and off more decisively than the desk panel's own Save
+    // does. Without this line, clearing the name kills the channel while its
+    // pill goes on reading "999 Desk sync on" until Settings is closed.
+    //
+    // It has to be refreshDeskSyncStatus() and not SyncController's own
+    // refreshStatus(), for exactly the reason round-two finding 3 named on
+    // saveDeskSettings: the controller knows about the token and the coords and
+    // nothing at all about the device-name gate.
+    refreshDeskSyncStatus();
   }
   status.textContent = saved ? (next ? '✓ Saved' : '✓ Cleared') : '⚠ Not saved';
   // Show back exactly what is now stored, trimming and cap included.
@@ -3737,6 +3784,334 @@ const syncCtl = SyncController.create({
     if (phase === 'push' || document.getElementById('history-panel').style.display === 'block') renderHistory();
   },
 });
+
+// ─── 999 DESK LIVE AREA SYNC (#913, PRD #887) ───────────────────────────────
+//
+// The other desk's work areas, live during the sort, applied into this device's
+// Goes To boxes and marked as theirs by the #886 pill. The wire format, the
+// sort-day gate and the apply rules all live in lib/remote-areas.js; this block
+// is only the wiring.
+//
+// A SECOND, SEPARATE CHANNEL, and the separation is the security design (#912).
+// Fine-grained PATs scope to REPOSITORIES, not branches, so one credential
+// serving both channels would put the desk's token on the same repo as the
+// Repeat History. Its own keys, its own coords, its own token, its own
+// SyncController instance — sharing the lifecycle code (ADR-0014) without
+// sharing any credential or any data.
+const DESK_TOKEN_KEY  = 'ibno_desk_token';
+const DESK_COORDS_KEY = 'ibno_desk_coords';
+const DESK_SHA_KEY    = 'ibno_desk_sha';
+
+function setDeskSyncStatus(kind, text) {
+  if (typeof document === 'undefined' || !document) return;
+  const el = document.getElementById('desk-sync-status');
+  if (el) { el.className = 'ibno-sync-status ' + kind; el.textContent = text; }
+}
+
+// Publishing is OFF unless this device has a name and a report is loaded.
+// Both are real states, not errors: an unnamed device cannot attribute its work
+// (lib/remote-areas.js says why there is no anonymous path), and with no report
+// there is no sort day, which is the one thing the gate on the other end reads.
+function deskPublishReady() {
+  return !!RemoteAreas.pathFor(deviceName) && !!currentSortDay;
+}
+
+// READING IS GATED ON THE DEVICE NAME TOO, and that is a decision rather than
+// symmetry for its own sake (#918 review finding 3).
+//
+// The first draft gated only publishing. An UNNAMED device with a token still
+// pulled and APPLIED the other desk's areas — and ActualArea.otherBy returns ''
+// when `self` is empty, so the #886 pill never rendered. Her values landed in
+// the Goes To boxes of the cage PC as unattributed entries indistinguishable
+// from work done there, which is the exact laundering the `remote` flag exists
+// to prevent, on the one machine most likely to be left unnamed. It also made
+// the Settings hint ("an unnamed device neither publishes nor shows whose a row
+// is") false in its first clause.
+//
+// Applying an area nobody can attribute is worse than applying none: the second
+// is a visibly-off feature, the first is a wrong-belt error with no author. So
+// the name is the off switch for the WHOLE channel, both directions.
+function deskReadReady() {
+  return !!RemoteAreas.pathFor(deviceName);
+}
+
+// Set by the fetch adapter when a file could not be read or could not be
+// parsed, and re-read after the pull settles. It exists because the adapter's
+// only loud channel is `throw`, and throwing would discard the desks that DID
+// read — see the adapter for what each value means.
+let deskPullProblem = '';
+
+const deskCtl = SyncController.create({
+  storage: toolStorage,
+  keys: { token: DESK_TOKEN_KEY, coords: DESK_COORDS_KEY, sha: DESK_SHA_KEY },
+  setStatus: setDeskSyncStatus,
+  // ~5s, per #913. Longer than the Repeat History's 800ms on purpose: this
+  // fires on every area commit during the busiest part of a sort, and the other
+  // desk reading an answer four seconds later costs nothing.
+  debounceMs: 5000,
+  messages: {
+    off:       ['off', '999 Desk sync off'],
+    idle:      ['ok', '999 Desk sync on'],
+    dirty:     ['ok', '999 Desk sync on'],
+    // Overridden for the same reason the three above are: without it the
+    // controller's DEFAULT 'synced ✓' lands after every successful sync and is
+    // then replaced by '999 Desk sync on' at the next refresh, so the one pill
+    // for this channel says two different things for the same state. Found
+    // while writing the finding-5 test, which had to assert what "healthy"
+    // reads as and could not name one string.
+    ok:        ['ok', '999 Desk sync on'],
+    notReady:  ['off', '999 Desk sync off — add token + repo in Settings'],
+    pushError: ['error', 'offline — areas saved locally'],
+    pullError: ['error', 'offline — the other desk’s areas are not showing'],
+    auth:      ['error', '999 Desk token invalid or expired — update in Settings'],
+  },
+  adapter: {
+    // Read every OTHER desk's file. One file per writer, so this is a directory
+    // listing plus a fetch each — never a merge of two authors into one file.
+    //
+    // ONE UNREADABLE FILE IS NOT THE WHOLE DESK, BUT IT IS NOT NOTHING EITHER
+    // (#918 review findings 5 and 6). The first draft swallowed every per-file
+    // error except `auth` and dropped every {ok:false} parse in silence, so two
+    // real failures read as a clean sync:
+    //
+    //   - listDir succeeds (cheap, and a 404 directory is legitimately empty)
+    //     while every per-file GET fails on a flaky station network. Pill says
+    //     "999 Desk sync on"; not one of her areas is on screen. That is the
+    //     silent failure listDir was deliberately made loud to prevent.
+    //   - the cage PC takes the next deploy and publishes version 2. parse
+    //     refuses it OUT LOUD, as its header promises — and the refusal was
+    //     then thrown away, so the desk simply looked absent, indistinguishable
+    //     from a day she is not working.
+    //
+    // Neither can be reported by throwing: a throw here discards the desks that
+    // read fine, and on a three-desk morning one bad file would blank the other
+    // two. So the good envelopes are still returned and the trouble is recorded
+    // in deskPullProblem, which deskPull() paints over the pill once the
+    // controller has finished saying "ok". A 404 on a single file is NOT
+    // trouble — it is a device that unpublished between the listing and the
+    // fetch, which fetchRemote reports as sha === null.
+    fetch: async (token, coords) => {
+      deskPullProblem = '';
+      const mine = RemoteAreas.pathFor(deviceName);
+      const files = await GithubJsonSync.listDir(token, Object.assign({}, coords, { path: RemoteAreas.DIR }));
+      const envelopes = [];
+      let unreadable = 0;
+      let unsupported = 0;
+      for (const f of files) {
+        if (mine && f.path === mine) continue;   // never read our own file back
+        try {
+          const r = await GithubJsonSync.fetchRemote(token, Object.assign({}, coords, { path: f.path }));
+          if (r.sha === null) continue;          // gone since the listing; not a failure
+          const parsed = RemoteAreas.parse(r.data);
+          // ONLY 'version' MEANS "THAT DEVICE IS AHEAD OF THIS ONE" (#918
+          // round-two finding 5). parse refuses for four distinct causes and
+          // the first draft folded all four into "publishing a newer format",
+          // so a single TRUNCATED file told Tyler to update a device that was
+          // perfectly current — a diagnosis he would act on and could never
+          // make come true. GithubJsonSync.fetchRemote swallows a JSON error of
+          // its own and hands back `[]`, which parse then refuses as 'shape',
+          // so a half-written file really does arrive on this path.
+          if (parsed.ok) envelopes.push(parsed.envelope);
+          else if (parsed.reason === 'version') unsupported++;
+          else unreadable++;
+        } catch (e) {
+          // An auth error still throws out of listDir above, so this cannot
+          // swallow an expired token; every other transport failure (`http`, a
+          // bare TypeError from a dropped network, `coords`) is counted and
+          // spoken rather than dropped.
+          if (e && e.code === 'auth') throw e;
+          unreadable++;
+        }
+      }
+      // BOTH COUNTS ARE REPORTED, not the first one that fires (#918
+      // round-two finding 5). `if (unsupported) … else if (unreadable)` let a
+      // single corrupt file hide "3 desks' areas could not be read" — which is
+      // the two-real-failures case this block exists for, and the one where
+      // being told only half of it is worst.
+      const trouble = [];
+      if (unsupported) {
+        trouble.push('the other desk is publishing a newer format — update this device');
+      }
+      if (unreadable) {
+        trouble.push(unreadable === 1
+          ? 'one desk’s areas could not be read'
+          : unreadable + ' desks’ areas could not be read');
+      }
+      if (trouble.length) deskPullProblem = trouble.join('; ') + ' — tap Sync now';
+      return { data: envelopes, sha: null };
+    },
+    // Write OUR file, whole. There is no merge to do: this device owns this
+    // path outright, which is what one-file-per-writer buys.
+    push: async (token, local, sha, coords) => {
+      const path = RemoteAreas.pathFor(deviceName);
+      if (!path) return { data: local, sha: sha };
+      const r = await GithubJsonSync.pushMerge(token, local, {
+        coords: Object.assign({}, coords, { path: path }),
+        merge: (_remote, current) => current,
+        messagePrefix: '999 desk areas',
+      });
+      return { data: r.data, sha: r.sha };
+    },
+    mergeLocal: (remote, _local) => remote,
+  },
+  getLocal: () => RemoteAreas.build({
+    day: currentSortDay,
+    by: deviceName,
+    updatedAt: new Date().toISOString(),
+    areas: RemoteAreas.localAreas(actualAreaStore, { day: currentSortDay }),
+  }),
+  // Applies the other desks' envelopes into the area store. Reached on both
+  // phases: on 'pull' with their files, and on 'push' with the echo of our own,
+  // which RemoteAreas.applyTo skips by author — so a push can never re-stamp
+  // this device's own rows as somebody else's.
+  setLocal: (data, _phase) => {
+    const envelopes = Array.isArray(data) ? data : [data];
+    const touched = [];
+    envelopes.forEach(env => {
+      const r = RemoteAreas.applyTo(actualAreaStore, env, {
+        day: currentSortDay,
+        self: deviceName,
+        // What a human HERE has already rejected today (#918 round-two finding
+        // 2). Without it, clearing her area survives one render and the next
+        // pull puts it straight back with her pill on it.
+        cleared: deskClearedStore,
+      });
+      actualAreaStore = r.store;
+      r.changed.forEach(l => touched.push(l));
+    });
+    if (!touched.length) return;
+    if (!saveActualAreas()) warnAreaNotSaved();
+    // repaintAreaSurfaces, NOT repaintGoesTo (#918 round-two finding 4).
+    // repaintGoesTo matches only '.goesto-input[data-label]'; the barcode
+    // dialog's own area field carries no data-label, which is the whole reason
+    // #876 added repaintAreaSurfaces. With the dialog open on a blank row, a
+    // pull updated the row behind it while the dialog still showed empty — and
+    // that field's blur handler is commitGoesTo, so committing from the dialog
+    // then wrote an empty value over her area FROM A FIELD THAT NEVER SAW IT.
+    touched.forEach(repaintAreaSurfaces);
+    updateSelectAreaButtons();
+  },
+});
+
+function refreshDeskSyncStatus() {
+  if (deskCtl.syncReady() && !deskReadReady()) {
+    setDeskSyncStatus('off', '999 Desk sync off — set “This device’s name” in Settings');
+    return;
+  }
+  deskCtl.refreshStatus();
+}
+function scheduleDeskPublish()   { if (deskPublishReady()) deskCtl.scheduleSync(); }
+
+// The one pull path. Named, gated and status-corrected in one place so the boot
+// call and the report-load call below cannot drift apart.
+// Resolves TRUE only when a pull actually ran, reached the network and came
+// back clean — which is what deskPullForDay() below needs in order to decide
+// whether the day's one pull has been spent.
+async function deskPullOnLoad() {
+  // CLEARED BEFORE DELEGATING, NOT ONLY INSIDE THE ADAPTER (#918 round-two
+  // finding 7). The adapter clears it on entry, so on a path where the adapter
+  // never runs the value simply survives: a pull fails, the user clears the
+  // token, and the next call takes the !syncReady() early return inside
+  // pullOnLoad — after which the trailing repaint below painted the OLD error
+  // over a channel that is now switched off. An error message on a switched-off
+  // feature is a bug report Tyler cannot act on.
+  deskPullProblem = '';
+  if (!deskReadReady()) { refreshDeskSyncStatus(); return false; }
+  const pulled = await deskCtl.pullOnLoad();
+  // The controller has said its piece; a per-file failure it never saw goes on
+  // top. See the fetch adapter for why this cannot be a throw.
+  if (deskPullProblem) setDeskSyncStatus('error', deskPullProblem);
+  // A partial failure counts as NOT DONE. One of three desks unread is a real
+  // gap, and the retry costs one listing.
+  return !!pulled && !deskPullProblem;
+}
+
+// THE FIRST LOAD OF A SHIFT PULLS NOTHING WITHOUT THIS (#918 review finding 9).
+//
+// The boot call at the bottom of this file runs before any report has been
+// dropped, so on a genuine cold boot — a fresh device, or the first load after
+// Load New File cleared the session — `currentSortDay` is still '' and the
+// sort-day gate discards every incoming file. The feature then did nothing at
+// all until a second F5, which is the whole first hour of a sort.
+//
+// So the pull also runs when a load first establishes the day. Guarded on the
+// day it last ran for, because applySortDayFrom is reached from four call sites
+// and Tyler re-drops the report constantly through a shift (#610) — an
+// ungated call would be a network round trip per drop. #914 will make the read
+// a poll and will replace this; until then, this is what makes the day it was
+// built for work.
+//
+// THE DAY IS STAMPED AFTER A PULL THAT RAN AND SUCCEEDED, NEVER BEFORE (#918
+// round-two review finding 1, and the worst of that round).
+//
+// The first draft set deskPulledDay on the line before the await, so a pull
+// that failed — or one that was skipped because the device had no name yet —
+// consumed the whole day anyway. Two real shifts follow from that:
+//
+//   - a flaky station network at boot paints "offline", and Tyler then re-drops
+//     the report twenty times through the sort. Every one of those calls takes
+//     the early return. Her areas never appear, all shift, even once the
+//     network is back.
+//   - the cage PC boots unnamed, deskPullOnLoad returns early on
+//     !deskReadReady(), the day is spent anyway, and naming the device in
+//     Settings afterwards changes nothing until an F5.
+//
+// #914's poll does not exist yet, so page load and report drop are the ONLY two
+// triggers this feature has, and the first draft spent both on one failure.
+let deskPulledDay = '';
+// One pull in flight at a time. Necessary BECAUSE the stamp moved after the
+// await: without it a burst of re-drops (#610 — Tyler re-drops constantly)
+// would each see an unstamped day and start their own round trip.
+let deskPullInFlight = null;
+function deskPullForDay() {
+  if (!currentSortDay || currentSortDay === deskPulledDay) return;
+  if (deskPullInFlight) return deskPullInFlight;
+  const day = currentSortDay;
+  deskPullInFlight = (async () => {
+    try {
+      const ok = await deskPullOnLoad();
+      // Only a pull that reached the network and came back clean spends the
+      // day — and only for the day it was actually made against, so a pull that
+      // straddles a day roll cannot silently mark the NEW day as done.
+      if (ok && currentSortDay === day) deskPulledDay = day;
+    } finally {
+      deskPullInFlight = null;
+    }
+  })();
+  return deskPullInFlight;
+}
+// Push now, skipping the 5s debounce. Mirrors ibnoSyncNow(); used by the DOM
+// test to assert what actually goes on the wire without waiting on a timer.
+function deskSyncNow()           { return deskCtl.syncNow(); }
+// Is there a typed area waiting to be published? scheduleSync() sets this the
+// instant a commit calls it, before the debounce elapses — which is what lets a
+// test prove the COMMIT scheduled the publish, rather than proving only that
+// deskSyncNow() can push when called directly. The first draft of the DOM test
+// asserted the latter and stayed green with the publish hook deleted.
+function deskIsDirty()           { return deskCtl.isDirty(); }
+
+function fillDeskSettings() {
+  const c = deskCtl.getCoords();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('desk-token', deskCtl.getToken());
+  set('desk-owner', c.owner); set('desk-repo', c.repo); set('desk-branch', c.branch);
+}
+
+function saveDeskSettings() {
+  const val = id => ((document.getElementById(id) || {}).value || '').trim();
+  deskCtl.saveSettings({ token: val('desk-token'), owner: val('desk-owner'), repo: val('desk-repo'), branch: val('desk-branch') });
+  // THROUGH THIS FUNCTION, NOT saveSettings' OWN refreshStatus (#918 round-two
+  // review finding 3). deskCtl.saveSettings ends in SyncController.refreshStatus,
+  // which knows nothing about the device-name gate — so a device with a token
+  // and coords but NO NAME painted "999 Desk sync on" right beside the Save
+  // button it had just been clicked on, while deskReadReady() and
+  // deskPublishReady() were both false and the channel neither read nor
+  // published. It self-corrected when the panel closed, which is not where the
+  // user is looking.
+  refreshDeskSyncStatus();
+  const st = document.getElementById('desk-settings-status');
+  if (st) { st.textContent = '✓ Saved'; st.classList.add('show'); setTimeout(() => st.classList.remove('show'), 2000); }
+}
 
 function refreshSyncStatus()   { syncCtl.refreshStatus(); }
 function scheduleHistorySync() { syncCtl.scheduleSync(); }
@@ -8111,6 +8486,69 @@ const ACTUAL_AREA_KEY = 'ibno_actual_area';
 const AREA_PROVENANCE_MIGRATED_KEY = 'ibno_area_provenance_migrated';
 let actualAreaStore = {};
 
+// ─── THE 999 DESK CLEAR TOMBSTONES (#913, #918 round-two finding 2) ─────────
+//
+// Which of the OTHER desk's areas a human on THIS device has cleared today.
+// lib/remote-areas.js owns the shape and every rule; this is the persistence.
+//
+// A SEPARATE KEY, not folded into ACTUAL_AREA_KEY, for the reason the lib's own
+// section gives: ActualArea.restore drops every entry without a usable area, so
+// a tombstone cannot live in the area store without forcing that guard open for
+// every consumer at once (ADR-0022, the #740 class). It is read by exactly one
+// function — the desk channel's setLocal — and can never be mistaken for an
+// answer.
+const DESK_CLEARED_KEY = 'ibno_desk_cleared';
+let deskClearedStore = {};
+function loadDeskCleared() {
+  deskClearedStore = RemoteAreas.restoreCleared(toolStorage.get(DESK_CLEARED_KEY, null));
+}
+// Returns whether the write LANDED, on the same terms as saveActualAreas: a
+// dropped tombstone means the next pull re-applies an area a human rejected, so
+// the caller says so rather than assuming.
+function saveDeskCleared() {
+  return toolStorage.set(DESK_CLEARED_KEY, RemoteAreas.serializeCleared(deskClearedStore));
+}
+
+// recordDeskClear(label, beforeEntry) -> did this commit's tombstone SURVIVE?
+//
+// The one place the two commit lanes record a rejection of the other desk's
+// area, and the reason it exists at all is #918 round-three finding 6: both
+// lanes called RemoteAreas.recordClear and then threw saveDeskCleared's boolean
+// away, against that function's own documented contract. On a full origin the
+// clear then vanished silently and the next pull put her area straight back —
+// the exact bug the tombstone was built to fix, reappearing through the one
+// path nobody was watching.
+//
+// TRUE WHEN THERE WAS NOTHING TO SAVE. Most commits here are ordinary typing,
+// which records no tombstone (and often DROPS one), and a dropped write that
+// lost nothing is not worth a warning that would then cry wolf on every
+// keystroke. Only a tombstone this commit actually needed to add counts.
+//
+// The comparison is on VALUE, not identity: restoreCleared rebuilds every entry
+// object on each call, so `before !== after` is true even when nothing changed.
+function recordDeskClear(label, beforeEntry) {
+  const key = String(label);
+  const had = deskClearedStore[key];
+  deskClearedStore = RemoteAreas.recordClear(deskClearedStore, label, beforeEntry, {
+    day: currentSortDay,
+    value: ActualArea.get(actualAreaStore, label),
+  });
+  const now = deskClearedStore[key];
+  const added = !!now && !(had && had.area === now.area && had.date === now.date);
+  const landed = saveDeskCleared();
+  return landed || !added;
+}
+
+// The tombstone sibling of warnAreaNotSaved. Different message because the loss
+// is a different shape: nothing on screen is wrong right now — the box he just
+// cleared IS clear — and the damage arrives later, when the next pull re-applies
+// the area he rejected with the other desk's pill back on it.
+function warnDeskClearNotSaved() {
+  flashGoesToNote('NOT SAVED: this browser\'s storage is full, so clearing the other desk\'s area ' +
+    'will not stick — their value will come back on the next sync. ' +
+    'Clear the Repeat History (Settings) to make room.', { warn: true });
+}
+
 // ─── THE SORT-DAY CLOCK (#695, decision record #621) ────────────────────────
 //
 // Which sort day the loaded report belongs to, read from ITS OWN INBOUND_DATE
@@ -8587,7 +9025,12 @@ function applySortDayFrom(rows, opts) {
     filed503Log = pruned503;
     save503Log();
   }
-  if (!SortDay.isLaterSortDay(day, currentSortDay)) return;
+  // The other desk's areas (#913), on the load that first names a day. Called
+  // on BOTH sides of the clock guard: a same-day re-drop takes the early return
+  // below, and on a cold boot the clock may already have reached today's day
+  // through the Post Sort report before the main pull lands. deskPullForDay()
+  // is idempotent per sort day, so the pair costs one round trip a shift.
+  if (!SortDay.isLaterSortDay(day, currentSortDay)) { deskPullForDay(); return; }
   currentSortDay = day;
   // The barcode-sheet ticks expire with their sort day (#733 needs this: a tick
   // now HOLDS A ROW OUT of "Select with area, not barcoded", so one that
@@ -8606,6 +9049,15 @@ function applySortDayFrom(rows, opts) {
     day: day,
   });
   actualAreaStore = rolled.areas;
+  // The desk clear tombstones roll with the areas they are about (#918
+  // round-two finding 2). A rejection is evidence about TODAY's stop, so one
+  // that outlived its sort day would refuse an area on a sort it knows nothing
+  // about — the same reasoning rollToSortDay applies to the areas themselves.
+  // Above the save-result branching below because it cannot fail loudly enough
+  // to be worth a second warning channel: a dropped write here costs a
+  // re-application the human can clear again, not a routing decision.
+  deskClearedStore = RemoteAreas.rollCleared(deskClearedStore, day);
+  saveDeskCleared();
   // NOT ROLLED BACK ON A DROPPED WRITE, AND THAT ASYMMETRY IS THE DECISION
   // (#777, split from #716). Read this before making it match the notes half
   // below.
@@ -8724,6 +9176,11 @@ function applySortDayFrom(rows, opts) {
   // this group because it is the only one here that is not a record of work —
   // nothing depends on its order, and it costs nothing if it never runs.
   applyNewSinceSortDay(day);
+  // LAST, after the roll above. rollToSortDay demotes areas typed on an earlier
+  // sort day; pulling first would race an incoming area against that demotion.
+  // The pull is async, so this is belt-and-braces rather than the only thing
+  // keeping the order — but the order is the decision, so it is written down.
+  deskPullForDay();
 }
 
 // canPersistArea() -> whether a typed Goes To area can be given a sort day.
@@ -10400,6 +10857,11 @@ function commitGoesTo(label, raw) {
   // Membership BEFORE the write, so the re-render below fires on a row leaving
   // 503 as well as one entering it.
   const was503 = filed503Snapshot();
+  // What was in this row BEFORE the write, kept for the 999 Desk clear
+  // tombstone below (#918 round-two finding 2). It has to be read here: set()
+  // with an empty value DELETES the entry, so after the write there is nothing
+  // left to say whose answer was just rejected.
+  const beforeEntry = actualAreaStore[label];
   const result = ActualArea.set(actualAreaStore, label, raw, {
     items: items,
     // The LOADED REPORT's sort day, not the device's (#695). Stamping with the
@@ -10411,6 +10873,21 @@ function commitGoesTo(label, raw) {
     by: deviceName,
   });
   actualAreaStore = result.store;
+  // THE 999 DESK CLEAR TOMBSTONE (#918 round-two finding 2). Clearing a box
+  // holding the OTHER desk's area is a correction, and without this it is the
+  // one correction that cannot stick: the entry is deleted, her file still
+  // lists the label, and the next pull re-applies her value with her pill on
+  // it. Typing a real value here DROPS any tombstone instead — his own answer
+  // governs the row from then on and setRemote cannot touch it. Every rule
+  // (which entries qualify, the day stamp, matching on value not author) lives
+  // in lib/remote-areas.js.
+  //
+  // Spoken FIRST of the three warnings this commit can raise, which on a
+  // last-writer-wins channel makes it the lowest precedence of the three: a
+  // package about to be walked to the wrong belt (drift) outranks an area that
+  // will not survive a refresh, which outranks a rejection that will be undone
+  // by a sync that has not happened yet.
+  if (!recordDeskClear(label, beforeEntry)) warnDeskClearNotSaved();
   const saved = saveActualAreas();
   // Spoken BEFORE the drift guard on purpose. Both claim the warning channel and
   // the last writer wins, so this ordering hands precedence to the drift guard:
@@ -10449,6 +10926,10 @@ function commitGoesTo(label, raw) {
   // The 503 side of the commit: auto-log every filing and un-filing this write
   // touched, and move the rows between the working list and the 503s tab.
   commit503(result.changed, was503, commitGoesTo);
+  // Publish to the other desk (#913), debounced. A no-op until the device is
+  // named and the 999 Desk sync is configured, so an unconfigured tool behaves
+  // exactly as it did before this feature.
+  scheduleDeskPublish();
 }
 
 function repaintGoesTo(label) {
@@ -12367,6 +12848,10 @@ function commitPostSortGoesTo(label, raw) {
   // early lane is not a place where 503 means less.
   const plan = IbnoWorkLoop.dockFlexPlan(items, label);
   const was503 = filed503Snapshot();
+  // Read BEFORE the write, for the 999 Desk clear tombstone below — the same
+  // reason commitGoesTo reads it: clearing deletes the entry, so afterwards
+  // there is nothing left to say whose answer was rejected.
+  const beforeEntry = actualAreaStore[label];
   // Stamped with the loaded report's sort day, same clock as commitGoesTo (#695).
   const result = ActualArea.setEarly(actualAreaStore, label, raw, {
     items: items,
@@ -12377,6 +12862,13 @@ function commitPostSortGoesTo(label, raw) {
     by: deviceName,
   });
   actualAreaStore = result.store;
+  // The 999 Desk clear tombstone, on BOTH lanes (#918 round two). ADR 0021
+  // gives the Post Sort report the main slot, so this is the lane the clear
+  // usually happens on — recording it only in commitGoesTo would have fixed the
+  // bug on the lane Tyler uses least. A dropped write is reported on the same
+  // terms as commitGoesTo's, and spoken first for the same precedence reason
+  // (#918 round-three finding 6).
+  if (!recordDeskClear(label, beforeEntry)) warnDeskClearNotSaved();
   // DRIFT GUARD (#697), now that this lane spreads too. Same reasoning as
   // commitGoesTo: preview and write derive the stop from the same key, so they
   // agree by construction, and a disagreement means the spread reached outside
@@ -12428,6 +12920,12 @@ function commitPostSortGoesTo(label, raw) {
   // Manual Review lane if both reports overlap, so this lane's own writes can
   // change what those buttons should say.
   updateSelectAreaButtons();
+  // Publish to the other desk (#913). BOTH lanes publish, for the same reason
+  // both lanes stamp `by`: under ADR 0021 the Post Sort report holds the main
+  // slot, so this is the lane most of a normal day's areas are typed in. Wiring
+  // only commitGoesTo would have shipped a feature that does nothing on the day
+  // it was built for (#732/#744/#745 are that mistake).
+  scheduleDeskPublish();
 }
 
 let goesToNoteTimer = null;
@@ -16826,6 +17324,11 @@ syncCopyModeControl();
 // report says which day it is (#695). Loaded BEFORE any restore renders rows,
 // so a restored session's inputs come up already filled.
 loadActualAreas();
+// The 999 Desk clear tombstones, beside the areas they are about and BEFORE the
+// boot pull below — a tombstone that loaded after the pull would let the first
+// read of the shift re-apply an area a human already rejected, which is the
+// exact bug it exists to fix, once per morning (#918 round-two finding 2).
+loadDeskCleared();
 loadAreaNotes();  // before restoreSession, which sets the sort day and may roll areas into notes
 loadBarcodeDone();
 loadParked();     // seed only: applySortDayFrom dates it once a report names the sort day (#698). Nothing here resets it (#730)
@@ -16895,6 +17398,20 @@ applyRestingWorkMode();
 // Cross-device: pull-merge the shared Repeat History on load (#176). No-op unless
 // sync is configured; offline degrades to the local cache.
 ibnoPullOnLoad();
+
+// The other desk's areas (#913). AFTER the restore above, because the sort-day
+// gate reads the LOADED REPORT's day — running this first would gate every
+// incoming file against an empty day and silently apply nothing.
+//
+// Through deskPullForDay(), not deskPullOnLoad(), and that is finding 9's fix
+// at this end (the other end is in applySortDayFrom). On a warm reload the
+// restore above has already named the day and already pulled, so this is a
+// no-op instead of a second round trip; on a genuine COLD boot there is no day
+// yet, so there is nothing to gate an incoming file against and no request is
+// worth making — the first report drop pulls instead. The pill still gets its
+// resting state either way.
+deskPullForDay();
+refreshDeskSyncStatus();
 </script>
 <script>ToolHelpers.pinHeader();</script>
 </body>
