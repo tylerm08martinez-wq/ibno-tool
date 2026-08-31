@@ -1052,6 +1052,18 @@
     .sync-field:focus { outline: none; border-color: #4D148C; }
     #sync-settings-status, #device-name-status { font-size: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
     #sync-settings-status.show, #device-name-status.show { opacity: 1; }
+    /* #desk-settings-status was in NEITHER rule above (#923). It carries the
+       literal text "✓ Saved" in the markup and had no opacity of its own, so it
+       rendered at full strength from first paint — a device that had never been
+       configured showed a green tick beside the button that configures it. That
+       is the same class of lie this issue is about, one element over.
+       Tokens, not hexes: the two rules above hardcode #16a34a, which the pill
+       comment further up measured at 3.30:1 in light and therefore below AA
+       (#920). --ok-ink and --danger-ink carry a value per theme. .warn also
+       drops white-space:nowrap, because its text is a sentence and not a tick. */
+    #desk-settings-status { font-size: 12px; font-weight: 600; color: var(--ok-ink); opacity: 0; transition: opacity 0.3s; }
+    #desk-settings-status.show { opacity: 1; }
+    #desk-settings-status.warn { color: var(--danger-ink); opacity: 1; white-space: normal; }
   
     /* ─── WORK MODE ───────────────────────────────────────────────
        A layer over Needs Manual Review, off by default. It only ever ADDS: the
@@ -1782,7 +1794,7 @@
 
     <hr class="settings-divider">
     <label>999 Desk area sync (live, between desks)</label>
-    <div class="hint-text">Optional, and <strong>separate from the Repeat History sync above on purpose</strong> — its own private data-only repo and its own token, so neither one can reach the other's data. Publishes the work areas you type today and picks up the other desk's, marked with their name. <strong>Areas only.</strong> Filed rows and Park never travel on this loop. Needs <em>This device's name</em> above to be set: an unnamed device neither publishes nor reads, because an area it cannot attribute would land in a Goes To box looking like your own work.</div>
+    <div class="hint-text">Optional, and <strong>separate from the Repeat History sync above on purpose</strong> — its own private data-only repo and its own token, so neither one can reach the other's data. Publishes the work areas you type today and picks up the other desk's, marked with their name. <strong>Areas only.</strong> Filed rows and Park never travel on this loop. Needs <em>This device's name</em> above to be set: an unnamed device neither publishes nor reads, because an area it cannot attribute would land in a Goes To box looking like your own work. Saving here saves that name too, so this button on its own is enough. <strong>Owner, repo and branch are already filled in</strong> — every desk in the station points at the same repo, so all a new machine needs is a token and a device name. Type over them only for a different station or a test repo.</div>
     <div class="sync-fields">
       <input type="password" id="desk-token" class="sync-field" placeholder="GitHub token (fine-grained, Contents R/W, this repo only)" autocomplete="off" spellcheck="false">
       <input type="text" id="desk-owner" class="sync-field" placeholder="Repo owner" autocomplete="off" spellcheck="false">
@@ -3826,6 +3838,28 @@ const DESK_TOKEN_KEY  = 'ibno_desk_token';
 const DESK_COORDS_KEY = 'ibno_desk_coords';
 const DESK_SHA_KEY    = 'ibno_desk_sha';
 
+// THE ONE PLACE THE STATION'S DESK REPO IS NAMED (#922).
+//
+// Unlike the Repeat History channel above — which really does point at a
+// configurable repo and its own ibno-data branch — the desk channel is the same
+// three constants on every machine in the building. Only the token varies per
+// device. Making all three fields blank on a fresh profile is three retyped
+// strings per Windows profile, so three typo surfaces, AND A TYPO DOES NOT FAIL
+// AT THE SAVE BUTTON: a wrong-but-non-empty owner passes hasCoords() cleanly and
+// only fails later at the network, on a different surface, after the panel is
+// closed. On 2026-08-31 two devices were set up, both believed correct, and
+// ibno-desk-areas still held nothing but its README.
+//
+// These are DEFAULTS, not hardcoding. They are applied to the INPUTS by
+// fillDeskSettings when the stored value is empty, and nothing else reads them:
+// a second station or a test repo is still reachable by typing over the box.
+// Deliberately NOT a fallback inside SyncController — the controller is
+// channel-agnostic, which is the property that let the desk channel reuse it
+// (ADR-0014) — and deliberately NOT three literals in the markup placeholders,
+// because a placeholder is not a value and three copies are three things to
+// forget.
+const DESK_DEFAULT_COORDS = { owner: 'tylerm08martinez-wq', repo: 'ibno-desk-areas', branch: 'main' };
+
 function setDeskSyncStatus(kind, text) {
   if (typeof document === 'undefined' || !document) return;
   const el = document.getElementById('desk-sync-status');
@@ -4118,11 +4152,69 @@ function fillDeskSettings() {
   const c = deskCtl.getCoords();
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('desk-token', deskCtl.getToken());
-  set('desk-owner', c.owner); set('desk-repo', c.repo); set('desk-branch', c.branch);
+  // DEFAULTS LAND ON THE INPUT, NEVER ON STORAGE (#922).
+  //
+  // A prefilled box is not a configured channel. Writing DESK_DEFAULT_COORDS
+  // into ibno_desk_coords here would make hasCoords() true — and therefore
+  // syncReady() a coin-flip on the token alone — for a device nobody has set
+  // up, which is #918 round-two finding 3 rebuilt from the other end: the panel
+  // reporting a channel as configured while it neither reads nor publishes.
+  // The gate still reads storage, storage still only moves on Save, and
+  // saveDeskSettings still reads whatever is in the box — so clearing a field
+  // and saving switches the channel off exactly as before.
+  set('desk-owner',  c.owner  || DESK_DEFAULT_COORDS.owner);
+  set('desk-repo',   c.repo   || DESK_DEFAULT_COORDS.repo);
+  set('desk-branch', c.branch || DESK_DEFAULT_COORDS.branch);
 }
 
 function saveDeskSettings() {
   const val = id => ((document.getElementById(id) || {}).value || '').trim();
+
+  // THIS BUTTON COMMITS THE DEVICE NAME TOO (#923).
+  //
+  // The name is the off switch for the whole channel in both directions —
+  // deskPublishReady() and deskReadReady() both require it — so it is the
+  // highest-consequence field in the panel. It was also the one most likely to
+  // be left unsaved, because it lives above a divider in its own section with
+  // its own button, so a user who has typed it has already "done" that section.
+  // Fill in all five values, click the one Save that names the feature you are
+  // switching on, and the channel stays off.
+  //
+  // That is not hypothetical: on 2026-08-31 two devices were set up this way,
+  // both believed correct, and ibno-desk-areas held nothing but its README.
+  // The pill did say so — it renders right here — but it named a field the user
+  // had typed into, so it read as already done.
+  //
+  // Warning about it was the other option and it is strictly weaker: a message
+  // can be misread, and this one already was. Committing the name removes the
+  // state instead of describing it. The name KEEPS its own section and its own
+  // button, because it also drives the #886 author pill on a device that never
+  // syncs, so it is not a desk-channel field and must not look like one.
+  //
+  // Through saveDeviceName(), never by writing DEVICE_NAME_KEY here: that
+  // function owns the blank-clears semantics, the read-back verification that
+  // exists because ToolHelpers.remove() swallows its own throw, and the lane
+  // repaint that stops already-painted author pills outliving a cleared name.
+  //
+  // ONLY WHILE THE PANEL IS OPEN, AND ONLY WHEN THE BOX DISAGREES WITH WHAT IS
+  // STORED.
+  //
+  // The open check is not belt-and-braces, it is the correctness condition, and
+  // the existing suite caught its absence immediately: a CLOSED panel has never
+  // rendered into #device-name-input, so the box reads empty while a name is
+  // stored — and the first draft of this function read that empty box as an
+  // intent to clear and DELETED THE DEVICE NAME. That is the channel's off
+  // switch in both directions, silently thrown, from a field the user was not
+  // looking at. The box only speaks for the user while it is on screen.
+  //
+  // The disagreement check is a smaller matter: saveDeviceName() rebuilds the
+  // early lane and carries the work cursor across it, which is real work to do
+  // on every save of an unrelated field.
+  const panel  = document.getElementById('settings-panel');
+  const nameEl = document.getElementById('device-name-input');
+  const panelOpen = !!panel && panel.style.display === 'block';
+  if (panelOpen && nameEl && normalizeDeviceName(nameEl.value) !== deviceName) saveDeviceName();
+
   deskCtl.saveSettings({ token: val('desk-token'), owner: val('desk-owner'), repo: val('desk-repo'), branch: val('desk-branch') });
   // THROUGH THIS FUNCTION, NOT saveSettings' OWN refreshStatus (#918 round-two
   // review finding 3). deskCtl.saveSettings ends in SyncController.refreshStatus,
@@ -4134,7 +4226,28 @@ function saveDeskSettings() {
   // user is looking.
   refreshDeskSyncStatus();
   const st = document.getElementById('desk-settings-status');
-  if (st) { st.textContent = '✓ Saved'; st.classList.add('show'); setTimeout(() => st.classList.remove('show'), 2000); }
+  if (st) {
+    // "SAVED" AND "ON" ARE DIFFERENT CLAIMS, AND THIS SPAN MUST NOT CONFLATE
+    // THEM (#923, and #918 round-two finding 3 is the reason the distinction
+    // is drawn from the gate rather than from the fact that a write happened).
+    //
+    // The token and the coords really were saved, so refusing to save them
+    // would only throw away a PAT the Admin has to be re-issued in person. What
+    // the button must not do is let a bare green tick stand for a channel that
+    // is switched off. After the commit above, this can only be reached by a
+    // device whose name box is genuinely empty — which is a real state, and the
+    // one the pill beside this span already names.
+    const unnamed = deskCtl.syncReady() && !deskReadReady();
+    st.textContent = unnamed
+      ? '⚠ Token and repo saved — but the channel is OFF until this device has a name. Type it in “This device’s name” above.'
+      : '✓ Saved';
+    st.classList.toggle('warn', unnamed);
+    st.classList.add('show');
+    // The tick fades; the warning does NOT. A message that removes itself after
+    // two seconds is a message the user can miss by looking at the keyboard,
+    // and this one is the whole point of the change. It clears on the next save.
+    if (!unnamed) setTimeout(() => st.classList.remove('show'), 2000);
+  }
 }
 
 function refreshSyncStatus()   { syncCtl.refreshStatus(); }
