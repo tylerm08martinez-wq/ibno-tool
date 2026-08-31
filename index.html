@@ -1019,9 +1019,33 @@
     .hist-prune { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-fainter); cursor: pointer; padding: 3px 9px; font-size: 13px; }
     .hist-prune:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
     .hist-foot { padding: 10px 18px; font-size: 11px; color: var(--text-fainter); border-top: 1px solid var(--border-soft); }
-    .ibno-sync-status { font-size: 12px; font-weight: 600; color: var(--text-faint); white-space: nowrap; }
-    .ibno-sync-status.ok { color: #16a34a; } .ibno-sync-status.syncing { color: var(--brand-ink); }
-    .ibno-sync-status.error { color: #dc2626; } .ibno-sync-status.off { color: #aaa; }
+    /* Both sync pills (#ibno-sync-status for Repeat History, #desk-sync-status for
+       the 999 Desk) wear this one rule, so every value here is spent twice. It was
+       four hardcoded hexes, and THREE of them failed AA at 12px/600 — but each in a
+       DIFFERENT theme, which is why the eye never caught it (issue #920):
+         .ok    #16a34a  3.30:1 light  / 4.97:1 dark   -> failed LIGHT
+         .error #dc2626  4.83:1 light  / 3.39:1 dark   -> failed DARK
+         .off   #aaa     2.32:1 light  / 7.04:1 dark   -> failed LIGHT
+       Darkening the green as #920 suggested would have fixed light and broken dark
+       (#15803d is 3.26:1 there). One hex cannot serve both surfaces, which is the
+       whole reason --ok-ink and --danger-ink exist with a value per theme. Spend the
+       tokens instead; .syncing already did, and was the only state that passed both.
+       The base color is a DEFENSIVE DEFAULT and is not reachable in the product.
+       It is easy to believe otherwise, and an earlier draft of this comment did:
+       sync-controller.js's DEFAULT_MESSAGES is keyed by STATE name (idle, dirty,
+       notReady, pushError, pullError, auth, coords, conflict) but each entry is a
+       [cssKind, text] tuple, and status() passes m[0] — the KIND. Both channels
+       (:3756, :3852) then remap the rest, dirty -> 'ok' on each. So the only classes
+       that ever reach this rule are off / ok / error / syncing, and all four have a
+       rule above. pushError and auth already render --danger-ink; errors already look
+       like errors. Reading the state names as class names is the trap — grep for the
+       tuple's FIRST element, not the key. The base still steps --text-faint ->
+       --text-muted (2.85:1 -> 5.74:1 in light) so the empty pill before the first
+       setStatus, and any kind a future channel adds without a rule, start above AA
+       instead of below it. */
+    .ibno-sync-status { font-size: 12px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+    .ibno-sync-status.ok { color: var(--ok-ink); } .ibno-sync-status.syncing { color: var(--brand-ink); }
+    .ibno-sync-status.error { color: var(--danger-ink); } .ibno-sync-status.off { color: var(--text-muted); }
     .settings-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
     .sync-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
     .sync-field { width: 100%; max-width: 420px; font-size: 13px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 7px 10px; background: var(--field-bg); color: var(--text); }
