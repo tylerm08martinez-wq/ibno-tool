@@ -623,6 +623,36 @@
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
       color: var(--text-faint); text-transform: uppercase;
     }
+    /* The Other work areas toolbar (#874): two rows, actions grouped by the
+       population they act on. Scoped to the section, like .lane-scope above.
+       Buttons never wrap internally — a label that folds to three lines was
+       the whole complaint — and each row wraps as a unit instead, so a phone
+       width stacks the groups rather than squeezing them. The scope caption
+       is plain text, not a title, because the section-vs-search-slice
+       distinction (#789) has to be readable without hovering. Theme tokens
+       only, so both themes follow lib/theme.js. */
+    .section.other-areas .other-areas-toolbar {
+      flex-direction: column; align-items: stretch; gap: 8px;
+      cursor: default;
+    }
+    .section.other-areas .other-areas-toolbar:hover { background: var(--surface); }
+    .section.other-areas .other-areas-toolbar .btn { white-space: nowrap; }
+    .section.other-areas .tb-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .section.other-areas .tb-view { justify-content: space-between; }
+    .section.other-areas .tb-view-controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto;
+    }
+    .section.other-areas .action-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .section.other-areas .action-group + .action-group {
+      border-left: 1px solid var(--border-strong); padding-left: 10px;
+    }
+    .section.other-areas .scope-cap {
+      font-size: 11px; font-weight: 600; letter-spacing: .02em;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+    /* On a phone the two stacked rows pin ~55% of a 390-wide viewport under the
+       page header; let the toolbar scroll away there instead of the table. */
+    @media (max-width: 640px) { .section.other-areas .other-areas-toolbar { position: static; } }
     .sort-select, .manual-search {
       border: 1px solid var(--border-strong);
       border-radius: 5px;
@@ -2235,29 +2265,46 @@
     </div>
   </div>
   <div id="other-areas-body" style="display:none">
-    <div class="section-header">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="filter-note">same rows, same columns, same coding controls</span>
+    <!-- The toolbar (#874). Two rows, grouped by the population each button
+         acts on, so the whole-section pair can never be mistaken for a search
+         slice: row 1 carries the actions under a visible scope caption per
+         group ("Checked rows" / "Whole section, not the search"), row 2 the
+         view settings (search, sort). Prototyped as four variants on the real
+         page at 1280/1024/390 in both themes; this was the only one where no
+         label wrapped, nothing overflowed at 390, every action stayed one
+         click away, and the section scope was readable without hovering.
+         Ids, handlers, labels and counts are unchanged from #704/#733. -->
+    <div class="section-header other-areas-toolbar">
+      <div class="tb-row tb-actions">
+        <div class="action-group" role="group" aria-label="Checked rows">
+          <span class="scope-cap">Checked rows</span>
+          <button class="btn btn-gray" id="copy-selected-other-areas" onclick="copySelectedManual('other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+          <button class="btn btn-gray" id="select-area-other" onclick="selectRowsWithArea('other')" title="Check every row here that has a Goes To area and has not been barcoded yet — the outstanding batch, so a second click never reprints cards you already have (#733)">&#10003; Select with area, not barcoded (0)</button>
+          <button class="btn btn-gray" id="barcode-selected-other-areas" onclick="barcodeSelected('other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+        </div>
+        <!-- ALL, not the search slice (#704, #789). See otherAreasAllRows(). -->
+        <div class="action-group" role="group" aria-label="Whole section, not the search">
+          <span class="scope-cap">Whole section, not the search</span>
+          <button class="btn btn-gray" id="copy-all-other-areas" onclick="copyAllOtherAreas()" title="Copy EVERY row in this section (tracking # or full barcode per the Copy-as toggle), one per line — the whole section, not the rows a search is currently showing">Copy all (0)</button>
+          <button class="btn btn-gray" id="barcode-all-other-areas" onclick="barcodeAllOtherAreas()" title="Print a barcode sheet for EVERY row in this section — the whole section, not the rows a search is currently showing. Read-only; it never codes a row, and a card shows an area only if you typed one.">&#9612;&#9613;&#9612; Barcode all (0)</button>
+        </div>
       </div>
-      <div class="right">
-        <button class="btn btn-gray" id="copy-selected-other-areas" onclick="copySelectedManual('other')" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
-        <button class="btn btn-gray" id="select-area-other" onclick="selectRowsWithArea('other')" title="Check every row here that has a Goes To area and has not been barcoded yet — the outstanding batch, so a second click never reprints cards you already have (#733)">&#10003; Select with area, not barcoded (0)</button>
-        <button class="btn btn-gray" id="barcode-selected-other-areas" onclick="barcodeSelected('other')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
-        <!-- ALL, not the search slice (#704). See otherAreasAllRows(). -->
-        <button class="btn btn-gray" id="copy-all-other-areas" onclick="copyAllOtherAreas()" title="Copy EVERY row in this section (tracking # or full barcode per the Copy-as toggle), one per line — the whole section, not the rows a search is currently showing">Copy all (0)</button>
-        <button class="btn btn-gray" id="barcode-all-other-areas" onclick="barcodeAllOtherAreas()" title="Print a barcode sheet for EVERY row in this section — the whole section, not the rows a search is currently showing. Read-only; it never codes a row, and a card shows an area only if you typed one.">&#9612;&#9613;&#9612; Barcode all (0)</button>
-        <input type="text" class="manual-search" id="other-areas-search" placeholder="Search firm or address..." aria-label="Search other work areas">
-        <select class="sort-select" id="other-areas-sort" aria-label="Sort other work areas">
-          <option value="report">Report order</option>
-          <option value="time">Newest scan first</option>
-          <option value="time-asc">Oldest scan first</option>
-          <option value="address">Address (group destination)</option>
-          <option value="reason">Reason</option>
-          <option value="wa">Work area</option>
-          <option value="zip">ZIP code</option>
-          <option value="isp">Service provider (groups same address)</option>
-          <option value="goesto">Goes to (work area)</option>
-        </select>
+      <div class="tb-row tb-view">
+        <span class="filter-note">same rows, same columns, same coding controls</span>
+        <div class="tb-view-controls">
+          <input type="text" class="manual-search" id="other-areas-search" placeholder="Search firm or address..." aria-label="Search other work areas">
+          <select class="sort-select" id="other-areas-sort" aria-label="Sort other work areas">
+            <option value="report">Report order</option>
+            <option value="time">Newest scan first</option>
+            <option value="time-asc">Oldest scan first</option>
+            <option value="address">Address (group destination)</option>
+            <option value="reason">Reason</option>
+            <option value="wa">Work area</option>
+            <option value="zip">ZIP code</option>
+            <option value="isp">Service provider (groups same address)</option>
+            <option value="goesto">Goes to (work area)</option>
+          </select>
+        </div>
       </div>
     </div>
     <table>
@@ -6231,26 +6278,41 @@ function laneBody(el) { return el && el.closest('tbody'); }
 //                 whole point of #605.
 //
 // The mark rides on the ROW rather than in a Set, because it has to survive
-// exactly as long as the check it describes and nothing longer: a row that
-// leaves the DOM takes it with it. renderManualSectionRows carries it across a
-// rebuild alongside the check itself, in one place, so the two can never drift.
+// exactly as long as the check it describes and nothing longer.
 //
-// #871: "one place" is one FUNCTION, not one loop. renderManualSectionRows
-// carries the mark in TWO walks — a full-report one beside the check, and an
-// early one that carries the mark alone because postSortChecked already owns
-// that row's check. Both live in that function, so they still cannot drift
-// apart; what they must not do is diverge on WHICH provenances get carried,
-// which is precisely the hole this ticket closed.
+// ── ONE CARRIER PER PROVENANCE (#899) ───────────────────────────────────────
 //
-// #871 REVIEW FINDING 1: a repaint is not the only thing an EARLY row's mark
-// has to survive. Its CHECK lives in postSortChecked, which outlives the DOM
-// entirely, so a fold / unfold — or anything else that takes the row out of the
-// DOM and brings it back — returned it checked but unmarked. The mark therefore
-// ALSO lives in postSortDeliberate, written and cleared line-for-line beside
-// postSortChecked; buildManualRow's early branch restores it from there. Read
-// postSortDeliberate's declaration for why that is not a second writer for the
-// check, and why inheriting postSortChecked's clear discipline exactly is what
-// keeps the resurrection hazard this comment warns about closed.
+// "Exactly as long as the check" is the whole rule, and it decides the carrier
+// on its own — a mark is carried by whatever carries its check, and by nothing
+// else:
+//
+//   FULL-REPORT row .. the check lives only on the checkbox node, so the DOM is
+//                      the carrier. renderManualSectionRows captures mark and
+//                      check in ONE walk and restores them in ONE loop, so they
+//                      cannot drift; a row that leaves the DOM takes both.
+//   EARLY row ........ the check lives in postSortChecked, which outlives the
+//                      DOM, so the mark lives in postSortDeliberate beside it —
+//                      written and cleared line-for-line, never independently —
+//                      and buildManualRow's early branch restores it.
+//
+// #871 REVIEW FINDING 1 is why the early half needs a store at all: a repaint is
+// not the only thing an early row's mark has to survive. A fold / unfold — or
+// anything else that takes the row out of the DOM and brings it back — returned
+// it checked but unmarked, because its check came back from a place a DOM
+// capture cannot see.
+//
+// #871 shipped BOTH carriers for an early row: postSortDeliberate AND a
+// dedicated early walk in renderManualSectionRows. #899 deleted the walk. Its
+// cases are a strict SUBSET of the store's — the store covers the repaint, the
+// fold, a search and a disposition change; the walk covered only the repaint —
+// so it changed no outcome, nothing pinned it (deleting it left the whole suite
+// green), and two carriers for one piece of state is the shape drift starts
+// from. If you add a new writer of an early row's mark, put it beside
+// postSortChecked; do not carry it through the DOM.
+//
+// Read postSortDeliberate's declaration for why that store is not a second
+// writer for the CHECK, and why inheriting postSortChecked's clear discipline
+// exactly is what keeps the resurrection hazard this comment warns about closed.
 const DELIBERATE_ATTR = 'userChecked';
 function markDeliberate(tr, on) {
   if (!tr || !tr.dataset) return;
@@ -7126,25 +7188,51 @@ function renderManualSectionRows() {
   // 2). Captured in the same walk and restored in the same one below, so the
   // mark cannot outlive or fall behind the check it describes.
   const carriedDeliberate = new Set();
-  // ...and the EARLY rows' deliberate marks, in their OWN set (#871).
   //
-  // The walk below is FULL_ROW_SEL — `tr[data-label]:not([data-provenance=
-  // "early"])` — so before this ticket an early row's mark was simply dropped
-  // on every repaint, while its CHECK came back from postSortChecked. That
-  // asymmetry is the whole defect: the sweep in bulkApply is NOT scoped to
-  // FULL_ROW_SEL (it is `tr[data-label][data-bucket=...]`, which reaches early
-  // rows on purpose — see #703 review finding 1 there), so a repaint left a
-  // deliberately-checked early row looking blanket-checked and the next sweep
-  // would release it. Exactly what #676 finding 2's exemption exists to stop,
-  // one provenance over.
+  // ── ONE CARRIER PER PROVENANCE (#899) ─────────────────────────────────────
   //
-  // A SEPARATE set, and a separate restore, because the two halves are NOT the
-  // same job. carriedChecked deliberately excludes early rows: postSortChecked
-  // is the single source of truth for an early row's CHECK and a second writer
-  // here would be the bug in the other direction. The MARK has no such owner —
-  // nothing but the row itself carries it — so carrying it costs no second
-  // writer, and the restore below writes the mark and never the check.
-  const carriedEarlyDeliberate = new Set();
+  // This walk is FULL_ROW_SEL — `tr[data-label]:not([data-provenance="early"])`
+  // — and that scope is the WHOLE contract now, not an oversight. A deliberate
+  // mark is carried by exactly whatever carries the check it describes, so
+  // there is one carrier per provenance and never two for one row:
+  //
+  //   FULL-REPORT row .. its CHECK lives only on the checkbox node, so the DOM
+  //                      is its carrier. carriedChecked and carriedDeliberate
+  //                      are captured in ONE walk here and restored in ONE loop
+  //                      below, so the mark cannot outlive or fall behind the
+  //                      check. This is the ONLY carrier a full row has: delete
+  //                      it and a hand-picked selection reads as blanket-checked
+  //                      after the next repaint, and #605's sweep in bulkApply —
+  //                      `tr[data-label][data-bucket="…"]:not([data-user-checked])`
+  //                      — silently releases it.
+  //   EARLY row ........ its CHECK lives in postSortChecked, which outlives the
+  //                      DOM entirely, so its MARK lives in postSortDeliberate
+  //                      beside it and buildManualRow's early branch restores
+  //                      both. Nothing about an early row's mark is carried
+  //                      here, and the sweep still reaches early rows on purpose
+  //                      (#703 review finding 1), so the store is what exempts
+  //                      them.
+  //
+  // #871 first closed the early hole by ALSO capturing early marks off the
+  // pre-rebuild DOM, into a third `carriedEarlyDeliberate` set restored in a
+  // third loop below. #899 removed that. Measured, not assumed: with the store's
+  // restore in buildManualRow deleted, the early fold round-trip goes RED and
+  // the early REPAINT stays green — the walk covered only the repaint, which the
+  // store already covered, so it was a strict subset that changed no outcome and
+  // that nothing pinned. Two carriers for one piece of state, one silently
+  // subsuming the other, is the shape drift starts from: a later edit to either
+  // path fixes nothing for the other and the suite stays green regardless.
+  //
+  // WHAT THIS MEANS FOR AN EDIT HERE: if a NEW writer of an early row's mark is
+  // added, it must write postSortDeliberate line-for-line beside postSortChecked
+  // (as onPostSortCheck, selectRowsWithArea and applyRangeRowSelection all do)
+  // rather than being carried back here. Adding a fourth capture in this
+  // function re-opens #899.
+  //
+  // Pinned by tests/ibno-deliberate-mark-carrier-dom.test.js: deleting the
+  // carriedDeliberate restore below goes RED on the full-report lane, and the
+  // early half's fold round-trip goes RED without postSortDeliberate — a case no
+  // DOM capture can reach, which is what proves the two are not duplicates.
   MANUAL_LANES.forEach(lane => {
     const body = document.getElementById(lane.tbody);
     if (!body) return;
@@ -7154,11 +7242,6 @@ function renderManualSectionRows() {
         if (!tr) return;
         carriedChecked.add(tr.dataset.label);
         if (isDeliberate(tr)) carriedDeliberate.add(tr.dataset.label);
-      });
-    body.querySelectorAll(EARLY_ROW_SEL + ' .manual-check:checked')
-      .forEach(cb => {
-        const tr = cb.closest('tr[data-label]');
-        if (tr && isDeliberate(tr)) carriedEarlyDeliberate.add(tr.dataset.label);
       });
   });
   const { bodies, open } = openLanes(MANUAL_LANES.map(l => l.tbody),
@@ -7321,26 +7404,12 @@ function renderManualSectionRows() {
       });
     });
   }
-  // The early half of that restore (#871). Separate loop, and it writes ONLY
-  // the mark: buildManualRow has already restored this row's checkbox from
-  // postSortChecked, which stays that state's single writer.
-  //
-  // Gated on the checkbox actually coming back checked, so the mark can never
-  // outlive the check it describes — the same "exactly as long as the check and
-  // nothing longer" contract markDeliberate states. If the fold, a search or a
-  // resolve means the row is not rendered at all, there is nothing to restore
-  // it onto and it is correctly forgotten.
-  if (carriedEarlyDeliberate.size) {
-    MANUAL_LANES.forEach(lane => {
-      const body = document.getElementById(lane.tbody);
-      if (!body) return;
-      body.querySelectorAll(EARLY_ROW_SEL).forEach(tr => {
-        if (!carriedEarlyDeliberate.has(tr.dataset.label)) return;
-        const cb = tr.querySelector('.manual-check');
-        if (cb && cb.checked) markDeliberate(tr, true);
-      });
-    });
-  }
+  // THERE IS NO EARLY HALF OF THIS RESTORE, and that is #899's decision rather
+  // than an omission: buildManualRow's early branch has already put BOTH an
+  // early row's checkbox (from postSortChecked) and its deliberate mark (from
+  // postSortDeliberate) back, under the same "only while the check is on" gate
+  // this loop's full-report half uses. A second restore here would be a second
+  // carrier for state that already has one — see the capture above.
   renderCodedChip();
   updateManualBadge();
   updateBulkButtons();
@@ -10887,6 +10956,11 @@ function goesToCell(item, opts) {
     '<input type="text" class="goesto-input' + hasAreaClass(item && item.label) + '"' +
     ' maxlength="' + ActualArea.MAX_LEN + '"' +
     ' value="' + ToolHelpers.escapeHtml(v) + '"' +
+    // What the TOOL put in this box (#901). paintArea keeps it in step on every
+    // repaint; humanTouched reads it to tell "he changed this" from "he only
+    // looked at it", which is what makes a stale blur distinguishable from a
+    // deliberate one.
+    ' data-painted="' + ToolHelpers.escapeHtml(v) + '"' +
     ' data-label="' + ToolHelpers.escapeHtml(item.label) + '"' +
     ' placeholder="—" aria-label="Actual work area for ' + ToolHelpers.escapeHtml(item.label) + '"' +
     ' title="' + ToolHelpers.escapeHtml(title) + '">' +
@@ -10951,6 +11025,7 @@ function areaNoteHtml(label, currentArea) {
 function attachGoesToInput(tr, item) {
   const input = tr.querySelector('.goesto-input');
   if (!input) return;
+  trackAreaTyping(input);
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('keydown', e => {
     e.stopPropagation();  // the page-level C/B copy-mode shortcuts must not fire while typing
@@ -10959,10 +11034,15 @@ function attachGoesToInput(tr, item) {
     // the next row that still needs him with ITS street already copied — so
     // the pass never leaves the keyboard.
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); advanceFromRow(tr); }
-    else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
+    else if (e.key === 'Escape') { paintArea(input, actualAreaOf(item)); input.blur(); }
   });
   input.addEventListener('change', e => e.stopPropagation());
-  input.addEventListener('blur', () => commitGoesTo(item.label, input.value));
+  // A blur from a field he never touched, over an area that landed while it had
+  // focus, is not his write and must not commit (#901 item 3).
+  input.addEventListener('blur', () => {
+    if (areaBlurIsStale(input, item.label)) return;
+    commitGoesTo(item.label, input.value);
+  });
 }
 
 // commitGoesTo(label, raw) -> persist, propagate to the same address, repaint
@@ -10970,6 +11050,11 @@ function attachGoesToInput(tr, item) {
 // propagation would be the wrong shape: rows changing off-screen with no notice
 // is how a human stops trusting the field.
 function commitGoesTo(label, raw) {
+  // THE AREA A FOCUSED BOX REFUSED TO SHOW (#901), taken BEFORE the refusal
+  // below: a value canPersistArea rejects never landed, so nothing was
+  // displaced and there is no disagreement to record — but the shadow must
+  // still be dropped, or it would surface against an unrelated later commit.
+  const shadow = takeShadowedArea(label);
   // No readable sort day means no expiry date, so the write is refused out
   // loud and the box snaps back to whatever is really stored.
   //
@@ -11059,6 +11144,8 @@ function commitGoesTo(label, raw) {
       (nowValue ? 'set to ' + nowValue : 'cleared'));
   }
   syncBarcodeDialogArea(label);
+  // His answer stands; the one it displaced goes on the surface (#901).
+  maybeSurfaceTypingConflict(label, shadow, beforeEntry);
   updateSelectAreaButtons();
   // The 503 side of the commit: auto-log every filing and un-filing this write
   // touched, and move the rows between the working list and the 503s tab.
@@ -11069,16 +11156,282 @@ function commitGoesTo(label, raw) {
   scheduleDeskPublish();
 }
 
+// ─── TYPING WINS, DISAGREEMENT SURFACES (issue #901, DECIDED by Tyler) ──────
+//
+// ADR-0023 made areas arrive from ANOTHER DEVICE mid-shift — a dropped Day
+// Export or a 999 Desk pull writes the store without anybody here touching a
+// key. So a stored-area change can now land while a human is mid-word in a
+// Goes To box, and the three outcomes on offer were: the import wins (his
+// keystroke is taken away), his typing wins and the import is dropped
+// (information is lost silently), or his typing wins and the import is SHOWN.
+// Tyler chose the third: TYPING WINS, DISAGREEMENT SURFACES.
+//
+// The person typing has just done the FRO lookup, so he holds the newest
+// information. The other desk's write is not wrong, it is OLDER — and it is
+// exactly the kind of disagreement lib/area-conflicts.js already exists to
+// hold. Discarding it would be the one outcome that loses information;
+// overwriting the keystroke is the one that loses trust.
+//
+// THE MECHANISM IS ONE MAP. When a painter refuses to write into a focused
+// field, the value it did not show is SHADOWED here: "the store says this, and
+// the human cannot see it". The shadow is then consumed by that field's commit,
+// which is where the two answers can finally be compared — see the
+// immediate-vs-on-blur decision on maybeSurfaceTypingConflict below.
+//
+// IT IS CONSUMED ONLY BY A COMMIT, never cleared by a repaint, and the
+// staleness guard is a VALUE CHECK rather than a lifetime:
+// maybeSurfaceTypingConflict refuses a shadow that no longer matches what the
+// store held immediately before the write.
+//
+// WHAT HAPPENS WHEN THE ROW IS TORN OUT FROM UNDER A FOCUSED BOX (PR #928
+// review finding 4). An earlier draft of this comment claimed the value check
+// covers it. IT DOES NOT, and the claim was a non-sequitur: a re-render does
+// not move the store, so a shadow left behind by one would still match and
+// would still be able to surface. What actually closes it is the platform —
+// removing the focused element from the document fires `blur`, so the field's
+// own commit runs and CONSUMES the shadow before the row is gone. Verified in
+// real Chrome: switching lanes mid-edit fired blur, the commit ran, the shadow
+// was consumed, exactly one legitimate conflict row appeared and no phantom
+// followed it.
+//
+// THE MAP'S LIFETIME IS OTHERWISE UNBOUNDED, and that is stated rather than
+// fixed. Nothing clears it on a sort-day roll, a report reload or a Day Export
+// restore. No reachable phantom was found — every entry is written while a
+// field has focus and every such field blurs — and the value check means a
+// survivor can only ever surface a disagreement that is still literally true of
+// the store. If a future change adds a painter that can shadow a field which
+// never blurs, clear the map at those three points rather than widening the
+// value check.
+const shadowedAreas = new Map();   // label -> { area, by }
+
+// paintArea(el, value) -> the ONE writer of a Goes To field's text, and it is
+// now literally the only one: the four Escape handlers (both row lanes, both
+// barcode dialogs) revert THROUGH it rather than assigning `.value` by hand
+// (PR #928 review finding 5, which found the claim untrue as first written).
+// `painted` records what the TOOL put there, so humanTouched below can tell a
+// field the person changed from one they only looked at.
+function paintArea(el, value) {
+  // ONLY A PAINT THAT ACTUALLY REPLACES THE TEXT RETIRES THE TYPED BIT
+  // (PR #928 round-two finding R4, BLOCKING, measured in real Chrome on both
+  // row lanes). The bit means "what is standing in this field is his". A paint
+  // that writes the string already there has REPLACED NOTHING, so his text is
+  // still his and the bit still true — but clearing it unconditionally killed
+  // BOTH witnesses in one statement, because the same assignment also makes
+  // `value === painted`.
+  //
+  // REACHABLE, AND ONLY ON THE ROW LANES. repaintGoesTo guards on focused AND
+  // DISAGREEING, so an AGREEING store change falls straight through to here
+  // while his identical text is in the box with the caret still in it.
+  // Measured on 383010896287: he types BELT 99, her agreeing pull of BELT 99
+  // lands and erases the bit, her correction to BELT 12 then lands, and his
+  // blur silently discarded BELT 99 — no conflict row, entry left `remote` for
+  // the next pull to overwrite. The dialogs are immune only because
+  // syncBarcodeDialogArea guards on focus alone, so paintArea never runs on a
+  // focused dialog field; the row lane's narrower guard is the asymmetry.
+  //
+  // FIXED HERE RATHER THAN BY WIDENING THAT GUARD, deliberately: the agreeing
+  // case is exactly when the tags, the author pill and the cross-day note are
+  // the only thing that changes, and guarding on focus alone would strand them
+  // (see repaintGoesTo's own note).
+  const replaced = el.value !== value;
+  el.value = value;
+  el.dataset.painted = value;
+  // Cleared HERE rather than at each caller, so the two halves of humanTouched
+  // below cannot drift apart.
+  if (replaced) delete el.dataset.touched;
+}
+
+// trackAreaTyping(el) -> record that a HUMAN put characters in this field.
+//
+// PR #928 REVIEW FINDING 1. Until this listener existed, "did a human type
+// here" was inferred from `value !== painted`, and those are not the same
+// question. RE-TYPING THE VALUE ALREADY IN THE BOX IS A REAL ACT with a real
+// consequence — ADR 0022's "confirming the other desk's value", where setEarly
+// DROPS `remote` so the row stops being deletable by their withdrawal — and it
+// leaves the two strings equal.
+//
+// MEASURED, on the real Post Sort export, label 383010896287: a pull lands her
+// BELT 46; Tyler selects all and re-types BELT 46 to confirm it; her corrected
+// BELT 12 lands while he still has focus; on blur his confirmation was
+// DISCARDED, nothing reached the disagreement surface, and the entry stayed
+// `remote` for the next pull to overwrite again.
+//
+// `beforeinput` AND `input`: they answer the same question at two points and
+// the second listener costs nothing. Neither fires for a programmatic
+// `.value =`, which is exactly the distinction being drawn.
+function trackAreaTyping(el) {
+  if (!el) return;
+  const mark = () => { el.dataset.touched = '1'; };
+  el.addEventListener('beforeinput', mark);
+  el.addEventListener('input', mark);
+}
+
+// humanTouched(el) -> did a HUMAN put what is in this field there?
+//
+// TWO INDEPENDENT WITNESSES, either of which is enough:
+//
+//   the TYPED BIT   set by trackAreaTyping on a real keystroke or paste and
+//                   cleared by paintArea. Catches the re-typed confirmation,
+//                   which the string comparison cannot see.
+//   the STRING      `value !== painted`. Catches a change that arrived without
+//                   an input event, and covers any field this ticket's
+//                   listeners were never attached to.
+//
+// An UNKNOWN field (no `painted`) answers YES, so a field whose provenance
+// cannot be established commits exactly as it did before. Every fallback here
+// errs toward COMMITTING, which is the safe direction: the failure this
+// predicate exists to prevent is a field NOBODY touched writing over the other
+// desk, and such a field has neither witness.
+function humanTouched(el) {
+  if (!el) return true;
+  if (el.dataset.touched === '1') return true;
+  if (el.dataset.painted === undefined) return true;
+  return el.value !== el.dataset.painted;
+}
+
+function shadowArea(label, area) {
+  shadowedAreas.set(String(label), {
+    area: area,
+    // Whose answer is being held back. otherBy answers '' for this device's own
+    // entry or an unnamed writer, and AreaConflicts treats '' as "no name to
+    // show" rather than as an error — the same fallback #795 gave the envelope.
+    by: ActualArea.otherBy(actualAreaStore, label, deviceName),
+  });
+}
+function shadowedArea(label) { return shadowedAreas.get(String(label)) || null; }
+function takeShadowedArea(label) {
+  const key = String(label);
+  const held = shadowedAreas.get(key) || null;
+  shadowedAreas.delete(key);
+  return held;
+}
+
+// areaBlurIsStale(el, label) -> is this blur a field the human NEVER TOUCHED,
+// closing over an area that arrived while it held focus? (#901 item 3.)
+//
+// WHY THIS EXISTS. "The human's write stands" is only true when there WAS one.
+// #918 already found the shape once: the barcode dialog open on a blank row, a
+// pull filling the row behind it, and the dialog's blur then writing its empty
+// field over her area FROM A FIELD THAT NEVER SAW IT. Last-writer-wins is the
+// right rule here and this is what makes the last writer a person.
+//
+// GATED ON A PENDING SHADOW, deliberately. With no import racing this field
+// there is nothing to protect and the commit runs exactly as it always has —
+// including the main lane's re-stamp of `by` when the same value is re-typed
+// (#886). The only behaviour this ticket changes is behaviour inside the race.
+function areaBlurIsStale(el, label) {
+  if (!shadowedArea(label)) return false;
+  if (humanTouched(el)) return false;
+  takeShadowedArea(label);
+  // The import stands, so SHOW it: the field has been holding a value the store
+  // no longer agrees with, and leaving it there is the drift #832 names.
+  repaintAreaSurfaces(label);
+  return true;
+}
+
+// maybeSurfaceTypingConflict(label, shadow, beforeEntry) -> put the displaced
+// import on the disagreement surface, or do nothing.
+//
+// ─── DECIDED: ON BLUR, NOT ON IMPORT (#901's open sub-decision) ─────────────
+//
+// The surface could be raised the moment the import lands, or once the human's
+// value is committed. It is raised ON THE COMMIT, which is Tyler's lean and
+// holds up for a reason stronger than taste: at import time the field holds a
+// HALF-TYPED value. "BEL" on the way to "BELT 12" is not an answer, and a
+// disagreement recorded against it would be a permanent record of a
+// disagreement that never existed — and permanent is literal here, because
+// lib/area-conflicts.js keys on (package, my answer, their answer) and NOTHING
+// in that store ever expires or un-resolves. Settling the "BEL" row would then
+// SUPPRESS nothing useful, and the real "BELT 12 vs BELT 46" row would arrive
+// as a second key seconds later. On blur there is exactly one comparison to
+// make and both sides are answers.
+//
+// The cost of waiting is bounded: the value is already safe in the store, the
+// panel is not a live feed, and a blur is one keystroke away.
+//
+// THE SHADOW MUST STILL MATCH THE STORE. `beforeEntry` is what the store held
+// immediately before this write, read by the commit for the 999 Desk tombstone.
+// If it no longer equals the shadowed area, the store moved on between the
+// guard and the blur and this shadow is describing a world that is gone —
+// dropped rather than surfaced, because a conflict row nobody can act on is
+// exactly the cry-wolf failure area-conflicts.js's header names.
+//
+// A REFUSED WRITE RECORDS NOTHING, and that falls out rather than being
+// special-cased: setEarly can decline to overwrite a value it does not own, in
+// which case the area that stands IS the shadowed one, and isConflict says two
+// identical strings do not disagree.
+function maybeSurfaceTypingConflict(label, shadow, beforeEntry) {
+  if (!shadow) return;
+  const displaced = (beforeEntry && beforeEntry.area) || '';
+  if (displaced !== shadow.area) return;
+  const mine = ActualArea.get(actualAreaStore, label);
+  if (!AreaConflicts.isConflict(mine, shadow.area)) return;
+  // Straight through AreaConflicts.record, the same call the import path makes,
+  // so a disagreement a human already settled stays settled: a re-run of this
+  // race on the same three values is counted as suppressed and re-opens nothing.
+  const rec = AreaConflicts.record(areaConflictStore, [{
+    label: label,
+    local: mine,
+    localBy: (actualAreaStore[label] && actualAreaStore[label].by) || deviceName,
+    incoming: shadow.area,
+    by: shadow.by,
+  }], { day: currentSortDay });
+  areaConflictStore = rec.store;
+  const landed = saveAreaConflicts();
+  renderAreaConflicts();
+  if (!rec.opened.length) return;
+  // warn: this competes with the routine spread note on the same element, and
+  // an area the other desk disagrees about outranks "3 other rows were set".
+  flashGoesToNote('Your ' + mine + ' stands. ' +
+    (shadow.by ? shadow.by + '’s ' : 'The imported ') + shadow.area +
+    ' arrived while you were typing and is waiting below to settle.' +
+    (landed ? '' : ' ⚠ That record was NOT saved — storage is full.'),
+    { warn: true });
+}
+
 function repaintGoesTo(label) {
   const value = ActualArea.get(actualAreaStore, label);
   const auto = !!value && ActualArea.isAuto(actualAreaStore, label);
   const early = !!value && ActualArea.isEarly(actualAreaStore, label);
+  // Set by the focus guard below, applied AFTER the loop: the same label can be
+  // on screen in both lanes, and a shadow written by the focused box must not
+  // then be cleared by its unfocused twin two iterations later.
+  let guarded = false;
   // Matches every '.goesto-input' with this data-label across the whole
   // document, which by construction covers both the Manual Review lanes and
   // the Post Sort lane (issue #634) — the same tracking label can appear in
   // both, and a write in one must repaint the other's box too.
   document.querySelectorAll('.goesto-input[data-label="' + cssAttrEscape(label) + '"]').forEach(el => {
-    if (document.activeElement !== el || el.value !== value) el.value = value;
+    // TYPING WINS (#901). A focused box is a box somebody is typing in, and
+    // this function runs from a dropped Day Export and a 999 Desk pull as well
+    // as from a commit — so until this ticket an area arriving from the other
+    // device overwrote the supervisor's keystroke mid-word.
+    //
+    // THE OLD CONDITION WAS NOT A FOCUS GUARD. `activeElement !== el ||
+    // el.value !== value` skipped the write only when the focused box ALREADY
+    // said the same thing, which is caret preservation — it exists so a repaint
+    // does not jump the cursor to the end of a value the box is already
+    // showing. Every case where the two DISAGREED, which is every case that
+    // matters, wrote straight over him.
+    //
+    // ONE GUARD, ONE DECISION (#876's rule, applied to the row). The whole
+    // element is left alone, not just its text: the `has-area` highlight and
+    // the tags below are statements ABOUT the value in the box, and painting
+    // them from a store the box is not showing is #832's drift arriving by the
+    // other door — an empty box wearing the "answered" highlight.
+    //
+    // FOCUSED AND ALREADY AGREEING IS NOT A CONFLICT, so it paints. Nothing is
+    // being taken from him — the text is byte-identical — and this is the case
+    // a commit produces on every path that repaints a row whose box still has
+    // the caret in it, where the tags (`same addr`, `early`, the author pill,
+    // the cross-day note) are the only thing that actually changes. Skipping on
+    // focus ALONE would strand those, which is the drift above pointing the
+    // other way.
+    if (document.activeElement === el && el.value !== value) {
+      guarded = true;
+      return;
+    }
+    paintArea(el, value);
     // THE SAME PREDICATE THE BUILD PATH USES (#832). goesToCell emits the class
     // from hasAreaClass() -> ActualArea.isAnswered; this names it too, so a box
     // painted on commit and a box painted on a rebuild cannot disagree about
@@ -11164,6 +11517,9 @@ function repaintGoesTo(label) {
     // under its box for the rest of the sort.
     cell.classList.toggle('has-note', !!line);
   });
+  // The value the human could not be shown, held for his own commit to compare
+  // against (#901). Written after the loop for the two-lane reason above.
+  if (guarded) shadowArea(label, value);
   if (workModeOn) refreshWorkBar();
 }
 
@@ -12946,15 +13302,22 @@ function togglePostSortFold() {
 function attachPostSortGoesToInput(tr, item) {
   const input = tr.querySelector('.goesto-input');
   if (!input) return;
+  trackAreaTyping(input);
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('keydown', e => {
     e.stopPropagation();
     // Same loop as the full-report rows (#697): commit, then advance.
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); advanceFromRow(tr); }
-    else if (e.key === 'Escape') { input.value = actualAreaOf(item); input.blur(); }
+    else if (e.key === 'Escape') { paintArea(input, actualAreaOf(item)); input.blur(); }
   });
   input.addEventListener('change', e => e.stopPropagation());
-  input.addEventListener('blur', () => commitPostSortGoesTo(item.label, input.value));
+  // Same stale-blur rule as the Manual Review rows (#901 item 3). ADR 0021
+  // gives the Post Sort report the main slot, so this is the lane the race
+  // actually happens on — guarding only the other one would fix nothing.
+  input.addEventListener('blur', () => {
+    if (areaBlurIsStale(input, item.label)) return;
+    commitPostSortGoesTo(item.label, input.value);
+  });
 }
 
 // commitPostSortGoesTo(label, raw) -> write with EARLY provenance
@@ -12964,6 +13327,10 @@ function attachPostSortGoesToInput(tr, item) {
 // hard requirement. This never calls lib/ibno-review-plan.js and never writes
 // a code, category, or disposition; it is Goes To only.
 function commitPostSortGoesTo(label, raw) {
+  // The shadowed area, taken before the refusal — same contract as commitGoesTo
+  // (#901). BOTH lanes, because ADR 0021 gives the Post Sort report the main
+  // slot and this is the commit a normal sort day actually runs.
+  const shadow = takeShadowedArea(label);
   // Same refusal as commitGoesTo: an unstamped entry would outlive every sort.
   // And the same both-surfaces snap-back (#876): this lane's barcode dialog
   // (openEarlyBarcodeDialog) commits through here too, so the dialog field has
@@ -13047,6 +13414,10 @@ function commitPostSortGoesTo(label, raw) {
       (nowValue ? 'set to ' + nowValue : 'cleared'));
   }
   syncBarcodeDialogArea(label);
+  // His answer stands; the one it displaced goes on the surface (#901). Note
+  // setEarly may have REFUSED the write, in which case the area that stands IS
+  // the shadowed one and isConflict records nothing — see the function header.
+  maybeSurfaceTypingConflict(label, shadow, beforeEntry);
   // The 503 side, identical to commitGoesTo's (#699). Note setEarly may have
   // REFUSED the write, in which case result.changed omits this label and
   // nothing is logged — which is right: a refused filing did not happen.
@@ -13430,7 +13801,14 @@ function focusWorkRow(copyStreet) {
     ? document.getElementById('work-area')
     : tr.querySelector('.goesto-input');
   if (input) {
-    if (workModeOn) input.value = ActualArea.get(actualAreaStore, tr.getAttribute('data-label'));
+    // NO `input.value = ...` HERE ANY MORE (#930). This line used to be the
+    // ONLY writer of the bar's text, and being the only writer is exactly what
+    // made the bar the one Goes To surface #901's rule could not reach: it
+    // never carried `data-painted`, so humanTouched fell through to its
+    // unknown-field YES, and nothing repainted it from the store so no shadow
+    // was ever recorded for it. The paint is now paintWorkBar(), called from
+    // refreshWorkBar() a few lines above — which runs on EVERY path this
+    // function takes, including the no-rows one.
     input.focus();
     if (input.select) input.select();
   }
@@ -13446,11 +13824,147 @@ function advanceFromRow(tr) {
   stepWork(1);
 }
 
+// ─── THE SHARED BAR IS A GOES TO SURFACE, AND IT IS PAINTED LIKE ONE (#930) ─
+//
+// There are THREE surfaces that write a work area: a row's own Goes To box, the
+// barcode dialog's field, and this bar. #901/#928 gave the first two the
+// three-part rule (painted through paintArea, trackAreaTyping attached, a
+// guarded painter that SHADOWS rather than drops a store change arriving under
+// the caret). The bar had none of it, and both halves of the failure were
+// measured on the real Post Sort export with a 999 Desk pull landing mid-row:
+//
+//   (a) bar holding BELT 99, her pull lands BELT 46, Enter -> store BELT 99 and
+//       CONFLICTS RECORDED: 0. His value winning is right; her answer vanishing
+//       with no record is the one outcome #901 explicitly rejected.
+//   (b) bar EMPTY and never typed in, her pull lands BELT 46, Enter to skip the
+//       row -> store entry `undefined`. HER AREA DELETED, silently. This is
+//       #918's shape ("committing then wrote an empty value over her area FROM
+//       A FIELD THAT NEVER SAW IT") on the surface #918 did not audit.
+//
+// WHICH ROW THE BAR IS SPEAKING FOR IS STATE, and it has to be, because the bar
+// is SHARED. The row lane's guard can be a pure function of (element, store) —
+// a box only ever shows one label for its whole life. The bar shows a different
+// package every Enter, so "the focused field disagrees with the store" is two
+// completely different situations depending on whether the cursor just moved:
+//
+//   SAME row  -> the store changed underneath him. That is the race, and the
+//                withheld value is shadowed for his own commit to compare
+//                against, exactly as repaintGoesTo does.
+//   NEW row   -> the text in the bar belongs to the package he just left and
+//                has already been committed. It is not his answer to THIS row
+//                and must be replaced outright, or the loop would carry one
+//                package's belt onto the next one. This is the case the
+//                keyboard loop hits on literally every Enter (Enter commits and
+//                advances WITHOUT blurring, so the bar still holds focus), and
+//                guarding on focus alone would freeze the bar on row one.
+let workBarLabel = null;
+
+// True only while commitWorkArea's own write is in flight (#930).
+//
+// WHY A FLAG AND NOT A CLEVERER GUARD. On the row lanes Enter blurs the box
+// BEFORE committing, so the commit's own repaint always finds an unfocused
+// field. The bar never blurs, so without this every commit would re-enter the
+// guard against its own write: a normalizing commit (he types `belt 12`, the
+// store takes `BELT 12`) would read as a disagreement and shadow the value it
+// had just written, and areaBlurIsStale's deliberate "the import stands, so
+// SHOW it" repaint would be refused by the very guard it is trying to undo,
+// leaving the bar still showing the empty field case (b) is about.
+let workBarCommitting = false;
+
+// The bar's own keystroke witness (#930). trackAreaTyping is #928's listener
+// pair; until now it was attached to every Goes To field EXCEPT this one, which
+// is half of why humanTouched could only ever answer YES here. Attached once at
+// script init — the bar is static markup that outlives every report, so it
+// never needs re-attaching and must never be attached twice.
+trackAreaTyping(document.getElementById('work-area'));
+
+// forgetWorkBarRow() -> the bar is no longer speaking for any package.
+//
+// Called wherever the loop starts over (entering Work mode, a fresh report
+// render, leaving Work mode), so the next paint is the unconditional NEW-row
+// one rather than a guarded compare against a row from the previous report.
+function forgetWorkBarRow() {
+  // AND IT TAKES THE SHADOW WITH IT (PR #935 review finding 2). shadowedAreas'
+  // own header asks that a painter which can shadow a field that NEVER BLURS
+  // clear the map at the points where that field stops being able to deliver
+  // it. The bar is exactly that painter, and its shadow is consumed by
+  // commitWorkArea alone — so every exit that is NOT a commit used to leave one
+  // standing, unbounded, keyed to a package the bar no longer speaks for.
+  //
+  // MEASURED: a pull lands under the caret, he presses Escape out of Work mode,
+  // and the shadow survives. He comes back to that package later, sees her
+  // BELT 46 sitting in the bar and presses Enter to confirm it — and
+  // areaBlurIsStale fires on the STALE shadow, refuses the commit in silence,
+  // and leaves the entry {remote: true, by: 'Cage PC'}. Per ADR 0022 her
+  // withdrawal can then delete a row he had confirmed.
+  if (workBarLabel) takeShadowedArea(workBarLabel);
+  workBarLabel = null;
+}
+
+// paintWorkBar(tr) -> put the store's answer for the cursor row in the bar, or
+// shadow it if the human is mid-keystroke on that same row.
+function paintWorkBar(tr) {
+  const input = document.getElementById('work-area');
+  if (!input) return;
+  const label = tr ? String(tr.getAttribute('data-label') || '') : '';
+  const value = label ? ActualArea.get(actualAreaStore, label) : '';
+  if (label !== workBarLabel) {
+    // The cursor MOVING OFF a shadowed row is the same exit as leaving Work
+    // mode (PR #935 review finding 2): a street-click can carry the bar away
+    // from a package whose shadow only commitWorkArea could ever have consumed.
+    // Routed through the same function so the two exits cannot drift apart.
+    forgetWorkBarRow();
+    workBarLabel = label;
+    // Retired EXPLICITLY, not left to paintArea. paintArea only retires the bit
+    // when the paint actually replaces the text (PR #928 finding R4), and two
+    // consecutive rows can easily hold the same string — `BELT 12` typed on one
+    // package and stored on the next. Carrying the bit across the advance would
+    // make the next row's untouched Enter read as a human write, which is
+    // case (b) coming back through the cursor.
+    delete input.dataset.touched;
+    paintArea(input, value);
+    return;
+  }
+  // TYPING WINS (#901), the same decision and the same shape as repaintGoesTo's
+  // guard: focused AND disagreeing. Focused-and-agreeing falls through to
+  // paintArea on purpose, so `data-painted` keeps up with a store that agrees.
+  if (!workBarCommitting && document.activeElement === input && input.value !== value) {
+    // ...BUT ONLY THE RACE GETS SHADOWED (PR #935 review finding 1). The row
+    // lane gets this for free: repaintGoesTo only ever runs for the label whose
+    // store just changed, so a shadow written there IS a store change.
+    // refreshWorkBar carries no such promise — it is called from five places
+    // that have nothing to do with the cursor row's store (repaintGoesTo for
+    // ANY label, markBarcodeDone, restoreWorkCursor, toggleCodedHidden, the
+    // focusin handler), and every one of them found a focused bar disagreeing
+    // with the store for the ordinary reason that a human was typing in it.
+    //
+    // MEASURED: her BELT 46 lands while the bar is UNFOCUSED, so he SEES it; he
+    // clicks in, selects all and types BELT 99 deliberately — no race, nothing
+    // was taken from him. He then toggles the coded chip, and that alone
+    // shadowed her BELT 46. Enter recorded a permanent AreaConflicts row and
+    // told him her area "arrived while you were typing", which is false.
+    // Whether it happened at all turned on an invisible UI event, and nothing
+    // in lib/area-conflicts.js ever un-resolves.
+    //
+    // data-painted IS THE RECORD OF WHAT THE BAR WAS LAST SHOWN, so comparing
+    // the store against it asks the right question: has the store MOVED since
+    // the bar last painted it? An unpainted bar (no data-painted at all)
+    // shadows nothing for the same reason — there is no before-value for the
+    // store to have moved away from.
+    if (input.dataset.painted !== undefined && input.dataset.painted !== value) {
+      shadowArea(label, value);
+    }
+    return;
+  }
+  paintArea(input, value);
+}
+
 function refreshWorkBar() {
   const bar = document.getElementById('work-bar');
   if (!bar || !workModeOn) return;
   const rows = workRows();
   const tr = rows[workIndex];
+  paintWorkBar(tr);
   const street = tr ? workStreetOf(tr) : '';
   // WORKED vs SCANNED (#697, #612 decision 3, ADR 0022's consumer table).
   //
@@ -13531,10 +14045,30 @@ function commitWorkArea() {
   // same tbody, in the same bucket, sorted among its full-report neighbours.
   // The row says what it is (isEarlyRow), which is also the only spelling that
   // stays correct once a bucket holds both kinds interleaved.
-  if (isEarlyRow(tr)) {
-    commitPostSortGoesTo(tr.getAttribute('data-label'), input.value);
-  } else {
-    commitGoesTo(tr.getAttribute('data-label'), input.value);
+  const label = tr.getAttribute('data-label');
+  // EVERYTHING FROM HERE IS THIS DEVICE'S OWN WRITE, so the bar's typing-wins
+  // guard must not fire against it (see workBarCommitting's own note). The
+  // stale check is INSIDE the flag deliberately: its whole point is to repaint
+  // the bar with the value it was about to write over, and that repaint runs
+  // while the bar still holds focus.
+  workBarCommitting = true;
+  try {
+    // #930 / #918's shape, on the third surface. `areaBlurIsStale` is named for
+    // the row lanes, where the commit rides a blur; here it rides Enter. The
+    // QUESTION is identical and so is the answer — "is this a field the human
+    // never touched, closing over an area that arrived while it held focus?" —
+    // so it is the same predicate rather than a bar-shaped copy of it, and a
+    // copy is exactly how the two surfaces would drift apart. It is gated on a
+    // pending shadow, so with no import racing this bar it returns false
+    // immediately and Enter commits exactly as it always has.
+    if (areaBlurIsStale(input, label)) return;
+    if (isEarlyRow(tr)) {
+      commitPostSortGoesTo(label, input.value);
+    } else {
+      commitGoesTo(label, input.value);
+    }
+  } finally {
+    workBarCommitting = false;
   }
 }
 
@@ -13630,6 +14164,12 @@ function enterWorkLoop(copyStreet) {
   }
   // focusWorkRow repaints the bar on every path, including the no-rows path,
   // so a stale "3 of 12" from the previous report can never survive here.
+  //
+  // And now a stale VALUE cannot either (#930): the bar's text is painted by
+  // paintWorkBar, whose guard compares against the row it was last speaking
+  // for. A re-drop can land the cursor on the same tracking label, so the
+  // starting-over is said out loud rather than inferred.
+  forgetWorkBarRow();
   focusWorkRow(!!copyStreet);
 }
 
@@ -13661,6 +14201,10 @@ function setWorkMode(on, opts) {
     enterWorkLoop(o.copy !== false);
   } else {
     document.querySelectorAll('.manual-body tr.work-active').forEach(tr => tr.classList.remove('work-active'));
+    // The bar is display:none from here, so nothing repaints it until Work mode
+    // comes back on (#930). Forgetting the row it was speaking for is what
+    // makes that return an unconditional repaint.
+    forgetWorkBarRow();
   }
 }
 
@@ -14312,7 +14856,13 @@ function openBarcodeDialog(label) {
     '<label class="barcode-area-label">Goes to' +
       '<input type="text" id="barcode-area-input" class="goesto-input big' + hasAreaClass(item && item.label) + '"' +
       ' maxlength="' + ActualArea.MAX_LEN + '"' +
-      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
+      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '"' +
+      // What the TOOL put here (#901) — see goesToCell. This field is the one
+      // #918 caught writing an empty value over the other desk's area from a
+      // field that never saw it, so it is the field the stale-blur rule most
+      // needs a provenance stamp on.
+      ' data-painted="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '"' +
+      ' placeholder="work area">' +
     '</label>' +
     '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
 
@@ -14325,6 +14875,7 @@ function openBarcodeDialog(label) {
   // row inputs already close over item.label (see attachGoesToInput); this
   // brings the dialog in line with them.
   const dialogLabel = barcodeDialogLabel;
+  trackAreaTyping(input);
 
   input.addEventListener('keydown', e => {
     e.stopPropagation();  // the page-level C/B copy-mode shortcuts must not fire while typing
@@ -14339,12 +14890,17 @@ function openBarcodeDialog(label) {
     // the reverted value, so the revert sticks), then close.
     else if (e.key === 'Escape') {
       e.preventDefault();
-      input.value = actualAreaOf(item);
+      paintArea(input, actualAreaOf(item));
       input.blur();
       closeBarcodeDialog();
     }
   });
-  input.addEventListener('blur', () => commitGoesTo(dialogLabel, input.value));
+  // #918's exact case, now refused (#901 item 3): a dialog field the human
+  // never typed into must not commit over an area that arrived behind it.
+  input.addEventListener('blur', () => {
+    if (areaBlurIsStale(input, dialogLabel)) return;
+    commitGoesTo(dialogLabel, input.value);
+  });
 
   document.getElementById('barcode-dialog').style.display = 'flex';
   input.focus();
@@ -14391,23 +14947,34 @@ function openEarlyBarcodeDialog(label) {
     '<label class="barcode-area-label">Goes to' +
       '<input type="text" id="barcode-area-input" class="goesto-input big' + hasAreaClass(item && item.label) + '"' +
       ' maxlength="' + ActualArea.MAX_LEN + '"' +
-      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '" placeholder="work area">' +
+      ' value="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '"' +
+      // What the TOOL put here (#901) — see goesToCell. This field is the one
+      // #918 caught writing an empty value over the other desk's area from a
+      // field that never saw it, so it is the field the stale-blur rule most
+      // needs a provenance stamp on.
+      ' data-painted="' + ToolHelpers.escapeHtml(actualAreaOf(item)) + '"' +
+      ' placeholder="work area">' +
     '</label>' +
     '<div class="barcode-addr">' + ToolHelpers.escapeHtml(item.address || '') + '</div>';
 
   const input = document.getElementById('barcode-area-input');
   const dialogLabel = barcodeDialogLabel;
+  trackAreaTyping(input);
   input.addEventListener('keydown', e => {
     e.stopPropagation();
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
     else if (e.key === 'Escape') {
       e.preventDefault();
-      input.value = actualAreaOf(item);
+      paintArea(input, actualAreaOf(item));
       input.blur();
       closeBarcodeDialog();
     }
   });
-  input.addEventListener('blur', () => commitPostSortGoesTo(dialogLabel, input.value));
+  // Same stale-blur refusal as the full-report dialog (#901 item 3).
+  input.addEventListener('blur', () => {
+    if (areaBlurIsStale(input, dialogLabel)) return;
+    commitPostSortGoesTo(dialogLabel, input.value);
+  });
 
   document.getElementById('barcode-dialog').style.display = 'flex';
   input.focus();
@@ -14437,8 +15004,17 @@ function syncBarcodeDialogArea(label) {
   //
   // The highlight is NOT covered by repaintGoesTo: this field carries no
   // data-label, so that function's selector has never matched it (#832).
-  if (document.activeElement === input) return;
-  input.value = ActualArea.get(actualAreaStore, barcodeDialogLabel);
+  //
+  // #901 ADDED THE SHADOW AND CHANGED NOTHING ELSE. The guard already kept the
+  // keystroke; what was missing was the other half of Tyler's decision — the
+  // value it refused to show is REMEMBERED, so this field's own commit can put
+  // the disagreement on the surface instead of dropping it silently.
+  const held = ActualArea.get(actualAreaStore, barcodeDialogLabel);
+  if (document.activeElement === input) {
+    if (input.value !== held) shadowArea(barcodeDialogLabel, held);
+    return;
+  }
+  paintArea(input, held);
   input.classList.toggle('has-area', ActualArea.isAnswered(actualAreaStore, barcodeDialogLabel));
 }
 
