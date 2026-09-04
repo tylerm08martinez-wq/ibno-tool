@@ -57,6 +57,16 @@ html[data-theme="dark"] {
   --field-bg-alt:   #23242f;
   --hover-soft:     #23242f;
   --hover-row:      #2b2c3a;
+  /* The dark half of the IBNO Coder's --warn-ink (#954). Its LIGHT value lives
+     in that tool's inline <style>, next to --danger-ink and --ok-ink; the dark
+     one is here because this file loads after every tool's inline styles and
+     wins, so a dark value written inline could be silently overridden from
+     here — the PR #504 trap. #b45309 goes muddy on the dark --surface, so this
+     is lifted the same way --danger-ink's dark value is.
+
+     Only the IBNO Coder reads it today. It is a token, not a rule, so a tool
+     that never mentions var(--warn-ink) renders exactly as before. */
+  --warn-ink:       #fbbf24;
 }
 
 html[data-theme="dark"] body {

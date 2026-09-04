@@ -33,6 +33,19 @@
        dark value is lifted the same way --danger-ink's is. */
     :root { --ok-ink: #157347; }
     html[data-theme="dark"] { --ok-ink: #4ade80; }
+    /* The MIDDLE of that pair, for a condition that is real and actionable but
+       not an emergency: DeskHealth.assess's `warn` level, which today means one
+       desk published and then went quiet (#954 criterion 2). It needs to be
+       distinguishable from --danger-ink at a glance on BOTH surfaces, so it is
+       a different hue and not a lighter red.
+
+       ONLY THE LIGHT VALUE IS HERE. The dark one is in theme.css, under the
+       same html[data-theme="dark"] token block that carries every other dark
+       token, because theme.css loads after this inline <style> and a dark rule
+       written here could be silently overridden from there (the trap that broke
+       PR #504). --danger-ink and --ok-ink predate that rule and are left as
+       they are; theme.css defines neither, so nothing is overriding them. */
+    :root { --warn-ink: #b45309; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -1676,6 +1689,17 @@
       border-left: 4px solid var(--danger-ink); border-radius: 8px;
       margin-bottom: 16px; padding: 10px 14px;
       font-size: 13px; font-weight: 600; color: var(--danger-ink);
+    }
+    /* WARN AND ERROR MUST NOT LOOK THE SAME (#954 criterion 2). The default
+       above is the ERROR skin — a dead token, or a file this build cannot read,
+       both of which mean the channel is broken until a human does something.
+       `warn` is one desk that published and then went quiet: worth looking up
+       for, not worth reading as "sync is down". Both the rule (the left bar,
+       which is what catches the eye above the fold) and the text take the
+       amber, so the two are distinguishable at a glance and not only on close
+       reading. Tokens only: --warn-ink carries a value per theme. */
+    #desk-health-banner[data-level="warn"] {
+      border-left-color: var(--warn-ink); color: var(--warn-ink);
     }
 
     #area-conflict-panel {
@@ -4078,9 +4102,30 @@ function renderDeskHealth() {
   const alarm = deskReadReady() && deskCtl.syncReady()
     ? DeskHealth.assess(deskHealth, { now: new Date().toISOString() })
     : null;
-  if (!alarm) { el.textContent = ''; el.style.display = 'none'; return; }
+  if (!alarm) {
+    el.textContent = '';
+    // THE ATTRIBUTES GO WITH THE TEXT (#954 criterion 1). Blanking the words
+    // while leaving `data-code="auth"` on the element leaves a stale answer
+    // behind on the one surface a test, a stylesheet or a future reader would
+    // ask — the banner is hidden, so nobody sees the contradiction until
+    // something keys off the attribute and reports a dead token on a healthy
+    // channel. data-level goes for the same reason: it is the level OF a code
+    // that no longer exists.
+    delete el.dataset.code;
+    delete el.dataset.level;
+    el.style.display = 'none';
+    return;
+  }
   el.textContent = alarm.text;
   el.dataset.code = alarm.code;
+  // THE LEVEL IS RENDERED, NOT JUST RETURNED (#954 criterion 2). assess has
+  // always distinguished 'warn' (a desk gone quiet — real, actionable, not an
+  // emergency) from 'error' (a dead credential or a file this build cannot
+  // read), and the banner painted both in the same red. Two conditions that
+  // want different urgency looking identical is how a surface stops carrying
+  // information. The colour pair lives in the CSS block above; the DARK half of
+  // it is in theme.css, which loads after this file's inline <style> and wins.
+  el.dataset.level = alarm.level;
   el.style.display = 'block';
 }
 
@@ -4202,12 +4247,24 @@ const deskCtl = SyncController.create({
           // swallow an expired token; every other transport failure (`http`, a
           // bare TypeError from a dropped network, `coords`) is counted and
           // spoken rather than dropped.
-          if (e && e.code === 'auth') throw e;
+          //
+          // AND THE KIND IS CAPTURED ON THE WAY PAST (#954 criterion 3). The
+          // rethrow was always here, so an expired token DID abort the pull —
+          // but `deskPullFailure` was left at '', and deskPullOnLoad's
+          // `failure: deskPullFailure || 'network'` then recorded the one
+          // condition #915 exists to shout about as the one condition it is
+          // deliberately silent on. The 401 reached the pill as "the connection
+          // dropped" and the banner said nothing at all, which on a desk that
+          // is unstaffed two weekdays a week is indistinguishable from a quiet
+          // day for as long as it takes somebody to notice. Same capture as the
+          // listDir tap above, for the same reason.
+          const kind = DeskHealth.failureKind(e);
+          if (kind === 'auth') { deskPullFailure = kind; throw e; }
           // DeskHealth.failureKind owns this taxonomy; there is no second copy
           // of it here. Anything it cannot place is 'network', which is the
           // safe direction — it under-reports into the pill rather than
           // over-reporting into the banner.
-          if (DeskHealth.failureKind(e) === 'parse') unreadable++;
+          if (kind === 'parse') unreadable++;
           else offline++;
         }
       }
@@ -4393,7 +4450,7 @@ async function deskPullOnLoad() {
 // by two things that do not lie about time:
 //
 //   - a THROTTLE (DeskHealth.shouldPull, 10s) instead of a day-long latch, so
-//     "read on every report drop" is affordable. Tyler re-drops constantly
+//     a read on every drop OUTSIDE THE 10s WINDOW is affordable. Tyler re-drops
 //     (#610); a drop inside the gap rides on the read that just happened, which
 //     is the same answer it would have got.
 //   - a POLL (DeskHealth.POLL_MS, 30s) for when he does not re-drop.
