@@ -2796,6 +2796,10 @@
 <script src="lib/ibno-sync.js"></script>
 <script src="lib/sync-controller.js"></script>
 <script src="lib/remote-areas.js"></script>
+<!-- Loaded AFTER remote-areas, ibno-parked and ibno-filed: DeskState delegates
+     the device slug to RemoteAreas (one device, one identity) and each store's
+     normalisation to its own module. -->
+<script src="lib/desk-state.js"></script>
 <script src="lib/desk-health.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
@@ -4174,6 +4178,88 @@ function renderDeskHealth() {
   el.style.display = 'block';
 }
 
+// ─── THE STATE LANE: THEIR PARK AND WORK-AREA-ASSIGNED, READ-ONLY (#945) ────
+//
+// A SECOND FILE ON THE SAME CHANNEL, desk/<slug>.json, riding beside the areas
+// file rather than inside it. lib/desk-state.js's header carries the whole
+// argument for why it could not be a key on either existing envelope; the short
+// version is that areas APPLY and this does not.
+//
+// THE MAP IS IN MEMORY ONLY. It is never persisted, never merged into
+// parkedStore or filedStore, and nothing on the answer path may read it:
+// isSetAside, isAnswered, the badges and chips, the progress denominator and
+// lib/ibno-merged-view.js's predicates all read the local stores exactly as
+// they did before. That is the single property tests/ibno-desk-sync-dom.test.js
+// pins, with the leak as its control.
+let deskRemoteState = DeskState.empty();
+
+// The tracer's visible claim, and the seam the DOM test and the Chrome probe
+// both read: how many of their rows are being held, and by whom.
+function deskRemoteStateCounts() { return DeskState.counts(deskRemoteState); }
+function deskRemoteDesks() { return DeskState.desks(deskRemoteState); }
+
+// PUBLISH — this device's own two stores, whole, to its own path.
+//
+// Same one-file-per-writer shape as the areas push, so there is no merge to do
+// and no concurrent-write class to manage. Serialised through SortDay before
+// DeskState sees them for the same reason saveParked/saveFiled do it: the live
+// variables are day stores and the file must carry the store, not the object
+// identity.
+async function deskStatePublish(token, coords) {
+  const path = DeskState.pathFor(deviceName);
+  if (!path) return;                       // an unnamed device publishes nothing
+  const env = DeskState.build({
+    day: currentSortDay,
+    by: deviceName,
+    updatedAt: new Date().toISOString(),
+    parked: SortDay.serializeDayStore(parkedStore),
+    filed: SortDay.serializeDayStore(filedStore),
+  });
+  await GithubJsonSync.pushMerge(token, env, {
+    coords: Object.assign({}, coords, { path: path }),
+    merge: (_remote, current) => current,
+    messagePrefix: '999 desk state',
+  });
+}
+
+// READ — every OTHER device's state file, on the #914 cadence.
+//
+// Called from the areas fetch adapter, so it inherits the throttle, the poll,
+// the refocus force and the report-drop trigger without a second timer. The
+// whole map is rebuilt from the listing: a file is the whole truth about its
+// author, so a desk that has unparked everything reads as empty rather than
+// keeping a stale row on screen.
+//
+// AN UNREADABLE FILE CARRIES THE PREVIOUS READ FORWARD rather than deleting the
+// desk. A dropped connection or a half-written file is not evidence that she
+// unparked anything, and this lane exists precisely so Tyler does not rework a
+// row she has already handled — silently blanking her rows on a flaky station
+// network would produce the exact mistake the feature prevents. The areas lane
+// makes the failure loud on the pill; this one must not invent an answer.
+async function deskStatePull(token, coords) {
+  const mine = DeskState.pathFor(deviceName);
+  const prev = deskRemoteState;
+  const files = await GithubJsonSync.listDir(token, Object.assign({}, coords, { path: DeskState.DIR }));
+  let next = DeskState.empty();
+  for (const f of files) {
+    if (mine && f.path === mine) continue;          // never read our own file back
+    const slug = String(f.name || '').replace(/\.json$/i, '');
+    try {
+      const r = await GithubJsonSync.fetchRemote(token, Object.assign({}, coords, { path: f.path }));
+      if (r.sha === null) continue;                 // unpublished since the listing
+      const parsed = DeskState.parse(r.data);
+      if (parsed.ok) {
+        next = DeskState.record(next, parsed.envelope, { day: currentSortDay, self: deviceName });
+      } else if (prev[slug]) {
+        next[slug] = prev[slug];
+      }
+    } catch (e) {
+      if (prev[slug]) next[slug] = prev[slug];
+    }
+  }
+  deskRemoteState = next;
+}
+
 const deskCtl = SyncController.create({
   storage: toolStorage,
   keys: { token: DESK_TOKEN_KEY, coords: DESK_COORDS_KEY, sha: DESK_SHA_KEY },
@@ -4340,6 +4426,13 @@ const deskCtl = SyncController.create({
       // exist to stop that being silent. Only the two FORMAT causes reach the
       // banner, because only they are worth interrupting a sort about.
       deskPullFormatProblem = !!(unsupported || unreadable);
+      // THE STATE LANE RIDES THE SAME CADENCE AND CANNOT BREAK THE AREAS ONE
+      // (#945). Its own errors are swallowed here on purpose: areas are the
+      // safety-relevant channel and this is a read-only display, so a desk/
+      // directory that 404s, a corrupt state file or a dropped connection must
+      // cost the display and nothing else. deskStatePull leaves the previous
+      // map in place on any failure, so nothing on screen goes silently blank.
+      try { await deskStatePull(token, coords); } catch (e) { /* display only */ }
       return { data: envelopes, sha: null };
     },
     // Write OUR file, whole. There is no merge to do: this device owns this
@@ -4365,6 +4458,12 @@ const deskCtl = SyncController.create({
       }
       deskHealth = DeskHealth.recordPublish(deskHealth, { ok: true });
       renderDeskHealth();
+      // BESIDE THE AREAS PUSH, NOT INSIDE IT (#945). Same token, same coords,
+      // same gesture — a second file. Its failure is not recorded as a publish
+      // failure and does not throw: the areas write above has already
+      // succeeded, and reporting the channel as broken because a read-only
+      // display file did not land would point #915's alarm at the wrong thing.
+      try { await deskStatePublish(token, coords); } catch (e) { /* display only */ }
       return { data: r.data, sha: r.sha };
     },
     mergeLocal: (remote, _local) => remote,
@@ -5294,6 +5393,17 @@ function togglePark(label) {
   // the position alone silently re-points at the wrong package. The label is
   // the thing that does not move.
   const cursorLabel = workCursorLabel();
+  // THE ADVANCE COPY, WRITTEN HERE AND NOT IN restoreWorkCursor (#966). Parking
+  // the row the cursor is on moves it to the next package, and the whole reason
+  // he is on that package is to paste its street into FRO. Read from the DOM as
+  // it stands — before the renders below tear the tbody down — and issued
+  // inside the click, which is the gesture the clipboard write needs.
+  //
+  // Park only, never unpark: unparking returns a row to the list from a tab and
+  // moves nobody's cursor. copyWorkAdvanceStreet self-guards on that too (it
+  // writes nothing when the cursor does not move), so this is belt and braces
+  // for the case that is not an advance by construction.
+  if (!was) copyWorkAdvanceStreet(l);
   // Provenance and the day, recorded at the moment of the park (#753, #754).
   // The day is the monotonic clock, the same one every dated write on this page
   // reads, and NEVER the device clock: the 1:30 AM sort straddles midnight.
@@ -5304,6 +5414,11 @@ function togglePark(label) {
   // back: a park that will not survive a refresh outranks the confirmation
   // that it happened.
   if (!saveParked()) warnParkNotSaved();
+  // AND THE OTHER DESK HEARS ABOUT IT (#945). Without this the state lane would
+  // publish only when an area is typed, so an admin who spends the sort parking
+  // no-address rows — the exact population Park exists for — would publish
+  // nothing all morning. Same debounce, same gate, same push.
+  scheduleDeskPublish();
   // The row moves between the working list and the tab, so both re-render.
   // The full lane render is what every other population change here does; a
   // surgical move would fight the bucket headers and the coded-row restore.
@@ -8281,10 +8396,38 @@ function copyOptsFor(item) {
   return { noFallback: !!(item && item.provenance === 'early') };
 }
 
+// The things INSIDE the tracking cell that are not the tracking number: the
+// caret, which is the row's explicit toggle, and the chips that each have a job
+// of their own. A click on any of them falls through to the row handler, which
+// has its own opt-out list for the chips and toggles on the caret.
+// `.today-tag` is the Repeat History cell's "in today" marker (~:3905). It is
+// inert text, and widening the copy target to the whole cell would have turned
+// it into a copy control (review round 1, finding F5); it keeps the behaviour
+// it had by opting out with the caret and the chips.
+const TRACKING_CELL_OPT_OUT = '.expand-indicator, .hist-caret, .hist-prune, .ftrack-link, ' +
+  '.eops-link, .barcode-chip, .street-chip, .street-copy, .addr-copy, .repeat-pill, .today-tag';
+
+// attachLabelCopy(tr, label, barcode, opts) -> clicking the tracking number
+// copies it. THE WHOLE CELL IS THE TARGET, not the .label-copy span (#966).
+//
+// The span is padded 1px 2px, so its hit box is the glyphs and nothing else,
+// and the <td class="mono"> padding around it was on no opt-out list — a click
+// a few pixels off the digits copied nothing and expanded the row instead. That
+// is the miss Tyler reported as "clicking the tracking digits also opens the
+// detail dropdown": the click he made was not on the digits.
+//
+// WHAT IS COPIED IS UNCHANGED. copyValueFor still resolves the value, still
+// returns '' on a Post Sort row awaiting a barcode, and the click is still
+// inert when it does — widening the hit box must not widen what lands on the
+// clipboard.
 function attachLabelCopy(tr, label, barcode, opts) {
   const span = tr.querySelector('.label-copy');
   if (!span) return;
-  span.addEventListener('click', e => {
+  const cell = span.closest('td') || span;
+  cell.addEventListener('click', e => {
+    // Fall through — WITHOUT stopping propagation — for the caret and the
+    // chips, so each keeps the behaviour it already had.
+    if (e.target !== cell && e.target.closest && e.target.closest(TRACKING_CELL_OPT_OUT)) return;
     e.stopPropagation();
     // RESOLVE FIRST, and do NOTHING when there is nothing to copy (#750 review
     // finding 1). copyValueFor can now return '' — that is the whole point of
@@ -8403,7 +8546,7 @@ function buildAutoRow(item, idx) {
   tr.lastElementChild.appendChild(btn);
   attachLabelCopy(tr, label, item.scanBarcode);
   tr.addEventListener('click', e => {
-    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy')) return;
+    if (e.target.closest('.copy-row-btn') || e.target.closest('.code-select') || e.target.closest('.label-copy') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.street-copy') || e.target.closest('.addr-copy')) return;
     toggleDetailRow(tr, item, 8);
   });
   layoutRow(tr, 'ready');   // #701, after every cell has been built and wired
@@ -9513,7 +9656,16 @@ function record503Changes(labels, wasFiled, fallbackAddresses) {
 // means the advance lands on the live list, and the cursor label read below is
 // the row that advance actually chose.
 let pending503Refresh = null;
-function refreshAfter503Change() {
+// `leaving` is the labels this change is FILING — the rows that are about to
+// leave the working list. Present only on the user-caused path (commit503);
+// the 999 Desk import calls this with nothing, because a sync pull is a repaint
+// and a repaint must never replace the clipboard (#966).
+function refreshAfter503Change(leaving) {
+  // FIRST, AND OUTSIDE THE DEFERRED TASK BELOW (#966). The render is deferred a
+  // task on purpose (see above), which puts restoreWorkCursor outside the click
+  // — so the street of the row this filing advances onto is read off the DOM as
+  // it stands right now, and written while the gesture is still live.
+  if (leaving && leaving.length) copyWorkAdvanceStreet(leaving);
   if (pending503Refresh) return;
   pending503Refresh = setTimeout(() => {
     pending503Refresh = null;
@@ -9559,7 +9711,12 @@ function commit503(changed, wasFiled, commitFn) {
   record503Changes(changed, wasFiled);
   const moved = (Array.isArray(changed) ? changed : []).some(
     label => !!wasFiled[label] !== is503Label(label));
-  if (moved) refreshAfter503Change();
+  // The labels this commit is FILING, as opposed to the ones it is clearing:
+  // only a row LEAVING the working list moves the Work cursor, and only that
+  // move earns the advance copy (#966).
+  const filedNow = (Array.isArray(changed) ? changed : []).filter(
+    label => !wasFiled[label] && is503Label(label));
+  if (moved) refreshAfter503Change(filedNow);
   announce503Filing(changed, wasFiled, commitFn);
 }
 
@@ -10267,6 +10424,7 @@ function markFiledBatch(labels) {
   const cursorLabel = workCursorLabel();
   filedStore = IbnoFiled.fileMany(filedStore, list, { sourceOf: filedSourceFor });
   if (!saveFiled()) warnFiledNotSaved();
+  scheduleDeskPublish();  // #945: the state lane carries filed rows too
   renderEarlyLane();      // the rows leave the working list
   updateManualBadge();    // badge, stat card and the live chip counts
   renderSetAside();
@@ -10282,6 +10440,7 @@ function unfileRow(label) {
   const cursorLabel = workCursorLabel();
   filedStore = IbnoFiled.unfile(filedStore, l);
   if (!saveFiled()) warnFiledNotSaved();
+  scheduleDeskPublish();  // #945: an unfile is a withdrawal the other desk needs
   renderEarlyLane();
   updateManualBadge();
   renderSetAside();
@@ -14198,6 +14357,163 @@ function restoreWorkCursor(label) {
   clampWorkIndex();
   paintWorkActive(workRows()[workIndex]);
   if (workModeOn) refreshWorkBar();
+  // The Park/503 advance copy was written INSIDE the click, one or more turns
+  // ago (#966). Its outcome is painted here as well as at the moment it lands,
+  // because the 503 path's render happens a task AFTER the clipboard promise
+  // settles: the flash applied then went onto markup this render has just
+  // thrown away. Nothing is copied here — see applyWorkAdvanceFlash.
+  applyWorkAdvanceFlash();
+}
+
+// ─── PARK AND 503 COPY THE STREET THEY LAND ON (#966) ───────────────────────
+//
+// Enter and the arrows advance through focusWorkRow, which calls copyRowStreet.
+// Park and 503 advance through restoreWorkCursor, which only clamps and
+// repaints — so the two controls Tyler uses most left the PREVIOUS row's street
+// on the clipboard while the cursor sat on a new one. Pasting that into FRO
+// files the wrong stop.
+//
+// Two things make this more than "call copyRowStreet from restoreWorkCursor":
+//
+//  1. TIMING. The 503 path defers its whole re-render a task (refreshAfter503-
+//     Change, for the blur reason documented there), so restoreWorkCursor runs
+//     outside the click. The write is therefore computed and issued
+//     SYNCHRONOUSLY inside the click, from the CURRENT DOM, before the row is
+//     torn out — which is also what Chrome's user-gesture rule wants and what
+//     the managed-profile Edge on the cage PC is strictest about.
+//  2. ONLY AN ADVANCE THE USER CAUSED COPIES. A repaint-only restore — a
+//     re-drop, a 999 Desk sync pull, the resting-state Work-mode auto-on — must
+//     copy NOTHING, or a repaint silently replaces what he just copied. That is
+//     why the copy lives at the two USER-CAUSED call sites (togglePark and
+//     commit503's refresh) rather than in restoreWorkCursor, which every
+//     repaint path also calls.
+//
+// The outcome of the last advance copy, waiting to be painted on the row it
+// landed on: { label, ok }. Cleared when the success flash times out.
+let workAdvanceFlash = null;
+
+// workAdvanceLanding(leaving) -> the row the cursor WILL be on once the labels
+// in `leaving` have left the working list, read off the DOM as it stands now.
+// Null when nothing is left to land on (the empty-queue case: the clipboard is
+// left exactly as it was).
+function workAdvanceLanding(leaving) {
+  const gone = Object.create(null);
+  (Array.isArray(leaving) ? leaving : [leaving]).forEach(l => {
+    const s = String(l == null ? '' : l).trim();
+    if (s) gone[s] = true;
+  });
+  const rows = workRows();
+  const cursorLabel = workCursorLabel();
+  const remaining = rows.filter(tr => !gone[tr.getAttribute('data-label') || '']);
+  if (!remaining.length) return null;
+  const clamped = Math.min(Math.max(workIndex, 0), remaining.length - 1);
+  // The cursor row itself is leaving: it holds its SLOT, so the row that takes
+  // its place is the landing row — the same rule restoreWorkCursor applies with
+  // an empty label. Otherwise the cursor stays anchored on its own package.
+  if (gone[cursorLabel]) return remaining[clamped] || null;
+  const i = remaining.findIndex(tr => (tr.getAttribute('data-label') || '') === cursorLabel);
+  return remaining[i >= 0 ? i : clamped] || null;
+}
+
+// copyWorkAdvanceStreet(leaving) -> the whole advance copy, called from inside
+// the click. Returns the street it wrote, or '' when it deliberately wrote
+// nothing (no advance happened, the queue is empty, or the landing row has no
+// street to paste).
+function copyWorkAdvanceStreet(leaving) {
+  const cursorLabel = workCursorLabel();
+  const tr = workAdvanceLanding(leaving);
+  if (!tr) return '';
+  const landed = tr.getAttribute('data-label') || '';
+  // THE CURSOR DID NOT MOVE, so this was not an advance: parking or filing some
+  // OTHER row than the one he is on leaves him where he was, and re-copying
+  // under him would be the repaint case wearing a click's clothes.
+  if (!landed || landed === cursorLabel) return '';
+  const street = workStreetOf(tr);
+  if (!street) return '';
+  copyWithFeedback(street,
+    () => noteWorkAdvanceCopy(landed, true),
+    () => {
+      noteWorkAdvanceCopy(landed, false);
+      // The same shared pill copyRowStreet uses, and AS A WARNING for the same
+      // reason: this copy has no button of its own, it fires as a side effect
+      // of landing on a row, and a plain note here is suppressed behind any
+      // warning this page fires routinely.
+      flashGoesToNote(COPY_FAIL_NOTE, { warn: true });
+    });
+  return street;
+}
+
+function noteWorkAdvanceCopy(label, ok) {
+  if (!ok) {
+    // A REFUSAL IS PAINTED ONCE, HERE, AND NOTHING IS PARKED (review F1).
+    // workAdvanceFlash is re-applied by restoreWorkCursor, which EVERY repaint
+    // path calls — so a refusal left in it would re-add .copy-failed, overwrite
+    // the button's title and re-take the document selection on every later
+    // re-drop, 999 Desk sync pull, unpark and park, long after he has moved off
+    // that row. Only the success flash survives a repaint, and only because the
+    // deferred 503 render throws away the node it was first painted on.
+    workAdvanceFlash = null;
+    paintWorkAdvanceOutcome({ label: label, ok: false });
+    return;
+  }
+  workAdvanceFlash = { label: label, ok: true };
+  applyWorkAdvanceFlash();
+}
+
+// applyWorkAdvanceFlash() -> paint the last advance copy's outcome on the row
+// it landed on. NEVER copies anything: it is safe to call from every repaint.
+//
+// On success, the brief green flash the street cell already has for its own
+// click — today's auto-copy is silent, so a Park that copies looks identical to
+// a Park that does not.
+//
+// On refusal, the sticky .copy-failed state the rest of the page uses, plus the
+// street text SELECTED so Ctrl+C still gets him the paste. The .street-copy
+// button is that visible fallback control; a second one would be a second thing
+// to explain.
+function applyWorkAdvanceFlash() {
+  const f = workAdvanceFlash;
+  // Only the SUCCESS flash is ever re-applied. See noteWorkAdvanceCopy.
+  if (!f || !f.label || !f.ok) return;
+  paintWorkAdvanceOutcome(f);
+}
+
+// paintWorkAdvanceOutcome({label, ok}) -> the paint itself, one row, one time.
+// Never copies anything and never touches workAdvanceFlash's lifetime beyond
+// clearing the success flash when its own timeout fires.
+function paintWorkAdvanceOutcome(f) {
+  if (!f || !f.label) return;
+  const tr = document.querySelector('.manual-body tr[data-label="' + cssAttrEscape(f.label) + '"]');
+  const btn = tr && tr.querySelector('.street-copy');
+  if (!btn) return;
+  if (f.ok) {
+    btn.classList.remove('copy-failed');
+    btn.classList.add('copied');
+    setTimeout(() => {
+      if (btn.isConnected) btn.classList.remove('copied');
+      if (workAdvanceFlash === f) workAdvanceFlash = null;
+    }, 900);
+  } else {
+    btn.classList.add('copy-failed');
+    btn.title = COPY_FAIL_NOTE;
+    selectTextIn(btn);
+  }
+}
+
+// selectTextIn(el) -> put the caret around the element's text so Ctrl+C works
+// when the clipboard API refused us. A nicety on the failure path, so every
+// part of it is guarded: a browser with no Selection must not turn a refused
+// copy into a thrown error.
+function selectTextIn(el) {
+  try {
+    if (!el || !document.createRange || !window.getSelection) return;
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) { /* the copy already failed loudly; the selection is a bonus */ }
 }
 
 // copyRowStreet(tr) -> put THIS row's street (house number and name only, no
@@ -16720,8 +17036,11 @@ function buildManualRow(item, bucket) {
   } else {
     attachGoesToInput(tr, item);
   }
+  // .street-copy joined this list in #966. The Street cell is a BUTTON with its
+  // own delegated copy listener, but this handler runs first — so clicking the
+  // street copied it AND opened the detail dropdown under his hand.
   tr.addEventListener('click', e => {
-    if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.addr-copy') || e.target.closest('.goesto-cell')) return;
+    if (e.target.closest('.action-cell') || e.target.closest('.label-copy') || e.target.closest('.chk-cell') || e.target.closest('.ftrack-link') || e.target.closest('.eops-link') || e.target.closest('.barcode-chip') || e.target.closest('.street-chip') || e.target.closest('.street-copy') || e.target.closest('.addr-copy') || e.target.closest('.goesto-cell')) return;
     toggleDetailRow(tr, item, MANUAL_COLSPAN);
   });
   // Tyler's column arrangement, applied at build time so a row is never painted
