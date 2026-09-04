@@ -46,6 +46,35 @@
        PR #504). --danger-ink and --ok-ink predate that rule and are left as
        they are; theme.css defines neither, so nothing is overriding them. */
     :root { --warn-ink: #b45309; }
+
+    /* THE CARRIED EARLY CHIP'S FILL AND INK (#805, Tyler's 2026-09-04 decision).
+
+       .early-tag used to reuse --hover-soft/--border-soft, which are washes over
+       the surface they sit on by definition. Measured in real Chrome on the real
+       2026-08-12 Post Sort export, that put the chip at 1.05:1 (light) and
+       1.12:1 (dark) against its own .goesto-cell, with the border at 1.05 and
+       1.02 — readable to someone already looking at the row, and invisible as an
+       object to anyone who was not. #805 raises the fill and the border to ~3:1
+       against the cell on BOTH of the backgrounds that cell can have (--surface
+       and the --surface-2 zebra), which is what makes the chip pull the eye.
+
+       AMBER, not red or purple: the tag means "pre-filled by the Post Sort lane,
+       not yet confirmed by a scan" — provisional, not wrong and not an
+       emergency. That is exactly --warn-ink's meaning, so the BORDER is
+       var(--warn-ink) and needs no token of its own. Only the FILL does, because
+       --warn-ink itself is a text ink and is too dark in light / too bright in
+       dark to sit under this chip's own label.
+
+       ONLY THE LIGHT VALUES ARE HERE, same rule as --warn-ink directly above:
+       the dark halves are in theme.css, which loads after this inline <style>
+       and would silently beat a dark value written here (the PR #504 trap).
+
+       --early-tag-ink is var(--text) rather than a hex, so it costs the
+       hardcoded-colour budget nothing; theme.css swaps it for white in dark,
+       where the light --text (#e7e7ec) would land at 4.04:1 on the dark fill,
+       under AA for 9.5px bold. tests/ibno-early-tag-salience-dom.test.js holds
+       every one of these numbers. */
+    :root { --early-tag-bg: #cf7005; --early-tag-ink: var(--text); }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -1240,14 +1269,30 @@
 
     /* Early-provenance tag (issue #634): a Post Sort pre-assignment value,
        shown wherever the row is seen so it reads as "not yet confirmed"
-       rather than an ordinary typed area. Reuses the same tokens as
-       .same-addr rather than hardcoding a color, so it already tracks light
-       and dark theme without a separate dark rule (theme.css cascade trap). */
+       rather than an ordinary typed area.
+
+       IT NO LONGER SHARES .same-addr's TOKENS (#805). It did until 2026-09-04,
+       and that is precisely what made it invisible: --hover-soft/--border-soft
+       are washes over the surface, so the chip measured 1.05:1 (light) and
+       1.12:1 (dark) against the .goesto-cell around it. This one chip is a
+       compensating control — since ADR 0022's isAnswered move the Work cursor
+       SKIPS a carried early row, so this tag is the only thing on screen that
+       distinguishes an unconfirmed area from a confirmed one — so it gets its
+       own fill (--early-tag-bg), its own ink (--early-tag-ink) and the
+       provisional amber --warn-ink border. See the token block near the top of
+       this file; the dark halves are in theme.css and the numbers are pinned by
+       tests/ibno-early-tag-salience-dom.test.js.
+
+       The sibling pills below (.by-tag, .new-tag, .bc-flag) deliberately KEEP
+       the wash pattern and still describe themselves as following ".early-tag
+       above" — that shared-token discipline is what those comments mean, and it
+       is still right for them. None of them is a compensating control; a page
+       where every pill shouts is a page where none of them does. */
     .early-tag {
       display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
       font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
-      background: var(--hover-soft); color: var(--text-muted); vertical-align: middle;
-      border: 1px solid var(--border-soft);
+      background: var(--early-tag-bg); color: var(--early-tag-ink); vertical-align: middle;
+      border: 1px solid var(--warn-ink);
     }
 
     /* Author tag (issue #886): WHO answered this row, shown only when that
