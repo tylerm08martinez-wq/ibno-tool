@@ -623,36 +623,64 @@
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
       color: var(--text-faint); text-transform: uppercase;
     }
-    /* The Other work areas toolbar (#874): two rows, actions grouped by the
-       population they act on. Scoped to the section, like .lane-scope above.
-       Buttons never wrap internally — a label that folds to three lines was
-       the whole complaint — and each row wraps as a unit instead, so a phone
-       width stacks the groups rather than squeezing them. The scope caption
-       is plain text, not a title, because the section-vs-search-slice
-       distinction (#789) has to be readable without hovering. Theme tokens
-       only, so both themes follow lib/theme.js. */
-    .section.other-areas .other-areas-toolbar {
+    /* The grouped two-row toolbar. Shipped for Other work areas by #874 and
+       lifted out of .section.other-areas scope by #939 so Needs Manual Review
+       carries the same treatment: its own toolbar wrapped Copy selected to
+       three lines at 1280 and pushed four controls off a 390 viewport.
+       Scoped to the .grouped-toolbar class a header opts INTO, never a bare
+       class rule: an unscoped class rule here leaked into another tool's
+       header once already. Buttons never wrap internally — a label that folds
+       to three lines was the whole complaint — and each row wraps as a unit
+       instead, so a phone width stacks the groups rather than squeezing them.
+       The scope caption is plain text, not a title, because the
+       section-vs-search-slice distinction (#789) has to be readable without
+       hovering. Theme tokens only, so both themes follow lib/theme.js. */
+    .section-header.grouped-toolbar {
       flex-direction: column; align-items: stretch; gap: 8px;
-      cursor: default;
     }
-    .section.other-areas .other-areas-toolbar:hover { background: var(--surface); }
-    .section.other-areas .other-areas-toolbar .btn { white-space: nowrap; }
-    .section.other-areas .tb-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .section.other-areas .tb-view { justify-content: space-between; }
-    .section.other-areas .tb-view-controls {
+    .section-header.grouped-toolbar .btn { white-space: nowrap; }
+    .section-header.grouped-toolbar .tb-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .section-header.grouped-toolbar .tb-view { justify-content: space-between; }
+    .section-header.grouped-toolbar .tb-view-controls {
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto;
     }
-    .section.other-areas .action-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .section.other-areas .action-group + .action-group {
+    .section-header.grouped-toolbar .action-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .section-header.grouped-toolbar .action-group + .action-group {
       border-left: 1px solid var(--border-strong); padding-left: 10px;
     }
-    .section.other-areas .scope-cap {
+    .section-header.grouped-toolbar .scope-cap {
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
       color: var(--text-muted); text-transform: uppercase;
     }
-    /* On a phone the two stacked rows pin ~55% of a 390-wide viewport under the
+    /* Other work areas is a counted line's toolbar, not a collapse toggle:
+       #other-areas-line owns the open/close, so this header must not read as
+       clickable. Needs Manual Review's header IS the collapse toggle and
+       keeps the base cursor and hover. */
+    .section.other-areas .other-areas-toolbar { cursor: default; }
+    .section.other-areas .other-areas-toolbar:hover { background: var(--surface); }
+    /* #939 (#936 review finding 2): once the two action groups stack, the
+       divider between them has nothing to divide and draws as an orphan line
+       at the left edge of the second group. The row's own 10px gap already
+       separates them, so the border goes and the gap stays.
+
+       The number is measured, not guessed: swept in real Chrome at 1px, the
+       groups sit side by side down to a LAYOUT width of 1250 and are stacked
+       at 1249. The query is deliberately 1270 rather than 1250, because a
+       media query matches the viewport INCLUDING the scrollbar while layout
+       gets clientWidth WITHOUT it. Tyler's Windows machine has classic ~17px
+       scrollbars, so there the groups stack at a media width near 1266; a
+       1250 breakpoint would leave that machine an orphan line in a ~16px
+       band the Mac can never reproduce. Erring high only means the border is
+       absent for ~20px while the groups are still side by side, which reads
+       fine — the scope captions, not the rule, are what carry #789. */
+    @media (max-width: 1270px) {
+      .section-header.grouped-toolbar .action-group + .action-group {
+        border-left: none; padding-left: 0;
+      }
+    }
+    /* On a phone the stacked rows pin ~55% of a 390-wide viewport under the
        page header; let the toolbar scroll away there instead of the table. */
-    @media (max-width: 640px) { .section.other-areas .other-areas-toolbar { position: static; } }
+    @media (max-width: 640px) { .section-header.grouped-toolbar { position: static; } }
     .sort-select, .manual-search {
       border: 1px solid var(--border-strong);
       border-radius: 5px;
@@ -1617,6 +1645,39 @@
        stays part of what scrolls, and it is a vh so it is a fraction of the
        screen rather than a guess at a row count. CLAUDE.md's standing rule:
        tall content scrolls in its own container, never by moving the page. */
+    /* THE 999 DESK HEALTH BANNER (#915).
+
+       A SEPARATE SURFACE FROM #area-conflict-panel, and #915 says not to stack
+       alarms — so here is why this one has nowhere else to live.
+
+       The desk channel already has a status pill (#desk-sync-status), and it is
+       the right home for "syncing", "offline" and "sync off". But it sits INSIDE
+       the Settings panel, which is collapsed all sort. A message nobody can see
+       without opening Settings cannot satisfy "loud on BOTH devices", which is
+       the entire requirement.
+
+       The conflict panel is the other candidate and is the wrong one: it answers
+       "which package did two people assign differently?" Folding a dead token
+       into it would make one surface answer two questions, which is how a
+       surface stops being trusted — ADR-0022's whole point, and the reason
+       lib/desk-health.js keeps its own state rather than borrowing the
+       conflict store's.
+
+       So: one banner, above the fold, hidden whenever DeskHealth.assess()
+       returns null — which is the normal state and most days is every minute of
+       them. It is empty AND display:none when quiet, never a "999 Desk OK"
+       heading: a permanent green bar is noise that trains the eye to skip the
+       spot where the red one will appear.
+
+       Tokens only, no literal colors and no inline dark rule — theme.css loads
+       after this block and a hardcoded value here could never be reached by it. */
+    #desk-health-banner {
+      display: none; background: var(--surface); border: 1px solid var(--border);
+      border-left: 4px solid var(--danger-ink); border-radius: 8px;
+      margin-bottom: 16px; padding: 10px 14px;
+      font-size: 13px; font-weight: 600; color: var(--danger-ink);
+    }
+
     #area-conflict-panel {
       display: none; background: var(--surface); border: 1px solid var(--border);
       border-left: 4px solid var(--danger-ink); border-radius: 8px;
@@ -1861,6 +1922,8 @@
      whether or not the page has been reloaded since. Deliberately NOT cleared
      by resetApp() — "Load New File" is a report gesture and this is not about
      the loaded report. -->
+<div id="desk-health-banner" role="status" aria-live="polite"></div>
+
 <div id="area-conflict-panel"></div>
 
 <div id="drop-zone"
@@ -2024,70 +2087,85 @@
 
 <!-- SECTION 2: MANUAL REVIEW -->
 <div class="section" id="manual-section">
-  <div class="section-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <h2>&#9888; Needs Manual Review</h2>
-      <span class="badge" id="manual-badge">0</span>
-      <span class="filter-note" id="manual-search-note"></span>
-      <span class="filter-note showing-note" id="manual-showing"></span>
-      <!-- The coded-count chip (#697, spec #690 story 32; #612 decision 2,
-           Tyler: "they should stay but let me filter them out"). A coded row
-           does NOT leave the working list — it dims in place and this chip
-           hides it. Absent entirely at zero, so it is never volume without
-           information. -->
-      <button type="button" class="coded-chip" id="manual-coded-chip" style="display:none"
-        aria-pressed="false" onclick="toggleCodedHidden()"></button>
-      <!-- The parked count (#698, #612 decision 8): while anything is parked a
-           count stays on screen and cannot be filtered away, clickable to
-           reveal the rows. Gone when nothing is parked, because a chip that
-           reads "0 parked" is volume without information (#611). -->
-      <button type="button" class="parked-chip" id="manual-parked-chip" style="display:none"
-        onclick="revealParked()"
-        title="Rows you parked for a later FTrack look. They wait in the Set aside group at the page bottom until you unpark them, including on later sort days, and drop off on their own once a fresh report no longer has the package. Park writes no record. Click to open them."></button>
-      <!-- The two 503 counts (#699, decision #615 point 3), the same quiet
-           register as the parked chip: rows that left the working list leave a
-           number behind, and the reappearance signal gets its own. Both absent
-           at zero, because "0 not fixed" is volume without information (#611)
-           and quiet is exactly how "presumed done" is meant to read. -->
-      <button type="button" class="parked-chip" id="manual-503-chip" style="display:none"
-        onclick="reveal503()"
-        title="Rows you flagged 503, the bad-address dummy route. They wait in the Set aside group at the page bottom, carry no OPS2 code, and the team stages them on the 503 pallet. Click to open them."></button>
-      <button type="button" class="parked-chip" id="manual-not-fixed-chip" style="display:none"
-        onclick="reveal503()"
-        title="Addresses you flagged 503 on an earlier sort day that are back on this report. Still coming back means the address update did not happen. Click to see which."></button>
-      <!-- The filed count (#734), the same quiet register as the parked and 503
-           chips: rows that left the working list leave a number behind. Absent
-           at zero, because "0 assigned" is volume without information (#611). -->
-      <button type="button" class="parked-chip" id="manual-assigned-chip" style="display:none"
-        onclick="revealAssigned()"
-        title="Rows you barcoded and confirmed you assigned. They wait in the Set aside group at the page bottom, still fully codeable, and reset on a new sort day. Click to open them."></button>
+  <!-- #939: the two-row grouped toolbar #874 shipped for Other work areas.
+       Row 1 is the view: the title block (badge, notes, every chip) plus
+       Columns / search / sort. Row 2 is the actions, under one CHECKED ROWS
+       caption — there is no whole-section pair on this lane (no Copy all /
+       Barcode all), so the section-vs-search scope question #789 asked does
+       not arise here and one caption is the whole grouping. Ids, handlers,
+       labels, titles and counts are UNCHANGED from main; updateSelectAreaButtons
+       and friends write into these same ids. -->
+  <div class="section-header grouped-toolbar">
+    <div class="tb-row tb-view">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h2>&#9888; Needs Manual Review</h2>
+        <span class="badge" id="manual-badge">0</span>
+        <span class="filter-note" id="manual-search-note"></span>
+        <span class="filter-note showing-note" id="manual-showing"></span>
+        <!-- The coded-count chip (#697, spec #690 story 32; #612 decision 2,
+             Tyler: "they should stay but let me filter them out"). A coded row
+             does NOT leave the working list — it dims in place and this chip
+             hides it. Absent entirely at zero, so it is never volume without
+             information. -->
+        <button type="button" class="coded-chip" id="manual-coded-chip" style="display:none"
+          aria-pressed="false" onclick="toggleCodedHidden()"></button>
+        <!-- The parked count (#698, #612 decision 8): while anything is parked a
+             count stays on screen and cannot be filtered away, clickable to
+             reveal the rows. Gone when nothing is parked, because a chip that
+             reads "0 parked" is volume without information (#611). -->
+        <button type="button" class="parked-chip" id="manual-parked-chip" style="display:none"
+          onclick="revealParked()"
+          title="Rows you parked for a later FTrack look. They wait in the Set aside group at the page bottom until you unpark them, including on later sort days, and drop off on their own once a fresh report no longer has the package. Park writes no record. Click to open them."></button>
+        <!-- The two 503 counts (#699, decision #615 point 3), the same quiet
+             register as the parked chip: rows that left the working list leave a
+             number behind, and the reappearance signal gets its own. Both absent
+             at zero, because "0 not fixed" is volume without information (#611)
+             and quiet is exactly how "presumed done" is meant to read. -->
+        <button type="button" class="parked-chip" id="manual-503-chip" style="display:none"
+          onclick="reveal503()"
+          title="Rows you flagged 503, the bad-address dummy route. They wait in the Set aside group at the page bottom, carry no OPS2 code, and the team stages them on the 503 pallet. Click to open them."></button>
+        <button type="button" class="parked-chip" id="manual-not-fixed-chip" style="display:none"
+          onclick="reveal503()"
+          title="Addresses you flagged 503 on an earlier sort day that are back on this report. Still coming back means the address update did not happen. Click to see which."></button>
+        <!-- The filed count (#734), the same quiet register as the parked and 503
+             chips: rows that left the working list leave a number behind. Absent
+             at zero, because "0 assigned" is volume without information (#611). -->
+        <button type="button" class="parked-chip" id="manual-assigned-chip" style="display:none"
+          onclick="revealAssigned()"
+          title="Rows you barcoded and confirmed you assigned. They wait in the Set aside group at the page bottom, still fully codeable, and reset on a new sort day. Click to open them."></button>
+      </div>
+      <div class="tb-view-controls">
+        <!-- The Columns panel (#701). One config for the merged manual section,
+             shared with Other work areas below it (same rows, same columns). The
+             button prints its own hidden count so a hidden column always leaves a
+             counted trace (the findability rule, #611). -->
+        <button class="btn btn-gray col-btn" id="columns-btn-manual" data-col-table="manual" aria-haspopup="true" aria-expanded="false" title="Reorder, resize or hide the columns on this table. Your arrangement is saved and survives new reports and new sort days.">&#8801; Columns</button>
+        <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
+        <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
+          <option value="report">Report order</option>
+          <option value="time">Newest scan first</option>
+          <option value="time-asc">Oldest scan first</option>
+          <option value="address">Address (group destination)</option>
+          <option value="reason">Reason</option>
+          <option value="wa">Work area</option>
+          <option value="zip">ZIP code</option>
+          <option value="isp">Service provider (groups same address)</option>
+          <option value="goesto">Goes to (work area)</option>
+        </select>
+      </div>
     </div>
-    <div class="right">
-      <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
-           tracking #s / full barcodes (honoring the Copy-as toggle), one per line, WITHOUT
-           coding them — for pasting into FTrack to research before deciding a code. -->
-      <button class="btn btn-gray" id="copy-selected-manual" onclick="copySelectedManual()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
-      <!-- Print a barcode sheet for the checked rows: full scan barcode + the
-           typed Goes To area on each card. Read-only, never codes a row. -->
-      <button class="btn btn-gray" id="select-area-mine" onclick="selectRowsWithArea('mine')" title="Check every row in this section that has a Goes To area and has not been barcoded yet — the outstanding batch, so a second click never reprints cards you already have (#733)">&#10003; Select with area, not barcoded (0)</button>
-      <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('mine')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
-      <!-- The Columns panel (#701). One config for the merged manual section,
-           shared with Other work areas below it (same rows, same columns). The
-           button prints its own hidden count so a hidden column always leaves a
-           counted trace (the findability rule, #611). -->
-      <button class="btn btn-gray col-btn" id="columns-btn-manual" data-col-table="manual" aria-haspopup="true" aria-expanded="false" title="Reorder, resize or hide the columns on this table. Your arrangement is saved and survives new reports and new sort days.">&#8801; Columns</button>
-      <input type="text" class="manual-search" id="manual-search" placeholder="Search firm or address..." aria-label="Search manual review">
-      <select class="sort-select" id="manual-sort" aria-label="Sort Needs Manual Review">
-        <option value="report">Report order</option>
-        <option value="time">Newest scan first</option>
-        <option value="time-asc">Oldest scan first</option>
-        <option value="address">Address (group destination)</option>
-        <option value="reason">Reason</option>
-        <option value="wa">Work area</option>
-        <option value="zip">ZIP code</option>
-        <option value="isp">Service provider (groups same address)</option>
-        <option value="goesto">Goes to (work area)</option>
-      </select>
+    <div class="tb-row tb-actions">
+      <div class="action-group" role="group" aria-label="Checked rows">
+        <span class="scope-cap">Checked rows</span>
+        <!-- Copy selected (#copy-selected-manual): copies the checked Manual Review rows'
+             tracking #s / full barcodes (honoring the Copy-as toggle), one per line, WITHOUT
+             coding them — for pasting into FTrack to research before deciding a code. -->
+        <button class="btn btn-gray" id="copy-selected-manual" onclick="copySelectedManual()" disabled title="Copy the checked rows (tracking # or full barcode per the Copy-as toggle) to paste into FTrack — does not code them">Copy selected (0)</button>
+        <!-- Print a barcode sheet for the checked rows: full scan barcode + the
+             typed Goes To area on each card. Read-only, never codes a row. -->
+        <button class="btn btn-gray" id="select-area-mine" onclick="selectRowsWithArea('mine')" title="Check every row in this section that has a Goes To area and has not been barcoded yet — the outstanding batch, so a second click never reprints cards you already have (#733)">&#10003; Select with area, not barcoded (0)</button>
+        <button class="btn btn-gray" id="barcode-selected-manual" onclick="barcodeSelected('mine')" disabled title="Print a barcode sheet for the checked rows (full barcode + Goes To area) — does not code them">&#9612;&#9613;&#9612; Barcode selected (0)</button>
+      </div>
     </div>
   </div>
   <!-- Issue #662: the "early strip" — everything the deleted #post-sort-section
@@ -2274,7 +2352,7 @@
          label wrapped, nothing overflowed at 390, every action stayed one
          click away, and the section scope was readable without hovering.
          Ids, handlers, labels and counts are unchanged from #704/#733. -->
-    <div class="section-header other-areas-toolbar">
+    <div class="section-header other-areas-toolbar grouped-toolbar">
       <div class="tb-row tb-actions">
         <div class="action-group" role="group" aria-label="Checked rows">
           <span class="scope-cap">Checked rows</span>
@@ -2649,6 +2727,7 @@
 <script src="lib/ibno-sync.js"></script>
 <script src="lib/sync-controller.js"></script>
 <script src="lib/remote-areas.js"></script>
+<script src="lib/desk-health.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
@@ -3946,6 +4025,65 @@ function deskReadReady() {
 // read — see the adapter for what each value means.
 let deskPullProblem = '';
 
+// The NARROWER of the two: true only when a file ARRIVED and was refused for
+// its FORMAT (a newer version, or a shape parse cannot read). deskPullProblem
+// above is the pill's question — "is anything missing from this screen?" — and
+// a dropped connection answers it yes. This is the banner's question — "is a
+// DEVICE out of date?" — which a dropped connection answers no.
+//
+// They were the same variable until #943's review: a mid-pull network drop was
+// therefore reported as "this version cannot understand the file… this device
+// needs the same update" about a device that was perfectly current, and #915
+// acceptance 4 says offline must not shout at all.
+let deskPullFormatProblem = false;
+
+// WHO THIS PULL ACTUALLY HEARD FROM, set by the fetch adapter alongside the
+// envelopes it returns and consumed once the pull settles.
+//
+// It is a separate variable from the envelope list for one reason: the adapter
+// returns only files it could READ, while the health roster wants only files
+// that are ALSO for today. RemoteAreas.isForDay owns that question and there is
+// no second copy of it in lib/desk-health.js, so the filtering happens here,
+// where the day and the envelopes are both in hand.
+let deskPullDesks = [];
+
+// Set by the fetch adapter the moment it starts, so deskPullOnLoad can tell a
+// pull that FAILED from one that was never attempted. Both make pullOnLoad()
+// return false and only one of them is a health event.
+let deskPullRan = false;
+// The kind of the error that ended the pull ('auth' | 'network' | 'parse'),
+// captured on the way past because SyncController swallows the error itself and
+// reports only a boolean. #915 needs the kind: a dead credential and a dropped
+// station network are the same boolean and completely different instructions.
+let deskPullFailure = '';
+
+// The 999 Desk channel's health (#914 records it, #915 speaks it).
+// Deliberately NOT persisted: every field is about what happened on THIS page
+// since it loaded, and a restored "the desk went quiet" from yesterday evening
+// would be the crying-wolf failure the gate exists to prevent.
+let deskHealth = DeskHealth.empty();
+
+// THE ALARM (#915). Hidden whenever there is nothing to say, which is the
+// normal state — see the CSS block for why this is its own surface and not a
+// line in the conflict panel or the Settings pill.
+function renderDeskHealth() {
+  if (typeof document === 'undefined' || !document) return;
+  const el = document.getElementById('desk-health-banner');
+  if (!el) return;
+  // A device that neither reads nor publishes has no channel to be unhealthy.
+  // Without this, switching the feature off in Settings leaves the last alarm
+  // frozen on screen — an error message about a feature that is not running,
+  // which is a bug report Tyler cannot act on (the same defect #918 round-two
+  // finding 7 caught on deskPullProblem).
+  const alarm = deskReadReady() && deskCtl.syncReady()
+    ? DeskHealth.assess(deskHealth, { now: new Date().toISOString() })
+    : null;
+  if (!alarm) { el.textContent = ''; el.style.display = 'none'; return; }
+  el.textContent = alarm.text;
+  el.dataset.code = alarm.code;
+  el.style.display = 'block';
+}
+
 const deskCtl = SyncController.create({
   storage: toolStorage,
   keys: { token: DESK_TOKEN_KEY, coords: DESK_COORDS_KEY, sha: DESK_SHA_KEY },
@@ -3997,11 +4135,40 @@ const deskCtl = SyncController.create({
     // fetch, which fetchRemote reports as sha === null.
     fetch: async (token, coords) => {
       deskPullProblem = '';
+      deskPullFormatProblem = false;
+      deskPullDesks = [];
+      deskPullRan = true;
+      deskPullFailure = '';
       const mine = RemoteAreas.pathFor(deviceName);
-      const files = await GithubJsonSync.listDir(token, Object.assign({}, coords, { path: RemoteAreas.DIR }));
+      let files;
+      try {
+        files = await GithubJsonSync.listDir(token, Object.assign({}, coords, { path: RemoteAreas.DIR }));
+      } catch (e) {
+        // CAPTURE THE KIND, THEN RETHROW UNCHANGED. The controller owns the
+        // pill and its own error handling; this is only a tap on the wire,
+        // because by the time pullOnLoad() returns, the error is gone and all
+        // that survives is `false` — which cannot tell an expired token from a
+        // station network drop. #915 gives those two opposite instructions.
+        deskPullFailure = DeskHealth.failureKind(e);
+        throw e;
+      }
       const envelopes = [];
-      let unreadable = 0;
-      let unsupported = 0;
+      // THREE COUNTS, NOT TWO, AND THE THIRD IS THE POINT (#943 review, finding 2).
+      //
+      // `unreadable` used to swallow BOTH a genuine parse refusal and a bare
+      // TypeError from a dropped station network, and deskPullOnLoad then fed
+      // the whole lot to DeskHealth as `formatProblem` — which #915 speaks as
+      // "this version cannot understand… if the other device took an update,
+      // this one needs the same one." Said about a device that is perfectly
+      // current, on the one condition #915 acceptance 4 says must stay SILENT
+      // because it fixes itself. So a flaky network shouted the loudest and
+      // most misleading of the three messages, several times a sort.
+      //
+      // The split is by CAUSE, not by call site: a file that arrived and was
+      // refused is a format problem; a file that never arrived is offline.
+      let unreadable = 0;    // arrived, refused by parse (shape/truncated/json)
+      let offline = 0;       // never arrived — transport, and NEVER an alarm
+      let unsupported = 0;   // arrived, refused as a NEWER format
       for (const f of files) {
         if (mine && f.path === mine) continue;   // never read our own file back
         try {
@@ -4016,7 +4183,18 @@ const deskCtl = SyncController.create({
           // make come true. GithubJsonSync.fetchRemote swallows a JSON error of
           // its own and hands back `[]`, which parse then refuses as 'shape',
           // so a half-written file really does arrive on this path.
-          if (parsed.ok) envelopes.push(parsed.envelope);
+          if (parsed.ok) {
+            envelopes.push(parsed.envelope);
+            // ONLY A FILE FOR TODAY COUNTS AS "this desk has published today",
+            // which is #915's gate. An envelope left over from yesterday reads
+            // fine and applies nothing, and letting it into the roster would
+            // fire the quiet alarm every morning for a desk nobody has heard
+            // from yet BY DESIGN — the exact cry-wolf failure the gate exists
+            // to prevent.
+            if (RemoteAreas.isForDay(parsed.envelope, currentSortDay)) {
+              deskPullDesks.push({ by: parsed.envelope.by, updatedAt: parsed.envelope.updatedAt });
+            }
+          }
           else if (parsed.reason === 'version') unsupported++;
           else unreadable++;
         } catch (e) {
@@ -4025,7 +4203,12 @@ const deskCtl = SyncController.create({
           // bare TypeError from a dropped network, `coords`) is counted and
           // spoken rather than dropped.
           if (e && e.code === 'auth') throw e;
-          unreadable++;
+          // DeskHealth.failureKind owns this taxonomy; there is no second copy
+          // of it here. Anything it cannot place is 'network', which is the
+          // safe direction — it under-reports into the pill rather than
+          // over-reporting into the banner.
+          if (DeskHealth.failureKind(e) === 'parse') unreadable++;
+          else offline++;
         }
       }
       // BOTH COUNTS ARE REPORTED, not the first one that fires (#918
@@ -4042,7 +4225,19 @@ const deskCtl = SyncController.create({
           ? 'one desk’s areas could not be read'
           : unreadable + ' desks’ areas could not be read');
       }
+      if (offline) {
+        trouble.push(offline === 1
+          ? 'one desk’s file could not be fetched — the connection dropped'
+          : offline + ' desks’ files could not be fetched — the connection dropped');
+      }
       if (trouble.length) deskPullProblem = trouble.join('; ') + ' — tap Sync now';
+      // WHAT THE PILL SAYS AND WHAT THE BANNER SAYS ARE NOW TWO ANSWERS.
+      //
+      // Every one of the three still reaches the PILL, because all three mean a
+      // real desk's areas are missing from this screen and #918 findings 5/6
+      // exist to stop that being silent. Only the two FORMAT causes reach the
+      // banner, because only they are worth interrupting a sort about.
+      deskPullFormatProblem = !!(unsupported || unreadable);
       return { data: envelopes, sha: null };
     },
     // Write OUR file, whole. There is no merge to do: this device owns this
@@ -4050,11 +4245,24 @@ const deskCtl = SyncController.create({
     push: async (token, local, sha, coords) => {
       const path = RemoteAreas.pathFor(deviceName);
       if (!path) return { data: local, sha: sha };
-      const r = await GithubJsonSync.pushMerge(token, local, {
-        coords: Object.assign({}, coords, { path: path }),
-        merge: (_remote, current) => current,
-        messagePrefix: '999 desk areas',
-      });
+      // TAPPED FOR HEALTH THE SAME WAY THE FETCH IS, and on the cage PC this is
+      // the path that catches an expired token FIRST: the desk writes far more
+      // often than it reads, so a 401 shows up here minutes before a poll would
+      // find it. A dead credential noticed sooner is the whole of #915.
+      let r;
+      try {
+        r = await GithubJsonSync.pushMerge(token, local, {
+          coords: Object.assign({}, coords, { path: path }),
+          merge: (_remote, current) => current,
+          messagePrefix: '999 desk areas',
+        });
+      } catch (e) {
+        deskHealth = DeskHealth.recordPublish(deskHealth, { ok: false, failure: e });
+        renderDeskHealth();
+        throw e;
+      }
+      deskHealth = DeskHealth.recordPublish(deskHealth, { ok: true });
+      renderDeskHealth();
       return { data: r.data, sha: r.sha };
     },
     mergeLocal: (remote, _local) => remote,
@@ -4121,11 +4329,38 @@ async function deskPullOnLoad() {
   // over a channel that is now switched off. An error message on a switched-off
   // feature is a bug report Tyler cannot act on.
   deskPullProblem = '';
-  if (!deskReadReady()) { refreshDeskSyncStatus(); return false; }
+  deskPullFormatProblem = false;
+  deskPullRan = false;
+  deskPullFailure = '';
+  if (!deskReadReady()) { refreshDeskSyncStatus(); renderDeskHealth(); return false; }
   const pulled = await deskCtl.pullOnLoad();
+  // RECORD BEFORE PAINTING, and only when the adapter actually ran (#914).
+  //
+  // pullOnLoad() also returns false when it never reached the network at all —
+  // no token, no coords — and that is not a health event. Recording it as one
+  // would stamp lastAttemptAt, which the throttle reads, so an unconfigured
+  // device would then rate-limit its own first real pull the moment a token was
+  // pasted in. deskPullRan is set by the adapter, so it is true only when a
+  // request was genuinely made.
+  if (deskPullRan) {
+    deskHealth = DeskHealth.recordPull(deskHealth, {
+      at: new Date().toISOString(),
+      day: currentSortDay,
+      ok: !!pulled,
+      // A per-file FORMAT refusal is not a failed pull, but it IS a desk whose
+      // areas are not on screen for a reason a human must act on. Narrower than
+      // deskPullProblem on purpose (#943 review, finding 2): the pill reports
+      // every per-file trouble including a dropped connection, and only the
+      // format ones are worth the banner.
+      formatProblem: deskPullFormatProblem,
+      desks: deskPullDesks,
+      failure: deskPullFailure || 'network',
+    });
+  }
   // The controller has said its piece; a per-file failure it never saw goes on
   // top. See the fetch adapter for why this cannot be a throw.
   if (deskPullProblem) setDeskSyncStatus('error', deskPullProblem);
+  renderDeskHealth();
   // A partial failure counts as NOT DONE. One of three desks unread is a real
   // gap, and the retry costs one listing.
   return !!pulled && !deskPullProblem;
@@ -4139,51 +4374,118 @@ async function deskPullOnLoad() {
 // sort-day gate discards every incoming file. The feature then did nothing at
 // all until a second F5, which is the whole first hour of a sort.
 //
-// So the pull also runs when a load first establishes the day. Guarded on the
-// day it last ran for, because applySortDayFrom is reached from four call sites
-// and Tyler re-drops the report constantly through a shift (#610) — an
-// ungated call would be a network round trip per drop. #914 will make the read
-// a poll and will replace this; until then, this is what makes the day it was
-// built for work.
+// So the pull also runs when a load first establishes the day.
 //
-// THE DAY IS STAMPED AFTER A PULL THAT RAN AND SUCCEEDED, NEVER BEFORE (#918
-// round-two review finding 1, and the worst of that round).
+// ── #914 REPLACED THE ONCE-PER-DAY LATCH THAT USED TO LIVE HERE ──────────────
 //
-// The first draft set deskPulledDay on the line before the await, so a pull
-// that failed — or one that was skipped because the device had no name yet —
-// consumed the whole day anyway. Two real shifts follow from that:
+// Until this ticket the day was SPENT by the first successful pull
+// (`deskPulledDay`), because page load and report drop were the only two
+// triggers and an ungated call would be a round trip per drop. That made the
+// feature a snapshot: whatever the other desk had published by the time Tyler's
+// first pull landed, and never a word after it. Everything they typed for the
+// rest of the sort reached him only if he pressed F5 — which is the rework
+// problem #887 exists to solve, still unsolved:
 //
-//   - a flaky station network at boot paints "offline", and Tyler then re-drops
-//     the report twenty times through the sort. Every one of those calls takes
-//     the early return. Her areas never appear, all shift, even once the
-//     network is back.
-//   - the cage PC boots unnamed, deskPullOnLoad returns early on
-//     !deskReadReady(), the day is spent anyway, and naming the device in
-//     Settings afterwards changes nothing until an F5.
+//   > i dont want them to have to export file i want it to be live during the
+//   > sort so we dont rework eachothers work
 //
-// #914's poll does not exist yet, so page load and report drop are the ONLY two
-// triggers this feature has, and the first draft spent both on one failure.
-let deskPulledDay = '';
-// One pull in flight at a time. Necessary BECAUSE the stamp moved after the
-// await: without it a burst of re-drops (#610 — Tyler re-drops constantly)
-// would each see an unstamped day and start their own round trip.
+// A read on page load is not live. So the latch is gone and its job is now done
+// by two things that do not lie about time:
+//
+//   - a THROTTLE (DeskHealth.shouldPull, 10s) instead of a day-long latch, so
+//     "read on every report drop" is affordable. Tyler re-drops constantly
+//     (#610); a drop inside the gap rides on the read that just happened, which
+//     is the same answer it would have got.
+//   - a POLL (DeskHealth.POLL_MS, 30s) for when he does not re-drop.
+//
+// THE THROTTLE READS THE ATTEMPT, NOT THE SUCCESS, and that keeps #918
+// round-two finding 1 fixed rather than reintroducing it under a new name. A
+// pull that fails costs 10 seconds, not the shift: the flaky-network-at-boot
+// case that used to blank her areas all day now retries on the next drop.
+//
+// One pull in flight at a time, still — a burst of re-drops must not each start
+// their own round trip.
 let deskPullInFlight = null;
-function deskPullForDay() {
-  if (!currentSortDay || currentSortDay === deskPulledDay) return;
+function deskPullForDay(opts) {
+  // No day, no read. The sort-day gate would discard every incoming file
+  // anyway, so this would be a request that could not change the screen.
+  if (!currentSortDay) return;
   if (deskPullInFlight) return deskPullInFlight;
-  const day = currentSortDay;
+  // `force` is for the gestures where a human is plainly asking to be current
+  // (Sync now, and coming back to a tab that was hidden). The throttle exists to
+  // stop machine-generated bursts, not to make a person wait ten seconds.
+  const force = !!(opts && opts.force);
+  if (!force && !DeskHealth.shouldPull(deskHealth, { now: new Date().toISOString() })) return;
   deskPullInFlight = (async () => {
-    try {
-      const ok = await deskPullOnLoad();
-      // Only a pull that reached the network and came back clean spends the
-      // day — and only for the day it was actually made against, so a pull that
-      // straddles a day roll cannot silently mark the NEW day as done.
-      if (ok && currentSortDay === day) deskPulledDay = day;
-    } finally {
-      deskPullInFlight = null;
-    }
+    try { await deskPullOnLoad(); }
+    finally { deskPullInFlight = null; }
   })();
   return deskPullInFlight;
+}
+
+// THE POLL (#914).
+//
+// Every POLL_MS (30s, measured rather than argued — see lib/desk-health.js):
+// pull if the throttle allows, and repaint the alarm whether or not
+// it did. The repaint is not optional — the quiet alarm is a statement about
+// ELAPSED TIME, so a desk that went silent at 09:00 becomes reportable at 09:30
+// with no new data arriving and nothing else on the page to notice it.
+//
+// PAUSED WHILE THE TAB IS HIDDEN, and resumed with a forced pull when it comes
+// back. The reason is not battery, it is honesty: a laptop shut on a desk for
+// two hours would otherwise wake up having "polled" throughout and paint an
+// alarm about a gap that is its own, not the desk's. Coming back forces one
+// read so the first thing shown is current rather than two hours stale.
+let deskPollTimer = null;
+// THE REFOCUS HANDLER IS HELD, NOT ANONYMOUS (#943 review, finding 4).
+//
+// It used to be registered inline inside startDeskPoll with no way to take it
+// off again, and stopDeskPoll cleared only the interval. Two consequences, both
+// real on the cage PC where the token gets pasted, cleared and pasted again:
+// the listener stayed live on a channel that had been switched OFF, and every
+// on→off→on cycle added another copy, so one refocus fired N forced pulls.
+// (The in-flight guard in deskPullForDay collapses the network traffic, which
+// is precisely why this would never have shown up as a symptom.)
+let deskVisibilityHandler = null;
+function stopDeskPoll() {
+  if (deskPollTimer) {
+    clearInterval(deskPollTimer);
+    deskPollTimer = null;
+  }
+  if (deskVisibilityHandler && typeof document !== 'undefined' && document && document.removeEventListener) {
+    document.removeEventListener('visibilitychange', deskVisibilityHandler);
+  }
+  deskVisibilityHandler = null;
+}
+function startDeskPoll() {
+  if (deskPollTimer) return;
+  if (typeof setInterval !== 'function') return;
+  // NO TIMER FOR A CHANNEL THAT IS SWITCHED OFF, and this is not merely tidy.
+  //
+  // An unconfigured device has nothing to poll: every tick would take the same
+  // early return inside deskPullForDay forever. Worse, a live interval keeps an
+  // event loop alive — which wedged EVERY ibno DOM test in this suite when the
+  // first draft started the timer unconditionally at boot, because jsdom's
+  // timers hold the child process open and the runner waits on it. A feature
+  // nobody has enabled must not leave a heartbeat running behind it.
+  //
+  // saveDeskSettings() calls this again, so pasting a token mid-sort starts the
+  // poll without an F5 — which is the one path this gate could otherwise break.
+  if (!deskCtl.syncReady() || !deskReadReady()) return;
+  deskPollTimer = setInterval(function () {
+    if (typeof document !== 'undefined' && document && document.hidden) return;
+    deskPullForDay();
+    renderDeskHealth();
+  }, DeskHealth.POLL_MS);
+  // Registered at most once per running poll, and taken off by stopDeskPoll.
+  if (!deskVisibilityHandler && typeof document !== 'undefined' && document && document.addEventListener) {
+    deskVisibilityHandler = function () {
+      if (document.hidden) return;
+      deskPullForDay({ force: true });
+      renderDeskHealth();
+    };
+    document.addEventListener('visibilitychange', deskVisibilityHandler);
+  }
 }
 // Push now, skipping the 5s debounce. Mirrors ibnoSyncNow(); used by the DOM
 // test to assert what actually goes on the wire without waiting on a timer.
@@ -4272,6 +4574,30 @@ function saveDeskSettings() {
   // published. It self-corrected when the panel closed, which is not where the
   // user is looking.
   refreshDeskSyncStatus();
+  // The channel may have just been switched on (or off) by this very click, and
+  // the poll is gated on that same readiness — so it is started or stopped here
+  // rather than only at boot. Without this, an Admin who pastes a token
+  // mid-sort gets a live feature that does not go live until an F5, which is
+  // the exact shape of the bug #914 exists to remove.
+  // DELIBERATELY STARTS THE POLL WITHOUT FORCING A PULL HERE.
+  //
+  // A pull on this click looked like an obvious kindness — the device that just
+  // became able to read should see the work already sitting in the repo — and it
+  // is wrong for a reason worth recording, because the next person will want to
+  // add it back.
+  //
+  // The pull repaints the pill to "syncing…", which lands directly beside the
+  // Save button the user is looking at, in place of the settled state that #918
+  // round-two finding 3 deliberately put there. Eight existing assertions pin
+  // that state, and they are pinning a reviewed decision about what this panel
+  // says after a save, not an implementation detail.
+  //
+  // The cost of leaving it out is bounded and small: the poll below fires within
+  // POLL_MS, and anyone finishing setup mid-sort drops a report within moments,
+  // which forces a read anyway.
+  if (deskCtl.syncReady() && deskReadReady()) startDeskPoll();
+  else stopDeskPoll();
+  renderDeskHealth();
   const st = document.getElementById('desk-settings-status');
   if (st) {
     // "SAVED" AND "ON" ARE DIFFERENT CLAIMS, AND THIS SPAN MUST NOT CONFLATE
@@ -9231,13 +9557,23 @@ function applySortDayFrom(rows, opts) {
     filed503Log = pruned503;
     save503Log();
   }
-  // The other desk's areas (#913), on the load that first names a day. Called
-  // on BOTH sides of the clock guard: a same-day re-drop takes the early return
-  // below, and on a cold boot the clock may already have reached today's day
-  // through the Post Sort report before the main pull lands. deskPullForDay()
-  // is idempotent per sort day, so the pair costs one round trip a shift.
+  // The other desk's areas, on every load that names a day (#913, made live by
+  // #914). Called on BOTH sides of the clock guard: a same-day re-drop takes the
+  // early return below, and on a cold boot the clock may already have reached
+  // today's day through the Post Sort report before the main pull lands.
+  //
+  // NO LONGER once per sort day — #914 replaced that latch with a 10s throttle,
+  // which is what turns Tyler's constant re-drops (#610) into the read trigger
+  // they always should have been. A same-day re-drop is now a real pull, not a
+  // no-op, and that is the point of this ticket.
   if (!SortDay.isLaterSortDay(day, currentSortDay)) { deskPullForDay(); return; }
   currentSortDay = day;
+  // Yesterday's roster is not evidence about today (#915). Without this roll, a
+  // morning load would carry last night's `updatedAt` into the gate and fire
+  // "nothing new from Marisol for 940 minutes" on a desk that is simply not
+  // staffed yet — the exact cry-wolf failure the publish-seen-today gate exists
+  // to prevent, arriving by the other door.
+  deskHealth = DeskHealth.rollDay(deskHealth, day);
   // The barcode-sheet ticks expire with their sort day (#733 needs this: a tick
   // now HOLDS A ROW OUT of "Select with area, not barcoded", so one that
   // outlived its day would hide today's package behind last week's card). It
@@ -18125,6 +18461,15 @@ ibnoPullOnLoad();
 // resting state either way.
 deskPullForDay();
 refreshDeskSyncStatus();
+// #914. GATED, NOT UNCONDITIONAL — startDeskPoll() starts nothing on a device
+// whose desk channel is switched off. An earlier draft started the timer here
+// regardless and hung EVERY ibno DOM test, because jsdom's timers hold the
+// child process open and the runner waits on it forever. The path that notices
+// a token pasted in halfway through a sort is saveDeskSettings(), which calls
+// startDeskPoll() itself; this call only covers a device that was already
+// configured before the page loaded.
+startDeskPoll();
+renderDeskHealth();
 </script>
 <script>ToolHelpers.pinHeader();</script>
 </body>
