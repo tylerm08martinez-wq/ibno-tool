@@ -3071,6 +3071,12 @@ function saveDeviceName() {
     // repaint added to fix a different finding from the same review.
     const cursorLabel = workCursorLabel();
     renderEarlyLane();
+    // AND THE SET ASIDE STRIP (#974 review, minor 1). Its tabs and its Other
+    // desk pane are gated on otherDeskAllowed(), which reads `deviceName` at
+    // render time — so renaming this device in Settings has to repaint the
+    // strip too, or the pane stays on screen for a device that may no longer be
+    // allowed to see it until some unrelated render happens along.
+    renderSetAside();
     restoreWorkCursor(cursorLabel);
     // THE DEVICE NAME IS THE 999 DESK CHANNEL'S OFF SWITCH, IN BOTH DIRECTIONS
     // (#918 round-three finding 5). deskPublishReady() has always required it,
@@ -4833,6 +4839,69 @@ function stopDeskPoll() {
   }
   deskVisibilityHandler = null;
 }
+// repaintArrivalAges() -> keep the age on the author pill honest between pulls
+// (#975).
+//
+// THE LOG DOES NOT CHANGE ON A QUIET TICK, BUT THE AGE DOES. deskPullForDay's
+// setLocal already repaints every label that ARRIVED, so a row is right at the
+// moment it lands and then silently wrong a minute later. This is the other
+// half: on every poll tick, repaint the rows that currently carry an arrival so
+// `12m` becomes `13m` rather than freezing at whatever it read when it landed.
+//
+// THE PILL, AND NOTHING BUT THE PILL (#977 review, critical 1). The first draft
+// called repaintAreaSurfaces per label, which is the pull's own repainter, and
+// that made a clock tick behave like an arriving area. repaintGoesTo's focus
+// guard answers "an import is racing this box" by calling shadowArea(label,
+// value), and on blur maybeSurfaceTypingConflict turns that shadow into a
+// PERMANENT areaConflictStore row plus a "their area arrived while you were
+// typing" warning. Reproduced: the supervisor focuses a box the admin published
+// 275 into, types 140, and one 30 s tick with no new pull invents an unresolved
+// disagreement. lib/area-conflicts.js never un-resolves a row, so that is a
+// durable wrong record about a race that never happened.
+//
+// So the tick edits ONE text node per row: the existing `.by-tag` in the Goes
+// To cell, its textContent and its title, from byTagParts. No paintArea, no
+// repaintGoesTo, no repaintAreaSurfaces, no shadowArea, no
+// syncBarcodeDialogArea, no refreshWorkBar. It cannot touch the input, so a
+// focused box cannot be read as a race; it writes no store, so nothing it does
+// outlives the next repaint.
+//
+// A row with no pill is SKIPPED rather than given one. A pill appearing is a
+// statement that somebody else answered the row, and that statement belongs to
+// the paint paths that read the store — the tick only ages what is already
+// there. Past the cutoff byTagParts returns the bare name and the shipped
+// title, so the age disappears on a tick the same way it does on a repaint.
+//
+// SCOPED TO THE ARRIVAL LOG, never to every row on screen. The log holds at
+// most DeskActivity.MAX_LOG labels (400) and a real day measured 225.
+function repaintArrivalAges() {
+  if (!otherDeskAllowed()) return;
+  const items = (deskArrivals && Array.isArray(deskArrivals.items)) ? deskArrivals.items : [];
+  const seen = new Set();
+  items.forEach(function (it) {
+    const label = it && it.label;
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    try { ageOnePill(label); } catch (e) { console.warn('[975] age repaint', e); }
+  });
+}
+
+// One row's pill, read-only in every direction that matters: it reads the area
+// store to learn WHOSE name the pill carries (ActualArea.otherBy, the same
+// reader repaintGoesTo uses) and writes only into the span that already exists.
+function ageOnePill(label) {
+  const byName = ActualArea.otherBy(actualAreaStore, label, deviceName);
+  if (!byName) return;
+  document.querySelectorAll('.goesto-input[data-label="' + cssAttrEscape(label) + '"]').forEach(el => {
+    const cell = el.closest('.goesto-cell');
+    const btag = cell && cell.querySelector('.by-tag');
+    if (!btag) return;
+    const parts = byTagParts(label, byName);
+    btag.title = parts.title;
+    btag.textContent = parts.text;
+  });
+}
+
 function startDeskPoll() {
   if (deskPollTimer) return;
   if (typeof setInterval !== 'function') return;
@@ -4852,6 +4921,7 @@ function startDeskPoll() {
     if (typeof document !== 'undefined' && document && document.hidden) return;
     deskPullForDay();
     renderDeskHealth();
+    repaintArrivalAges();
   }, DeskHealth.POLL_MS);
   // Registered at most once per running poll, and taken off by stopDeskPoll.
   if (!deskVisibilityHandler && typeof document !== 'undefined' && document && document.addEventListener) {
@@ -12226,6 +12296,51 @@ function initColumnLayout() {
   applyColumnLayouts();
 }
 
+// ─── THE AGE ON THE AUTHOR PILL (#975) ──────────────────────────────────────
+//
+// Tyler, 2026-09-08: "i want it to match exactly what we already have. i just
+// want it to be a little addition, not a complete revamp." So there is NO new
+// element, NO new class and NO new colour here. The pill #886 already draws
+// keeps its markup and its styling, and its TEXT grows a middle dot and an
+// age: `KEVIN'S DESK · 12m`. Past two hours it reads the bare name again,
+// exactly as it does today.
+//
+// SUPERVISOR DEVICES ONLY (#974), and read at paint time like every other
+// otherDeskAllowed() caller — an admin's cage PC sees the pill it has always
+// seen.
+//
+// THE SOURCE IS THE IN-MEMORY ARRIVAL LOG (#972), which nothing on the answer
+// path reads and which is never persisted. A page refreshed since the pull has
+// no arrival on record, so ageTagFor returns null and both the text and the
+// title fall back to the shipped ones. There is only ever one pill.
+//
+// ONE BUILDER FOR BOTH PAINTERS. goesToCell() draws the pill at row-build time
+// and repaintGoesTo() redraws it on every commit and every pull; the wording
+// lived in two places before this ticket and drifting them apart is how the
+// pill starts telling two stories about the same row.
+function byTagParts(label, byName) {
+  const plain = { text: byName, title: 'Answered by ' + byName + ', not on this device' };
+  if (!byName || !otherDeskAllowed()) return plain;
+  let tag = null;
+  try {
+    tag = DeskActivity.ageTagFor(deskArrivals, label, { now: new Date().toISOString() });
+  } catch (e) { tag = null; }
+  if (!tag) return plain;
+  // THE TITLE SAYS THE SAME AGE THE PILL DOES (#977 review, minor 6). Under an
+  // hour both read minutes, so the title spells it out as "12 min ago". From an
+  // hour the pill reads `1h23m` and a title saying "83 min ago" is the same fact
+  // in a second unit, which is one arithmetic step the reader should not have to
+  // do to check the two agree. Past an hour the title reuses the pill's own text.
+  const age = tag.minutes < 60
+    ? Math.max(1, tag.minutes) + ' min ago'
+    : tag.text + ' ago';
+  return {
+    text: byName + ' · ' + tag.text,
+    title: 'Answered by ' + byName + ' at ' + otherDeskClock(tag.at) + ', '
+      + age + ', not on this device',
+  };
+}
+
 // goesToCell(item, opts) -> opts.earlyLane: true when the caller's commit path
 // is commitPostSortGoesTo rather than commitGoesTo. Both lanes fill siblings at
 // the same address as of 2026-08-17, so the tooltip no longer denies
@@ -12252,6 +12367,9 @@ function goesToCell(item, opts) {
   // reader is ActualArea.otherBy and no predicate on this page gains a read of
   // `by`. An unnamed device shows nothing — see otherBy's header.
   const byName = v ? ActualArea.otherBy(actualAreaStore, item && item.label, deviceName) : '';
+  // The pill's text and title in one read (#975). Built once, because both
+  // halves of it come from the same arrival lookup.
+  const byParts = byName ? byTagParts(item && item.label, byName) : null;
   const title = o.earlyLane
     ? 'Where this package actually goes. Typing here also fills any other row at the SAME address that is still empty — it never overwrites a confirmed area.'
     : 'Where this package actually goes. Typing here also fills any other review row at the SAME address.';
@@ -12271,7 +12389,7 @@ function goesToCell(item, opts) {
     ' title="' + ToolHelpers.escapeHtml(title) + '">' +
     (auto ? '<span class="same-addr" title="Filled automatically because another package shares this exact address">same addr</span>' : '') +
     (early ? '<span class="early-tag" title="Pre-filled by the Post Sort early lane — not yet confirmed by a scan on this report">early</span>' : '') +
-    (byName ? '<span class="by-tag" title="' + ToolHelpers.escapeHtml('Answered by ' + byName + ', not on this device') + '">' + ToolHelpers.escapeHtml(byName) + '</span>' : '') +
+    (byParts ? '<span class="by-tag" title="' + ToolHelpers.escapeHtml(byParts.title) + '">' + ToolHelpers.escapeHtml(byParts.text) + '</span>' : '') +
     noteHtml +
     '</td>';
 }
@@ -12793,8 +12911,9 @@ function repaintGoesTo(label) {
         btag.className = 'by-tag';
         cell.appendChild(btag);
       }
-      btag.title = 'Answered by ' + byNow + ', not on this device';
-      btag.textContent = byNow;
+      const parts = byTagParts(label, byNow);
+      btag.title = parts.title;
+      btag.textContent = parts.text;
     } else if (btag) {
       btag.remove();
     }
