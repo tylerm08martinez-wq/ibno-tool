@@ -1675,6 +1675,67 @@
        out under the toolbar. Absent when quiet (#611), never a "0 not fixed". */
     .not-fixed-note { padding: 8px 14px; }
 
+    /* ── THE OTHER DESK PANE (#949) ────────────────────────────────────────
+       THEME TOKENS ONLY, no hardcoded colour and no separate dark rule — the
+       same discipline .by-tag and .new-tag above are written to, and the
+       reason is tests/theme-contrast-dom.test.js, which freezes this tool's
+       hardcoded-colour budget and may only shrink. A dark override in
+       theme.css would also cascade over this block (it loads after the inline
+       <style>), so every value here flips with the theme by construction
+       rather than by a second rule somebody has to remember to write. */
+    .other-desk-count { background: var(--surface-2); color: var(--text-muted); }
+    .other-desk-group { border-top: 1px solid var(--border-soft); }
+    .other-desk-group:first-child { border-top: 0; }
+    .other-desk-head {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 10px 14px 6px;
+    }
+    .other-desk-name { font: 800 13px/1.2 inherit; color: var(--text); }
+    /* The freshness line. --text-muted when the desk is current, --brand-ink
+       when it is not: "look here" is the same job .by-tag uses that token for.
+       It is never red — a quiet desk is real and actionable but is not an
+       emergency, which is exactly the warn/error split lib/desk-health.js
+       already draws for the banner.
+
+       NOT --text-faint (#968 review finding 10). #999 on white is 2.85:1 and
+       fails WCAG AA for body text, and this line is not decoration: in the
+       fresh state it is the ONLY thing on screen that says how old the list
+       below it is. --text-muted is #666 light / #b9b9c6 dark, both over 4.5:1
+       against their own surface. */
+    .other-desk-when { font: 600 11px/1.2 inherit; color: var(--text-muted); }
+    .other-desk-group[data-fresh="stale"] .other-desk-when,
+    .other-desk-group[data-fresh="never"] .other-desk-when,
+    .other-desk-group[data-fresh="absent"] .other-desk-when {
+      color: var(--brand-ink); font-weight: 800;
+    }
+    .other-desk-kind {
+      padding: 6px 14px 0; font: 700 11px/1.2 inherit;
+      letter-spacing: .02em; text-transform: uppercase; color: var(--text-muted);
+    }
+    /* Same reasoning as .other-desk-when: this note is the sentence that
+       distinguishes "parked nothing" from "lane is broken". */
+    .other-desk-note { padding: 4px 14px 10px; font: 600 11px/1.4 inherit; color: var(--text-muted); }
+    /* No hover lift and no pointer: these rows are not clickable and must not
+       advertise that they are. */
+    .other-desk-row td { cursor: default; }
+
+    /* The one sentence under the name: when they last typed a Goes To, and how
+       much of theirs is here today. Muted while they are working; it takes the
+       plain text colour once they have gone quiet, AND when nothing has been
+       typed at all, because both are the reading Tyler acts on. This matches
+       .other-desk-when, which escalates on stale, never and absent alike: an
+       admin with nothing typed today is as worth looking at as one gone quiet.
+
+       The head is a wrapping flex row, so `display: block` does nothing here.
+       flex-basis: 100% is what forces the sentence onto its own line under the
+       name instead of landing beside it as a third item on the same row. */
+    .other-desk-typed { flex-basis: 100%; font: 600 11px/1.3 inherit; color: var(--text-muted); }
+    .other-desk-typed[data-typed-state="stale"],
+    .other-desk-typed[data-typed-state="never"] { color: var(--text); }
+    /* Recent Goes To rows are a record of what arrived, not work to do. Same
+       no-pointer rule as .other-desk-row, held back a little further. */
+    .other-desk-recent-row td { cursor: default; opacity: 0.85; }
+
     /* ── WORK AREA DISAGREEMENTS (#796) ─────────────────────────────────────
        The one surface in the 999 Desk design that exists because a silent
        merge could put a package on the wrong belt. It sits directly under the
@@ -2521,6 +2582,20 @@
               aria-selected="false" aria-controls="set-aside-pane-assigned"
               onclick="event.stopPropagation();clickSetAsideTab('assigned')"
               onkeydown="event.stopPropagation()">&#9989; Work area assigned <span class="badge" id="assigned-badge">0</span></button>
+      <!-- OTHER DESK (#949, PRD #887). THEIR park, THEIR 503s and THEIR work
+           area assigned, read-only, grouped by the person who did them, so
+           Tyler can see what has already been worked instead of reworking it.
+
+           ITS COUNT IS NOT A BADGE ABOUT THIS DEVICE. `other-desk-count` is a
+           deliberately separate element from #parked-badge / #filed-503-badge /
+           #assigned-badge, and nothing in it ever reaches `isSetAside`, a chip,
+           a lane predicate or the progress denominator — that is the #740 shape
+           this whole lane is built to avoid, and the DOM test pins it with a
+           control shown RED. It counts rows that belong to somebody else. -->
+      <button type="button" class="set-aside-tab" id="set-aside-tab-other" role="tab"
+              aria-selected="false" aria-controls="set-aside-pane-other"
+              onclick="event.stopPropagation();clickSetAsideTab('other')"
+              onkeydown="event.stopPropagation()">&#128421; Other desk <span class="badge other-desk-count" id="other-desk-count">0</span></button>
       <span class="lane-scope">deferred for a later look &middot; waits until you unpark it, or the package stops showing up</span>
     </div>
   </div>
@@ -2634,6 +2709,37 @@
         </thead>
         <tbody id="assigned-tbody" class="assigned-body"></tbody>
       </table>
+    </div>
+
+    <!-- ── THE OTHER DESK PANE (#949) ────────────────────────────────────────
+         READ-ONLY, AND THAT IS THE FEATURE. No code pill, no Goes To box, no
+         Unpark, no Back to list, no checkbox: every one of those writes to
+         THIS device's stores, and these rows are somebody else's decisions
+         held in an in-memory map (lib/desk-state.js). A control that looked
+         like the working list's and quietly wrote here would be ADR-0022's
+         invariant-2 failure with a person's name on it.
+
+         GROUPED BY PERSON, NOT MERGED INTO "the desk" — #887 values continuity
+         across the Wed/Thu handover, so who did the work is the heading.
+
+         THE FRESHNESS LINE IS NOT DECORATION. deskStatePublish's failures are
+         swallowed on the publishing device (PR #967 assumption 5), so an empty
+         group and a broken lane look identical from here. Every group states
+         when it was last heard from; a desk the AREAS lane has heard from that
+         has published no state file at all gets a group of its own saying so.
+         An empty pane with no freshness signal is the dangerous answer. -->
+    <div id="set-aside-pane-other" role="tabpanel" aria-labelledby="set-aside-tab-other" style="display:none">
+      <div class="section-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="filter-note">their work, on their device &middot; read-only &middot; nothing here is parked, filed or coded on this machine</span>
+        </div>
+        <div class="right">
+          <button class="btn btn-gray" id="copy-all-other" onclick="copyAllOtherDesk()" title="Copy every row on this pane that the report in front of you also carries (tracking # or full barcode per the Copy-as toggle), one per line. Read-only: it files nothing and parks nothing here.">Copy all (0)</button>
+          <button class="btn btn-gray" id="barcode-all-other" onclick="barcodeAllOtherDesk()" title="Print a barcode sheet for every row on this pane the report in front of you also carries, to walk their work off paper. Read-only; it never codes a row, never files one and never parks one on this device.">&#9612;&#9613;&#9612; Barcode all (0)</button>
+        </div>
+      </div>
+      <div class="filter-note other-desk-empty" id="other-desk-empty" style="display:none"></div>
+      <div id="other-desk-groups"></div>
     </div>
   </div>
 </div>
@@ -2801,6 +2907,7 @@
      normalisation to its own module. -->
 <script src="lib/desk-state.js"></script>
 <script src="lib/desk-health.js"></script>
+<script src="lib/desk-activity.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
@@ -4193,6 +4300,23 @@ function renderDeskHealth() {
 // pins, with the leak as its control.
 let deskRemoteState = DeskState.empty();
 
+// WHICH REMOTE ROWS ARRIVED WHEN, in memory only (lib/desk-activity.js says why
+// this is not on the wire). Never persisted, never in the Day Export, and
+// nothing on the answer path reads it. Emptied on a sort-day roll alongside
+// deskHealth.
+let deskArrivals = DeskActivity.emptyLog();
+
+// WHEN THE STATE LANE ITSELF WAS LAST READ CLEANLY (#968 review finding 5).
+//
+// deskHealth.lastOkAt is the AREAS pull's stamp, and the two lanes fail
+// independently — deskStatePull's errors are swallowed one line below its call
+// site on purpose. Showing the areas stamp on the Other desk pane's empty state
+// would therefore answer "when did I last hear anything" with a time that says
+// nothing about THIS lane, which is the exact substitution the pane exists to
+// stop. In memory and page-level only: it is display, so it is deliberately NOT
+// added to lib/desk-health.js's persisted shape.
+let deskStateLastOkAt = '';
+
 // The tracer's visible claim, and the seam the DOM test and the Chrome probe
 // both read: how many of their rows are being held, and by whom.
 function deskRemoteStateCounts() { return DeskState.counts(deskRemoteState); }
@@ -4258,6 +4382,11 @@ async function deskStatePull(token, coords) {
     }
   }
   deskRemoteState = next;
+  // A COMPLETED WALK OF THE DIRECTORY, which is what "clean read" means here.
+  // An individual file that 404s or parses badly keeps the previous entry above
+  // and does not make the READ a failure; a throw out of listDir/fetchRemote
+  // never reaches this line, which is the whole point.
+  deskStateLastOkAt = new Date().toISOString();
 }
 
 const deskCtl = SyncController.create({
@@ -4432,7 +4561,14 @@ const deskCtl = SyncController.create({
       // directory that 404s, a corrupt state file or a dropped connection must
       // cost the display and nothing else. deskStatePull leaves the previous
       // map in place on any failure, so nothing on screen goes silently blank.
-      try { await deskStatePull(token, coords); } catch (e) { /* display only */ }
+      try { await deskStatePull(token, coords); } catch (e) { console.warn('[949] desk state pull', e); }
+      // AND THE PANE IS REPAINTED (#949). Through repaintSetAsideForPull, NOT
+      // renderSetAside directly (#968 review finding 1): this call is on the
+      // #914 THIRTY-SECOND POLL, and renderSetAside rebuilds the ✅ Work area
+      // assigned tab with innerHTML — which destroys a Goes To input Tyler is
+      // typing into, with no blur, so commitGoesTo never runs and the
+      // keystrokes are simply gone. See repaintSetAsideForPull.
+      try { repaintSetAsideForPull(); } catch (e) { console.warn('[949] pane repaint', e); }
       return { data: envelopes, sha: null };
     },
     // Write OUR file, whole. There is no merge to do: this device owns this
@@ -4494,6 +4630,8 @@ const deskCtl = SyncController.create({
       r.changed.forEach(l => touched.push(l));
     });
     if (!touched.length) return;
+    deskArrivals = DeskActivity.recordArrivals(deskArrivals, touched, actualAreaStore,
+      { now: new Date().toISOString(), day: currentSortDay });
     if (!saveActualAreas()) warnAreaNotSaved();
     // repaintAreaSurfaces, NOT repaintGoesTo (#918 round-two finding 4).
     // repaintGoesTo matches only '.goesto-input[data-label]'; the barcode
@@ -4562,6 +4700,28 @@ async function deskPullOnLoad() {
   // top. See the fetch adapter for why this cannot be a throw.
   if (deskPullProblem) setDeskSyncStatus('error', deskPullProblem);
   renderDeskHealth();
+  // AND THE OTHER DESK PANE, LAST (#949). It is repainted HERE, after
+  // recordPull, and not only in the fetch adapter, because it reads THREE
+  // things a pull moves at three different moments: the state map (in the
+  // adapter), their areas (applied later, in setLocal, which is where a 503 is
+  // derived from), and the AREAS ROSTER (written here, and the only evidence
+  // that a desk whose park is missing is nonetheless alive). A repaint placed
+  // at any one of those moments shows a pane that is a step behind on the other
+  // two — the first cut of this ticket rendered her park while her 503 waited
+  // for the next unrelated render.
+  //
+  // IT MOVES NOTHING OF TYLER'S. renderSetAside recomputes his own three counts
+  // from his own stores, exactly as its twenty other callers do; the DOM test
+  // asserts that with the store leak as its control.
+  //
+  // GUARDED, LIKE THE ADAPTER'S. This runs on the #914 POLL as well as on the
+  // boot pull, so it can fire on a page that is being torn down; an unguarded
+  // throw here becomes an unhandled rejection out of a timer nothing is
+  // awaiting, which takes the whole pull path down for the rest of the sort
+  // rather than costing one repaint. Same reasoning as deskStatePull's own
+  // swallow above: this lane is display, and areas are the channel that routes
+  // packages.
+  try { repaintSetAsideForPull(); } catch (e) { console.warn('[949] pane repaint', e); }
   // A partial failure counts as NOT DONE. One of three desks unread is a real
   // gap, and the retry costs one listing.
   return !!pulled && !deskPullProblem;
@@ -5332,6 +5492,11 @@ const SET_ASIDE_TABS = [
   { key: '503',      tab: 'set-aside-tab-503',      pane: 'set-aside-pane-503' },
   // ✅ Work area assigned (#734): barcoded AND confirmed assigned.
   { key: 'assigned', tab: 'set-aside-tab-assigned', pane: 'set-aside-pane-assigned' },
+  // 🖥 Other desk (#949): THEIR park, 503s and work area assigned, read-only.
+  // LAST IN THE STRIP ON PURPOSE. renderSetAside lands on the first tab that
+  // has rows, and Tyler's own work must win that race — the pane is an audit
+  // surface, not the day's work.
+  { key: 'other',    tab: 'set-aside-tab-other',    pane: 'set-aside-pane-other' },
 ];
 
 function selectSetAsideTab(key) {
@@ -5811,7 +5976,20 @@ function renderSetAside() {
   // longer carries.
   const rowsAssigned = assignedRows();
   const nAssigned = rowsAssigned.length;
-  const anything = n || n503 || nNotFixed || nAssigned;
+  // THE OTHER DESK PANE (#949). Read from the in-memory desk map and the areas
+  // already applied on this device — never from parkedStore or filedStore, and
+  // never the other way round. It contributes to the group's VISIBILITY and to
+  // its own count, and to nothing else: not the badges above, not isSetAside,
+  // not the progress denominator.
+  const otherDesk = otherDeskGroups();
+  // THE GROUP IS ON SCREEN WHEN THE OTHER DESK HAS SOMETHING TO SAY, EVEN IF
+  // TYLER HAS SET NOTHING ASIDE HIMSELF. #set-aside-section ships
+  // display:none, so without this clause the whole pane is unreachable on the
+  // exact morning it matters most — he has parked nothing, she has parked six,
+  // and the surface that would tell him is hidden. `groups.length`, not
+  // `rowCount`: a desk that has published and set nothing aside, or one whose
+  // lane is stale, is itself the answer he came for.
+  const anything = n || n503 || nNotFixed || nAssigned || otherDesk.groups.length;
   const section = document.getElementById('set-aside-section');
   // The group is on screen while ANY of the four has something to say. It
   // used to key on the parked count alone, which would have hidden a full
@@ -5845,6 +6023,7 @@ function renderSetAside() {
   }
   render503Tab(rows503, notFixed);
   renderAssignedTab(rowsAssigned);
+  renderOtherDeskTab(otherDesk);
   // CLEARED BEFORE the zero early-return below, never after it. The clear used
   // to live under that return, so at a count of zero the tab kept the PREVIOUS
   // report's rows: the badge read 0 over rows still in the tbody, which is the
@@ -5875,10 +6054,467 @@ function renderSetAside() {
   // as a growing chain of pairwise swaps — a chain of three pairs would be six
   // branches and is exactly how a fourth tab would get silently missed.
   if (setAsideTabPinned) { selectSetAsideTab(setAsideTab); return; }
-  const counts = { parked: n, '503': n503 || nNotFixed, assigned: nAssigned };
+  // `groups.length` again, for the reason above: a stale or empty desk group is
+  // information, so the auto-landing must be able to reach the pane that holds
+  // it. Tyler's own three tabs are earlier in SET_ASIDE_TABS, so they still win
+  // whenever any of them has rows.
+  const counts = { parked: n, '503': n503 || nNotFixed, assigned: nAssigned, other: otherDesk.groups.length };
   if (counts[setAsideTab]) { selectSetAsideTab(setAsideTab); return; }
   const withRows = SET_ASIDE_TABS.filter(t => counts[t.key])[0];
   selectSetAsideTab(withRows ? withRows.key : setAsideTab);
+}
+
+// repaintSetAsideForPull() -> the pull/poll's repaint, and the ONLY caller that
+// is allowed to skip half of renderSetAside.
+//
+// WHY THIS EXISTS (#968 review finding 1). The two call sites below run on the
+// #914 poll — every thirty seconds, unprompted, while Tyler is working the
+// list. renderSetAside rebuilds the ✅ Work area assigned tab by assigning
+// innerHTML, so if the cursor is in one of that tab's Goes To boxes the input
+// he is TYPING INTO is destroyed. There is no blur on a removed node, so
+// commitGoesTo never runs: the keystrokes are not committed and are not
+// recoverable, and from his side the box simply empties itself mid-word. That
+// is the #697 class exactly, and it is worse on a timer than on a keystroke
+// because nothing he did caused it.
+//
+// So when a Goes To box has focus the poll paints ONLY the other desk's pane —
+// which is the only thing a pull can have changed that this device did not do
+// itself. His own three tabs cannot have moved: their rows come from
+// parkedStore / filedStore / the loaded report, and the pull writes none of
+// them (that is this ticket's whole invariant). The one thing that CAN go a
+// tick stale is a 503 badge moved by the #913 areas lane, and the very blur
+// that ends the typing calls renderSetAside in full.
+//
+// The section-visibility clause is repeated here in its opening direction only.
+// Closing the group is left to renderSetAside, because only that pass has
+// Tyler's own four counts; opening it is what makes the pane reachable at all
+// on the morning he has set nothing aside and she has set aside six.
+function repaintSetAsideForPull() {
+  const active = document.activeElement;
+  const typing = !!(active && active.classList && active.classList.contains('goesto-input'));
+  if (!typing) { renderSetAside(); return; }
+  const otherDesk = otherDeskGroups();
+  renderOtherDeskTab(otherDesk);
+  const section = document.getElementById('set-aside-section');
+  if (section && otherDesk.groups.length) section.style.display = 'block';
+}
+
+// ─── THE OTHER DESK PANE (#949, PRD #887, tracer bullet 2 of 2) ─────────────
+//
+// READ-ONLY, DERIVED, AND IT WRITES NOTHING. Everything below assembles two
+// things this device ALREADY holds and puts them on screen under the name of
+// the person who did the work:
+//
+//   1. THEIR PARK AND THEIR WORK-AREA-ASSIGNED, from the #945 state lane's
+//      in-memory map (`deskRemoteState`, via DeskState.desks). Never persisted,
+//      never merged, and nothing on the answer path reads it.
+//   2. THEIR 503s, DERIVED rather than transported. A 503 is not a store — it
+//      is the Goes To box reading 503 (lib/ibno-503.js) — and their areas are
+//      already here, applied by the #913 lane and marked `remote` with a `by`.
+//      So the 503s half needs no new wire format at all: it is
+//      `Ibno503.is503` over the entries this device already carries that some
+//      OTHER device authored. That is why the state envelope did not have to
+//      grow a third store, and why VERSION stays 1.
+//
+// THE ONE-WAY RULE, stated where a future edit will trip over it: this pane
+// reads `deskRemoteState` and `actualAreaStore`; it writes NEITHER, and it
+// never touches `parkedStore`, `filedStore`, `barcodeDoneStore` or the archive.
+// Their rows do not enter isSetAside, isAnswered, any badge on the three tabs
+// beside this one, any chip, or the progress denominator. That is ADR-0022's
+// invariant-2 shape and #740 is what it looks like when it is broken.
+
+// otherDeskItemIndex() -> label -> the loaded row, over the SAME population the
+// Parked and 503s tabs read (filed503SourceItems: both reports plus the
+// resolved list, deduped first-occurrence-wins).
+//
+// A LABEL WITH NO ROW IS NORMAL AND IS NOT AN ERROR. She can park a package the
+// report in front of Tyler does not carry — a different Post Sort pull, a row
+// that has since dropped off. Those rows still show: her decision is the fact
+// worth knowing, and hiding it is precisely the rework this feature prevents.
+// They simply have no address to show and are skipped by Copy all / Barcode all
+// below, which need a real row to copy or print.
+function otherDeskItemIndex() {
+  const index = new Map();
+  filed503SourceItems().forEach(it => {
+    if (it && it.label && !index.has(it.label)) index.set(it.label, it);
+  });
+  return index;
+}
+
+// otherDeskRemote503() -> { author -> [label] }, their 503s, derived.
+//
+// `remote` is the gate and `by` is the heading, and the two are separate
+// questions on purpose (ADR-0022, "`remote` is a fourth provenance"): once
+// Tyler types the same value himself the entry STOPS being `remote` while `by`
+// stays hers, and at that point the row is his answer and leaves this pane.
+// That is the correct behaviour — the pane is "what have they set aside that I
+// have not touched", not "everything they ever typed".
+// KEYED ON DeskState.deviceSlug, NOT ON THE RAW `by` (#968 review finding 3).
+// The three lanes that feed this pane spell the same person three ways —
+// DeskState.record trims, ActualArea.byOf runs normalizeBy (whitespace-collapse
+// plus a 40-char cap), and the areas roster carries whatever was typed — so a
+// device called "Cage  PC" (two spaces) or a name past 40 characters would key
+// one admin under two headings AND make her state file look absent, which is
+// the pane's single loudest claim. The slug is the one spelling all three
+// agree on; absentDesks already compares on it.
+function otherDeskRemote503() {
+  const out = {};
+  const store = actualAreaStore || {};
+  Object.keys(store).forEach(label => {
+    if (!ActualArea.isRemote(store, label)) return;
+    if (!Ibno503.is503(ActualArea.get(store, label))) return;
+    const by = ActualArea.byOf(store, label);
+    if (!by) return;    // an unattributable area is not somebody's work (#918 finding 3)
+    const slug = DeskState.deviceSlug(by);
+    if (!slug) return;  // and neither is one whose name slugs to nothing
+    const e = out[slug] || (out[slug] = { by: by, labels: [] });
+    e.labels.push(label);
+  });
+  Object.keys(out).forEach(slug => out[slug].labels.sort());
+  return out;
+}
+
+// otherDeskGroups() -> { groups, rowCount }.
+//
+// One group per PERSON, never one merged "the desk" — #887 values continuity
+// across the Wed/Thu handover, so the question the pane answers is "what has
+// Marisol done", not "what has the cage PC done".
+//
+// THREE SOURCES OF A GROUP, and the third is the whole point of the freshness
+// requirement carried over from the #967 review:
+//   - a desk with a state file          -> its park + filings, plus its 503s
+//   - an author with only remote 503s   -> areas are arriving, no state file
+//                                          has ever been read for them
+//   - an author on the AREAS roster with no state file at all (absentDesks)
+//     -> "her areas reach me and her park does not", which is the exact shape
+//        a swallowed deskStatePublish failure takes on THIS screen. Without it
+//        a broken lane and an empty park are the same picture.
+function otherDeskGroups() {
+  const index = otherDeskItemIndex();
+  const remote503 = otherDeskRemote503();
+  const now = new Date().toISOString();
+  const store = actualAreaStore || {};
+
+  const shape = (kind, label, by, when) => {
+    const it = index.get(label) || null;
+    return {
+      kind: kind,
+      label: label,
+      by: by,
+      when: when || '',
+      address: it ? String(it.address || '') : '',
+      ibWork: it ? String(it.ibWork || '') : '',
+      area: ActualArea.get(store, label) || '',
+      item: it,
+      onReport: !!it,
+    };
+  };
+
+  const groups = [];
+  const claimed = {};
+  // DISTINCT LABELS, not row instances (#968 review finding 4). A package that
+  // she both filed and 503'd is one package and shows as two rows, and the
+  // tab's number used to say 2 while the Copy all beside it — which dedupes on
+  // exactly this rule — said 1. Two numbers describing the same pane disagreeing
+  // is how a reader stops trusting either.
+  const counted = new Set();
+
+  const push = (by, updatedAt, fresh, rows, absent) => {
+    rows.forEach(r => counted.add(r.label));
+    const activity = DeskActivity.activityFor({
+      roster: (deskHealth && deskHealth.desks) || {},
+      store: store,
+      log: deskArrivals,
+      by: by,
+      now: now,
+      quietAfterMs: DeskHealth.QUIET_AFTER_MS,
+      day: currentSortDay,
+    });
+    groups.push({
+      by: by, updatedAt: updatedAt || '', fresh: fresh, rows: rows, absent: !!absent,
+      activity: activity,
+      // Already filtered through the store as it stands now, and carrying the
+      // store's current area: see the filtering rule in DeskActivity.recentFor.
+      recent: activity.recent.map(r => {
+        const it = index.get(r.label) || null;
+        return {
+          label: r.label, area: r.area, at: r.at,
+          address: it ? String(it.address || '') : '',
+          onReport: !!it,
+        };
+      }),
+      kinds: {
+        parked: rows.filter(r => r.kind === 'parked'),
+        '503': rows.filter(r => r.kind === '503'),
+        assigned: rows.filter(r => r.kind === 'assigned'),
+      },
+    });
+  };
+
+  DeskState.desks(deskRemoteState).forEach(desk => {
+    const by = String(desk.by || '');
+    // desk.slug is what DeskState.record keyed the map on, so it is the slug by
+    // construction — no second normalisation to drift from it.
+    const slug = String(desk.slug || '');
+    if (!by || !slug) return;
+    claimed[slug] = true;
+    const rows = DeskState.rowsFor(desk).map(r => shape(r.kind, r.label, by, r.day));
+    ((remote503[slug] || {}).labels || []).forEach(label => rows.push(shape('503', label, by, desk.day)));
+    push(by, desk.updatedAt,
+      DeskState.freshness(desk, { now: now, quietAfterMs: DeskHealth.QUIET_AFTER_MS }), rows, false);
+  });
+
+  // Authors this device has 503s from but no state file for. Their areas are
+  // demonstrably arriving, so the state lane specifically is the thing that is
+  // not — which is worth saying out loud rather than showing three 503s under a
+  // heading that implies the rest of their work is simply empty.
+  Object.keys(remote503).sort().forEach(slug => {
+    if (claimed[slug]) return;
+    claimed[slug] = true;
+    const by = remote503[slug].by;
+    const rows = remote503[slug].labels.map(label => shape('503', label, by, ''));
+    push(by, '', { at: '', ageMs: null, state: 'absent', minutes: null }, rows, true);
+  });
+
+  // And the authors the areas lane has heard from today with nothing at all on
+  // this pane. lib/desk-state.js's absentDesks owns the comparison.
+  DeskState.absentDesks(deskRemoteState, (deskHealth && deskHealth.desks) || {}).forEach(d => {
+    const slug = DeskState.deviceSlug(d.by);
+    if (!slug || claimed[slug]) return;
+    claimed[slug] = true;
+    push(d.by, d.updatedAt, { at: '', ageMs: null, state: 'absent', minutes: null }, [], true);
+  });
+
+  groups.sort((a, b) => a.by.localeCompare(b.by));
+  return { groups: groups, rowCount: counted.size };
+}
+
+// otherDeskFreshnessText(group) -> the sentence beside the name.
+//
+// FOUR STATES, AND NONE OF THEM IS SILENCE. "Nothing here" with no timestamp is
+// the one answer this pane may never give (the #967 review's requirement, and
+// the reason it is a requirement is that a swallowed publish failure is
+// invisible from the publishing device).
+function otherDeskFreshnessText(group) {
+  const f = group.fresh || {};
+  if (f.state === 'absent') {
+    return group.updatedAt
+      ? 'their areas are reaching this screen, but no Park / Work-area-assigned file has been read for them — treat this list as incomplete'
+      : 'no Park / Work-area-assigned file has been read for this device — treat this list as incomplete';
+  }
+  if (f.state === 'never') return 'this file carries no time — how current it is cannot be told';
+  const when = otherDeskClock(f.at);
+  if (f.state === 'stale') {
+    return 'last heard ' + when + ' · nothing new for ' + f.minutes + ' minutes · treat this list as possibly out of date';
+  }
+  return 'last heard ' + when + ' · ' + f.minutes + ' min ago';
+}
+
+// A wall-clock HH:MM in the reader's own timezone. Deliberately not the sort
+// day's clock: this is "when did this arrive", a real-time question, and every
+// other freshness reading on this page (the pill, the quiet banner) answers it
+// the same way.
+function otherDeskClock(iso) {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (isNaN(t)) return 'an unknown time';
+  const d = new Date(t);
+  const pad = (v) => (v < 10 ? '0' : '') + v;
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+const OTHER_DESK_KINDS = [
+  { key: 'parked',   title: '⏳ Parked' },
+  { key: '503',      title: '🚫 503s' },
+  { key: 'assigned', title: '✅ Work area assigned' },
+];
+
+// renderOtherDeskTab(data) -> the pane, rebuilt whole on every renderSetAside.
+//
+// PLAIN CELLS, NO CONTROLS. buildManualRow is deliberately NOT reused here, and
+// that is the opposite call from the ✅ Work area assigned tab above — which
+// reuses it precisely because a filed row is still Tyler's to code. These rows
+// are not. Handing them the working list's builder would put a quick-code pill,
+// a Goes To box, a checkbox and a Done button on somebody else's decision, and
+// every one of those writes to this device's stores.
+function renderOtherDeskTab(data) {
+  const groups = (data && data.groups) || [];
+  const rowCount = (data && data.rowCount) || 0;
+  const esc = ToolHelpers.escapeHtml;
+
+  const countEl = document.getElementById('other-desk-count');
+  if (countEl) countEl.textContent = rowCount;
+
+  const copyable = otherDeskCopyableRows(data);
+  const copyBtn = document.getElementById('copy-all-other');
+  if (copyBtn) copyBtn.textContent = 'Copy all (' + copyable.length + ')';
+  const barcodeBtn = document.getElementById('barcode-all-other');
+  if (barcodeBtn) barcodeBtn.innerHTML = '&#9612;&#9613;&#9612; Barcode all (' + copyable.length + ')';
+
+  const empty = document.getElementById('other-desk-empty');
+  const host = document.getElementById('other-desk-groups');
+  if (!host) return;
+  host.innerHTML = '';
+
+  // THE EMPTY STATE CARRIES A TIME (#949 acceptance 2). "Nobody has published"
+  // and "the read has been failing for an hour" are different facts and Tyler
+  // acts differently on them, so the last CLEAN read is stated. #915 owns the
+  // alarm; this line only reports what this pane last saw.
+  if (!groups.length) {
+    if (empty) {
+      // THE STATE LANE'S OWN STAMP, never deskHealth.lastOkAt (#968 review
+      // finding 5). That one belongs to the AREAS pull, and this pane's lane
+      // fails independently of it — quoting the areas time here would tell
+      // Tyler the channel was read at 14:58 on a morning when the Park /
+      // Work-area-assigned read has been throwing since 06:00.
+      const lastOk = deskStateLastOkAt;
+      empty.style.display = 'block';
+      empty.textContent = lastOk
+        ? 'No other device has published anything for this sort day. Last clean read of the Park / Work-area-assigned lane: ' +
+          otherDeskClock(lastOk) + '.'
+        : 'No other device has published anything for this sort day — and this device has not completed a read of the Park / Work-area-assigned lane yet, so that is not the same as knowing nobody has.';
+    }
+    return;
+  }
+  if (empty) { empty.style.display = 'none'; empty.textContent = ''; }
+
+  groups.forEach(group => {
+    const wrap = document.createElement('div');
+    wrap.className = 'other-desk-group';
+    wrap.dataset.by = group.by;
+    wrap.dataset.fresh = (group.fresh && group.fresh.state) || 'never';
+
+    const head = document.createElement('div');
+    head.className = 'other-desk-head';
+    head.innerHTML = '<span class="other-desk-name">' + esc(group.by) + '</span>' +
+      '<span class="other-desk-when">' + esc(otherDeskFreshnessText(group)) + '</span>' +
+      '<span class="other-desk-typed" data-typed-state="' + esc((group.activity && group.activity.typed && group.activity.typed.state) || 'never') + '">' +
+        esc(DeskActivity.text(group.activity, { clock: otherDeskClock })) + '</span>';
+    wrap.appendChild(head);
+
+    // BEFORE the "nothing set aside" note, so an admin who has parked nothing
+    // still shows what has reached this screen from her.
+    const recent = group.recent || [];
+    if (recent.length) {
+      const h = document.createElement('div');
+      h.className = 'other-desk-kind';
+      h.dataset.kind = 'recent';
+      h.textContent = '🕒 Recent Goes To (' + recent.length + ')';
+      wrap.appendChild(h);
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>Tracking #</th><th>Recipient / Address</th><th>Area</th><th>Arrived</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      recent.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'other-desk-recent-row';
+        tr.dataset.label = r.label;
+        tr.innerHTML =
+          '<td>' + esc(r.label) + '</td>' +
+          '<td>' + (r.onReport ? esc(r.address) : '<span class="other-desk-when">not on the report in front of you</span>') + '</td>' +
+          '<td>' + esc(r.area || '—') + '</td>' +
+          '<td>' + esc(otherDeskClock(r.at)) + '</td>';
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+    }
+
+    if (!group.rows.length) {
+      const note = document.createElement('div');
+      note.className = 'other-desk-note';
+      note.textContent = group.absent
+        ? 'Nothing from this device on this lane. Read the line above before reading that as “nothing set aside”.'
+        : 'This device has published, and has parked, 503’d and assigned nothing.';
+      wrap.appendChild(note);
+      host.appendChild(wrap);
+      return;
+    }
+
+    OTHER_DESK_KINDS.forEach(kind => {
+      const rows = group.kinds[kind.key] || [];
+      if (!rows.length) return;      // no "0 parked" lines: #611, absent when quiet
+      const h = document.createElement('div');
+      h.className = 'other-desk-kind';
+      h.dataset.kind = kind.key;
+      h.textContent = kind.title + ' (' + rows.length + ')';
+      wrap.appendChild(h);
+
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr>' +
+        '<th>Tracking #</th><th>Recipient / Address</th><th>Area</th><th>By</th><th>When</th>' +
+        '</tr></thead>';
+      const tbody = document.createElement('tbody');
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'other-desk-row';
+        tr.dataset.label = r.label;
+        tr.dataset.kind = r.kind;
+        tr.dataset.by = r.by;
+        tr.innerHTML =
+          '<td>' + esc(r.label) + '</td>' +
+          '<td>' + (r.onReport ? esc(r.address) : '<span class="other-desk-when">not on the report in front of you</span>') + '</td>' +
+          '<td>' + esc(r.area || '—') + '</td>' +
+          '<td>' + esc(r.by) + '</td>' +
+          '<td>' + esc(r.when || '—') + '</td>';
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+    });
+
+    host.appendChild(wrap);
+  });
+}
+
+// otherDeskCopyableRows(data) -> the loaded items behind this pane's rows.
+//
+// SCOPED TO THE REPORT IN FRONT OF TYLER, and deduped by label: a row she
+// parked that this report does not carry has no barcode and no scannable value,
+// and a label that is both parked and 503'd is one package. Same rule
+// IbnoParked.parkedRows and Ibno503.filedRows already apply to their own tabs.
+function otherDeskCopyableRows(data) {
+  const seen = new Set();
+  const out = [];
+  ((data && data.groups) || []).forEach(g => {
+    g.rows.forEach(r => {
+      if (!r.item || seen.has(r.label)) return;
+      seen.add(r.label);
+      out.push(r.item);
+    });
+  });
+  return out;
+}
+
+// Copy all / Barcode all on this pane — ALLOWED BECAUSE THEY ONLY PRINT.
+//
+// Both go through the SAME shared paths the Parked and 503s toolbars use
+// (setAsideCopyBatch/setAsideCopyWrite, printBarcodesFor), so there is no
+// second copy of the clipboard or paper rules to drift. What matters here is
+// what neither of them does: no park, no file, no unfile, no code, no archive
+// row, and NO CONFIRM PANEL — the confirm panel is what files rows, and filing
+// somebody else's package on this device is the exact leak this lane exists to
+// prevent. The DOM test asserts the filed store's item count is unchanged after
+// both are invoked, with a control that shows it CAN move.
+function copyAllOtherDesk() {
+  const rows = otherDeskCopyableRows(otherDeskGroups());
+  if (!rows.length) return;
+  const batch = setAsideCopyBatch(rows);
+  const btn = document.getElementById('copy-all-other');
+  if (!batch.lines.length) {
+    if (btn) {
+      btn.textContent = '0 copied';
+      setTimeout(() => { renderSetAside(); }, 1200);
+    }
+    setAsideCopySkipNote(batch.skipped);
+    return;
+  }
+  setAsideCopyWrite('copy-all-other', batch.lines);
+  setAsideCopySkipNote(batch.skipped);
+}
+
+function barcodeAllOtherDesk() {
+  const rows = otherDeskCopyableRows(otherDeskGroups());
+  if (!rows.length) return;
+  printBarcodesFor(rows.map(it => ({ label: it.label, early: it.provenance === 'early' })));
 }
 
 // ─── THE 503s TAB (#699) ────────────────────────────────────────────────────
@@ -9833,6 +10469,7 @@ function applySortDayFrom(rows, opts) {
   // staffed yet — the exact cry-wolf failure the publish-seen-today gate exists
   // to prevent, arriving by the other door.
   deskHealth = DeskHealth.rollDay(deskHealth, day);
+  deskArrivals = DeskActivity.rollDay(deskArrivals, day);
   // The barcode-sheet ticks expire with their sort day (#733 needs this: a tick
   // now HOLDS A ROW OUT of "Select with area, not barcoded", so one that
   // outlived its day would hide today's package behind last week's card). It
