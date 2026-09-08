@@ -1665,6 +1665,13 @@
       background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-soft);
     }
     .set-aside-tab:hover { color: var(--text); }
+    /* #974: THE `hidden` ATTRIBUTE HAS TO BEAT THE RULE ABOVE. `display:
+       inline-flex` on the class outranks the user agent's `[hidden] { display:
+       none }`, so a tab marked hidden in script stayed on screen — the first
+       real-Chrome shot of this ticket showed a fourth pill the DOM test had
+       just called hidden. renderOtherDeskTab also sets style.display, which is
+       what the tests read; this rule is the second lock. */
+    .set-aside-tab[hidden] { display: none !important; }
     /* The SELECTED tab. Two tabs share one body (#699), so which pane is showing
        has to be visible on the tab itself — otherwise the group reads as one
        list whose contents changed for no reason. Theme tokens only. */
@@ -2908,6 +2915,7 @@
 <script src="lib/desk-state.js"></script>
 <script src="lib/desk-health.js"></script>
 <script src="lib/desk-activity.js"></script>
+<script src="lib/desk-roles.js"></script>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const toolStorage = ToolHelpers.createStorage();
@@ -4561,7 +4569,14 @@ const deskCtl = SyncController.create({
       // directory that 404s, a corrupt state file or a dropped connection must
       // cost the display and nothing else. deskStatePull leaves the previous
       // map in place on any failure, so nothing on screen goes silently blank.
-      try { await deskStatePull(token, coords); } catch (e) { console.warn('[949] desk state pull', e); }
+      // AND ONLY ON THE SUPERVISOR'S DEVICE (#974). The pane this lane feeds is
+      // not rendered anywhere else, so on an admin's PC the read is a listing
+      // plus one fetch per desk, every thirty seconds, for a surface nobody can
+      // see. PUBLISHING on this lane is untouched a few lines below — that is
+      // what keeps Tyler's own pane fed.
+      if (otherDeskAllowed()) {
+        try { await deskStatePull(token, coords); } catch (e) { console.warn('[949] desk state pull', e); }
+      }
       // AND THE PANE IS REPAINTED (#949). Through repaintSetAsideForPull, NOT
       // renderSetAside directly (#968 review finding 1): this call is on the
       // #914 THIRTY-SECOND POLL, and renderSetAside rebuilds the ✅ Work area
@@ -5487,6 +5502,23 @@ let setAsideTab = 'parked';
 // view state reset every load).
 let setAsideTabPinned = false;
 
+// otherDeskAllowed() -> is the Other desk pane this device's to see? (#974)
+//
+// Tyler, 2026-09-08: "i'm the tyler one … for now i still want them to see the
+// parked, 503s and work area assigned but the other desk is mine to see." The
+// pane is an audit surface built for the supervisor; on an admin's cage PC it
+// only shows them their coworkers' work.
+//
+// READ AT RENDER TIME, NEVER CACHED IN A BOOT-TIME CONST. `deviceName` is
+// rewritten by the Settings panel while the page is up, so a device renamed
+// mid-sort must take effect on the very next render rather than on a reload
+// nobody will perform. Every caller below asks fresh.
+//
+// A UI PERMISSION, NOT A BOUNDARY — see the header of lib/desk-roles.js.
+function otherDeskAllowed() {
+  return DeskRoles.isSupervisorDevice(deviceName);
+}
+
 const SET_ASIDE_TABS = [
   { key: 'parked',   tab: 'set-aside-tab-parked',   pane: 'set-aside-pane-parked' },
   { key: '503',      tab: 'set-aside-tab-503',      pane: 'set-aside-pane-503' },
@@ -5500,6 +5532,14 @@ const SET_ASIDE_TABS = [
 ];
 
 function selectSetAsideTab(key) {
+  // #974: THE HIDDEN TAB CANNOT BE SELECTED, from any caller. renderSetAside's
+  // "land on the first tab with rows" already cannot reach it (its count is
+  // zero on an admin device), but a device renamed in Settings while the Other
+  // desk tab is open would otherwise leave the active tab pointing at a pill
+  // that is no longer on screen — an empty Set aside section with no visible
+  // way back. Falling to Parked is the same fallback the strip's first entry
+  // gives every other empty case.
+  if (key === 'other' && !otherDeskAllowed()) key = 'parked';
   const known = SET_ASIDE_TABS.some(t => t.key === key);
   if (known) setAsideTab = key;
   SET_ASIDE_TABS.forEach(t => {
@@ -6190,6 +6230,11 @@ function otherDeskRemote503() {
 //        a swallowed deskStatePublish failure takes on THIS screen. Without it
 //        a broken lane and an empty park are the same picture.
 function otherDeskGroups() {
+  // #974: ON AN ADMIN DEVICE THERE IS NOTHING TO ASSEMBLE. Returning the empty
+  // shape here rather than only hiding the pane is what makes the SECTION
+  // visibility clause and `counts.other` in renderSetAside read zero, so their
+  // work can neither open his Set aside group nor steal the active tab.
+  if (!otherDeskAllowed()) return { groups: [], rowCount: 0 };
   const index = otherDeskItemIndex();
   const remote503 = otherDeskRemote503();
   const now = new Date().toISOString();
@@ -6337,6 +6382,32 @@ const OTHER_DESK_KINDS = [
 // a Goes To box, a checkbox and a Done button on somebody else's decision, and
 // every one of those writes to this device's stores.
 function renderOtherDeskTab(data) {
+  // #974: THE TAB AND ITS PANE COME OFF THE SCREEN ON AN ADMIN DEVICE, and the
+  // decision is made HERE — inside the render — so a name typed into Settings
+  // shows or hides the pill on the next repaint without a reload.
+  const tabEl = document.getElementById('set-aside-tab-other');
+  const paneEl = document.getElementById('set-aside-pane-other');
+  const allowed = otherDeskAllowed();
+  // BOTH THE ATTRIBUTE AND THE INLINE DISPLAY. `hidden` alone is not enough:
+  // `.set-aside-tab { display: inline-flex }` outranks the user agent's
+  // `[hidden]` rule, and the pill stayed visibly on screen while every probe
+  // that trusted `el.hidden` reported it gone. See the CSS above.
+  if (tabEl) {
+    tabEl.hidden = !allowed;
+    tabEl.style.display = allowed ? '' : 'none';
+  }
+  if (!allowed) {
+    if (paneEl) paneEl.style.display = 'none';
+    // Emptied, not merely hidden: a device that was Tyler's a moment ago holds
+    // her rows in this host, and a hidden pane still carrying them is one
+    // Settings edit away from being on screen again.
+    const hostOff = document.getElementById('other-desk-groups');
+    if (hostOff) hostOff.innerHTML = '';
+    const emptyOff = document.getElementById('other-desk-empty');
+    if (emptyOff) { emptyOff.style.display = 'none'; emptyOff.textContent = ''; }
+    if (setAsideTab === 'other') selectSetAsideTab('parked');
+    return;
+  }
   const groups = (data && data.groups) || [];
   const rowCount = (data && data.rowCount) || 0;
   const esc = ToolHelpers.escapeHtml;
