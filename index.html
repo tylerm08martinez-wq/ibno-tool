@@ -1295,6 +1295,27 @@
       border: 1px solid var(--warn-ink);
     }
 
+    /* 503 tag (#944). Before #944 a row typed 503 VANISHED from the lane on the
+       keystroke, so it needed no tag — its absence was the signal. Tyler's
+       2026-09-03 decision 1 keeps it in the lane until the barcode-confirm OK,
+       and a row sitting among open work carrying a dummy route with nothing
+       saying so is a package that gets worked twice.
+
+       Its own class, NOT .early-tag: repaintGoesTo() finds the early pill with
+       cell.querySelector('.early-tag') and rewrites whatever it matches to say
+       "early", so borrowing that class would have this tag silently relabelled
+       on the next commit. Theme tokens only, no hardcoded color, so both themes
+       are correct with no second rule — the same discipline the sibling pills
+       above describe. Deliberately the QUIET wash pattern rather than
+       .early-tag's own fill: .early-tag is the provisional-value warning, and a
+       page where every pill shouts is a page where none of them does. */
+    .a503-tag {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+      font-size: 9.5px; font-weight: 800; letter-spacing: .03em;
+      background: var(--hover-soft); color: var(--text); vertical-align: middle;
+      border: 1px solid var(--border-soft);
+    }
+
     /* Author tag (issue #886): WHO answered this row, shown only when that
        someone is not this device. Under the 999 Desk (ADR-0023) an Admin works
        the same Flagged Work Area list, so without this an assigned row reads as
@@ -1314,6 +1335,26 @@
       background: var(--hover-soft); color: var(--brand-ink); vertical-align: middle;
       border: 1px solid var(--border-soft);
       max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* THE OTHER DESK'S 503 / PARK NOTE (#990). It reuses .by-tag's token — same
+       fill, same ink, same border, so both themes stay correct with no new
+       colour and the measured 10.3:1 / 8.33:1 contrast is untouched. This rule
+       overrides ONE thing: the truncation.
+
+       WHY (#990 verify, finding 4). .by-tag holds a name and clips at 14ch,
+       which is right for a chip whose job is "somebody else". This chip's job is
+       "somebody else did THIS to your row", and the name is the half Tyler asked
+       for — at 102 px the Chrome measurement read `Parked · Ca…` and
+       `503 · Cage …`, clipping exactly the word that carries the meaning. So the
+       note WRAPS instead of clipping: nothing is hidden, the cell grows a line,
+       and no other pill's clipping changes. (Decision 1 removes the author chip
+       from these rows, so the row is not gaining a line on balance.)
+
+       Scoped to .desk-state-tag alone. .by-tag, .new-tag and the shared hover
+       rule are deliberately untouched. */
+    .desk-state-tag {
+      max-width: none; white-space: normal; overflow: visible; text-overflow: clip;
     }
 
     /* "New since the last drop" tag (issue #735): this package arrived on the
@@ -1550,8 +1591,84 @@
     body.work-mode .manual-body .row-chips { visibility: hidden; }
     body.work-mode .manual-body tr:hover .row-chips,
     body.work-mode .manual-body tr.work-active .row-chips { visibility: visible; }
-    body.work-mode .manual-body tr.work-active > td { background: var(--hover-row); }
-    body.work-mode .manual-body tr.work-active > td:first-child { box-shadow: inset 3px 0 0 var(--brand-ink); }
+    /* The row being worked: a FULL-BLEED INVERTED ROW (#946, variant C, picked
+       by Tyler 2026-09-04 from prototypes/2026-09-04-work-row/proto.html —
+       that file's `.v-C` block is the spec for this one).
+
+       WHY IT IS NOT A TINT. It used to be `background: var(--hover-row)` — the
+       very token the shared hover rule paints with — and that hover rule
+       (`tr:hover td { background: var(--hover-row) !important; }`, the one
+       every table in this tool leans on) carries `!important` while this one
+       did not. So the moment the cursor landed anywhere on the worked row it
+       became indistinguishable from any other hovered row: measured 1.00:1
+       against a hovered row, 1.20:1 light / 1.19:1 dark against a plain one.
+       The cursor vanished exactly when he was looking at it.
+
+       `!important` HERE IS LOAD-BEARING, not a shortcut. It is the only thing
+       that out-ranks that hover declaration, which is at equal specificity and
+       earlier in the source. Do not drop it, and do not "fix" it by editing
+       the hover rule instead — that rule is shared tool-wide.
+
+       Measured on the prototype: 11.70:1 light / 8.86:1 dark against a plain
+       row, 9.78:1 / 7.46:1 against a hovered one. Tokens only, so dark mode
+       needs no rule of its own: --brand-ink flips to #c4b5fd and --surface to
+       #1e1f29 in theme.css, which inverts the inversion rather than breaking
+       it. No `:first-child` accent bar any more — a 3px --brand-ink inset on a
+       --brand-ink fill is invisible, and the fill IS the whole signal now. */
+    body.work-mode .manual-body tr.work-active > td {
+      background: var(--brand-ink) !important;
+      color: var(--surface);
+      font-weight: 700;
+    }
+    /* Descendants that paint their own BARE text colour off a token would
+       otherwise stay dark-on-dark, and the --brand-ink ones would disappear
+       into the fill entirely. Chips, pills and the Goes To input are
+       deliberately NOT listed: each carries its own background, so each stays
+       a legible object sitting on the inverted row. The faint tier keeps its
+       hierarchy through opacity rather than a second colour, exactly as the
+       prototype did for `.muted`. */
+    /* AND EVERY LIFT BELOW STANDS DOWN ON :hover / .copied / .copy-failed
+       (PR #981 review). The lift is (0,4,2)+; the rules that repaint these
+       surfaces for those three states are only (0,2,0)-(0,3,0), so the state
+       BACKGROUND applied and the lift kept the text at --surface on top of it
+       — measured in real Chrome at 1.20:1 light / 1.19:1 dark on hover, the
+       exact ratio this ticket's own header cites as the original #946 defect,
+       one DOM level down. .copy-failed was the worst of the three: that state
+       carries NO AUTO-REVERT by design (see the block near the top of this
+       sheet), and this made it invisible on precisely the row the operator is
+       copying from — a refused clipboard write would have read as nothing at
+       all. In each of those states the surface paints its OWN opaque
+       background, so it is a legible object on the fill and needs no lift,
+       which is the same reasoning that leaves the real pills off this list.
+       .street-copy is the one exception: it is bare text in :hover and
+       .copied (--brand-ink, which would vanish into the fill), so only
+       .copy-failed — the state that brings a background — stands down.
+       The :not(:hover) on .recip-addr sits on .recip-addr itself and not on
+       some sibling selector ON PURPOSE: the hover comes from .addr-copy, a
+       SECOND CLASS ON THE SAME ELEMENT, so :not(.addr-copy:hover) would be
+       wrong and :not(:hover) is what actually reads it. */
+    body.work-mode .manual-body tr.work-active > td .label-copy:not(:hover):not(.copied):not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .recip-firm,
+    body.work-mode .manual-body tr.work-active > td .street-copy:not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .street-copy:hover:not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .street-copy.copied:not(.copy-failed) { color: var(--surface); }
+    body.work-mode .manual-body tr.work-active > td .expand-indicator,
+    body.work-mode .manual-body tr.work-active > td .recip-addr:not(:hover):not(.copied):not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .street-none { color: var(--surface); opacity: .85; }
+    /* The three OUTLINE chips (FTrack, Barcode, Street). They look like pills
+       but are `background: transparent` with --text-faint text and a --border
+       hairline, so they are bare text after all — caught in the real-Chrome
+       verify, not in the diff, where they read as "a chip, chips are fine".
+       Both halves are lifted: text AND the outline, or the pill dissolves and
+       leaves floating letters. Kept a step below the row's own text so they
+       stay secondary to the tracking number they sit beside. */
+    body.work-mode .manual-body tr.work-active > td .ftrack-link:not(:hover):not(.copied):not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .barcode-chip:not(:hover):not(.copied):not(.copy-failed),
+    body.work-mode .manual-body tr.work-active > td .street-chip:not(:hover):not(.copied):not(.copy-failed) {
+      color: var(--surface);
+      border-color: var(--surface);
+      opacity: .85;
+    }
 
     .work-bar {
       display: none; position: sticky; top: var(--header-h, 56px); z-index: 40;
@@ -1607,6 +1724,23 @@
        while dock flex is settling several rows at once (#612 decision 2). */
     .manual-body tr.row-coded > td,
     .assigned-body tr.row-coded > td { opacity: .55; }
+    /* THE ROW UNDER THE WORK-MODE CURSOR IS NEVER DIMMED (#946). The prototype
+       flagged this collision and it is real: `opacity: .55` composites the
+       whole cell — inverted fill AND the --surface text painted on it —
+       against the page, so a coded row that is also the cursor row loses both
+       halves of the contrast at once. The fill washes most of the way back
+       toward a plain row and the text on it lands nowhere near legible, which
+       is the exact failure #946 exists to end, re-introduced through a second
+       door.
+
+       Dimming gives way rather than the cursor because dimming is the weaker
+       of the two signals AND it is not the only one: a coded row still carries
+       its own `.coded-tag` chip, which is unaffected here, so "this one is
+       already coded" survives at full strength while he is standing on it.
+       The dimming returns the instant the cursor moves off. Scoped to
+       .manual-body only — .assigned-body rows never take the Work-mode cursor
+       (see the .assigned-body note above), so its dimming is untouched. */
+    body.work-mode .manual-body tr.row-coded.work-active > td { opacity: 1; }
     .manual-body tr.row-coded .coded-tag,
     .assigned-body tr.row-coded .coded-tag {
       font: 800 10.5px/1 inherit; padding: 3px 7px; border-radius: 4px; margin-right: 6px;
@@ -2632,11 +2766,21 @@
       </table>
     </div>
 
-    <!-- THE 503s TAB (#699, spec #690 stories 17-18, decision #615). 503 is a
-         DUMMY ROUTE, not a work area: the package shows 503 at re-inbound, the
-         team stages it on a separate pallet and fixes the address when they
-         have slack. Membership is the Goes To box reading 503 and nothing else
-         (lib/ibno-503.js), so there is no second state to expire.
+    <!-- THE 503s TAB (#699, spec #690 stories 17-18, decision #615; two groups
+         since #944). 503 is a DUMMY ROUTE, not a work area: the package shows
+         503 at re-inbound, the team stages it on a separate pallet and fixes
+         the address when they have slack.
+
+         TWO WAYS A ROW GETS HERE, and #944 is what split them:
+           * FILED 503 — Tyler typed or one-clicked 503 AND then barcoded the
+             row and confirmed it on the panel. Typing alone keeps the row in
+             the working lane, tagged and still selectable, because the sheet
+             that walks it to the pallet has not been printed yet.
+           * ALREADY INBOUND TO 503 — the report's own IB_WORK_AREA reads 503.
+             Nobody typed anything; these are worked only here (Tyler,
+             2026-09-03: "we are the ones that assign all 503s, I only want to
+             work them in their section"), never in the lanes, and they write
+             nothing to the address log and nothing to the not-fixed signal.
 
          The not-fixed line above the table is the passive done signal: an
          address flagged on an EARLIER sort day that is back on this report was
@@ -2644,7 +2788,7 @@
     <div id="set-aside-pane-503" role="tabpanel" aria-labelledby="set-aside-tab-503" style="display:none">
       <div class="section-header">
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="filter-note">503 is the bad-address pallet &middot; no OPS2 code, ever &middot; every assignment is logged on this device so &ldquo;still coming back&rdquo; can be answered later</span>
+          <span class="filter-note">503 is the bad-address pallet &middot; no OPS2 code, ever &middot; a row you type 503 into stays in your list until you barcode it and confirm &middot; every assignment is logged on this device so &ldquo;still coming back&rdquo; can be answered later</span>
         </div>
         <div class="right">
           <button class="btn btn-gray" id="copy-all-503" onclick="copyAll503()" title="Copy every 503 row (tracking # or full barcode per the Copy-as toggle), one per line, for the 503 pallet handoff">Copy all (0)</button>
@@ -2815,6 +2959,17 @@
 <script src="lib/ibno-rules.js"></script>
 <script src="lib/ibno-review-plan.js"></script>
 <script src="lib/report-clean.js"></script>
+<!-- lib/report-freshness.js (issue #464): the Address Catcher's freshness core,
+     now loaded here too. Two things come from it. (1) inboundFreshness() —
+     the today / stale / unknown decision behind showSortDateNote below,
+     replacing a hand-rolled `sortDate === today` compare that silently HID the
+     note whenever the sort date was blank, which is exactly the 'unknown' case
+     worth flagging; it also makes the today-vs-stale call in the report's own
+     LOCAL calendar frame, which a Phoenix night sort needs. (2)
+     modeInboundDate() — the single sort-date reader lib/ibno-session.js and
+     the Address Catcher both delegate to. Order-independent: ibno-session.js
+     and report-freshness.js each resolve the other lazily, per call. -->
+<script src="lib/report-freshness.js"></script>
 <!-- Post Sort "early" lane (issue #634, third slice of #622): a separate,
      fresher report surfaced as a supplement to the report above, never a
      replacement. post-sort-scans.js parses it (xlsx only — TRAP 1 refuses a
@@ -4894,7 +5049,15 @@ function ageOnePill(label) {
   if (!byName) return;
   document.querySelectorAll('.goesto-input[data-label="' + cssAttrEscape(label) + '"]').forEach(el => {
     const cell = el.closest('.goesto-cell');
-    const btag = cell && cell.querySelector('.by-tag');
+    // `:not(.desk-state-tag)` — THE NOTE IS NOT THE AUTHOR PILL (#990 review,
+    // finding 1). The #990 note reuses the .by-tag token, so on a row whose
+    // author pill is absent (a parked row with no area, above all) the FIRST
+    // .by-tag in the cell is the note, and an unqualified selector here writes
+    // the author string straight over `Parked · Cage PC`. repaintGoesTo carries
+    // the same qualifier for the same reason and deletes rather than overwrites.
+    // This site was masked only by `if (!byName) return` above plus emission
+    // order — i.e. by accident, which is why it is qualified rather than left.
+    const btag = cell && cell.querySelector('.by-tag:not(.desk-state-tag)');
     if (!btag) return;
     const parts = byTagParts(label, byName);
     btag.title = parts.title;
@@ -6084,7 +6247,7 @@ function renderSetAside() {
   // The ✅ Work area assigned tab's count (#734), read off the SAME loaded
   // population, so no tab can claim a package the report in front of Tyler no
   // longer carries.
-  const rowsAssigned = assignedRows();
+  const rowsAssigned = assignedTabRows();
   const nAssigned = rowsAssigned.length;
   // THE OTHER DESK PANE (#949). Read from the in-memory desk map and the areas
   // already applied on this device — never from parkedStore or filedStore, and
@@ -6199,10 +6362,81 @@ function renderSetAside() {
 // Closing the group is left to renderSetAside, because only that pass has
 // Tyler's own four counts; opening it is what makes the pane reachable at all
 // on the morning he has set nothing aside and she has set aside six.
+// THE REMOTE-FILED SET AS A CHANGE KEY (#971).
+//
+// renderSetAside() repaints the tabs and nothing else, which was enough while
+// the desk-state lane was pure display. #971 makes a remote marked-done move a
+// row OUT of the working list, so the lanes have to be repainted too -- but
+// only when the set actually moves. Repainting the merged list on every 30s
+// poll tick would rebuild every row under Tyler's cursor for no reason; keying
+// it on a joined, sorted label list means a poll that changed nothing costs a
+// string compare. The trio is markFiledBatch's own, so a remote filing and a
+// local one leave the page in the same state.
+// SEEDED WITH THE EMPTY SET, NOT null. A first pull that carries no marked-done
+// row must not count as a change: renderEarlyLane() rebuilds the merged list,
+// and doing that on every boot pull moved the Work-mode cursor off the row the
+// loop had put it on (caught by tests/ibno-work-bar-guard-dom.test.js, which
+// drives the real keyboard loop across a pull).
+// remoteNoteKey(map) -> the change key, factored out of repaintForRemoteFiled so
+// the SEED below is computed by the very same code (#990). Seeding a literal ''
+// stopped being right the moment the key grew a second field: the empty set then
+// hashes to '|', which differs from '', so the boot pull counted as a change and
+// renderEarlyLane() rebuilt the merged list under the Work-mode cursor — the
+// exact regression the note below warns about, and it was caught by
+// tests/ibno-work-bar-guard-dom.test.js rather than by reading the diff. A seed
+// that is DERIVED cannot drift out of step with the key's shape again.
+function remoteNoteKey(map) {
+  return DeskState.filedLabels(map, currentSortDay)
+    .map(function (l) { return l + (is503Label(l) ? '=503' : ''); }).join(',')
+    + '|' + DeskState.parkedLabels(map).join(',');
+}
+// SEEDED LAZILY, ON THE FIRST CALL, and that is not a style choice: this `let`
+// sits above `currentSortDay`'s own declaration, so evaluating remoteNoteKey()
+// here throws a temporal-dead-zone ReferenceError out of the page's top-level
+// script and the whole tool fails to boot. `null` means "not seeded yet" and is
+// unreachable as a real key, so it can never compare equal to one.
+let lastRemoteFiledKey = null;
+function repaintForRemoteFiled() {
+  if (lastRemoteFiledKey === null) lastRemoteFiledKey = remoteNoteKey(DeskState.empty());
+  // #990 PUTS THEIR PARK IN THE SAME KEY. The note set is what has to be
+  // repainted, and it moves when EITHER store moves: their marked-done routes a
+  // row (or draws a `503 ·` note), their park draws a `Parked ·` note. Keyed
+  // together rather than in a second latch so one poll tick cannot repaint for
+  // one store and leave the other's note a tick stale on screen. The park half
+  // is NOT day-gated, matching DeskState.parkedBy (a park carries across a sort
+  // day, #753). This decides WHEN TO REPAINT and nothing else — no lifecycle
+  // reads it, which is what keeps the parked read display-only.
+  //
+  // AND IT CARRIES THE 503-NESS OF EACH MARKED-DONE LABEL, WHICH IS NOT
+  // COSMETIC (#990). This function is called TWICE per pull — once from the
+  // areas adapter's fetch (line ~4727, BEFORE RemoteAreas.applyTo has run) and
+  // once from deskPullOnLoad's tail (AFTER it). Under #971 that was harmless
+  // because the routing did not depend on the area, so both calls agreed.
+  // #990 routes BY AREA, so the first call decides with the area still absent:
+  // it reads their 503 as a normal area, files the row away into Work area
+  // assigned, latches the key — and the second call, seeing the same label set,
+  // returns early and never corrects it. Reproduced as a RED test on the first
+  // pull of a fixture whose 503 and marked-done arrive together, which is the
+  // ordinary morning case. Folding the 503-ness in means the key genuinely
+  // moves when the areas land, and a poll that changed nothing still costs one
+  // string compare. is503Label is the same reader the routing uses, so the two
+  // cannot disagree about which rows those are.
+  const key = remoteNoteKey(deskRemoteState);
+  if (key === lastRemoteFiledKey) return false;
+  lastRemoteFiledKey = key;
+  renderEarlyLane();
+  updateManualBadge();
+  return true;
+}
+
 function repaintSetAsideForPull() {
   const active = document.activeElement;
   const typing = !!(active && active.classList && active.classList.contains('goesto-input'));
-  if (!typing) { renderSetAside(); return; }
+  // Gated on the SAME typing check the pane repaint is: rebuilding the lane
+  // under a Goes To box that has focus would take the keystroke with it (#901).
+  // The set is not forgotten, only deferred -- lastRemoteFiledKey is unchanged,
+  // so the next tick after the blur does the repaint.
+  if (!typing) { repaintForRemoteFiled(); renderSetAside(); return; }
   const otherDesk = otherDeskGroups();
   renderOtherDeskTab(otherDesk);
   const section = document.getElementById('set-aside-section');
@@ -6667,7 +6901,192 @@ function barcodeAllOtherDesk() {
 // the box and the tab can never disagree, which matters because the box is
 // what the sorter reads at re-inbound.
 function is503Label(label) { return Ibno503.is503(ActualArea.get(actualAreaStore, label)); }
-function isFiled503(item) { return !!item && is503Label(item.label); }
+// is503Area(item) -> "does this row's Goes To read 503?" and NOTHING ELSE.
+//
+// RENAMED FROM isFiled503 BY #944, and the rename is the ticket. Until then
+// "the Goes To reads 503" and "this row has left the working list into the 503s
+// tab" were the same sentence, so one predicate could carry both. Tyler's
+// 2026-09-03 decision 1 pulls them apart — typing 503 now KEEPS the row in its
+// lane and it crosses into the tab only at the barcode-confirm OK — so a single
+// name answering both questions is precisely ADR 0022's #740 class waiting to
+// happen. Each caller below now says which one it is asking.
+//
+// THIS question's callers are the ones that must fire on an UNBARCODED 503 too:
+//   * build503Button's toggle — the row already reads 503, so the control is
+//     Clear 503 whether or not a card was ever printed.
+//   * every OPS2 export and the Ready to Enter hide (#699 criterion 2). No OPS2
+//     code for a 503 row EVER; waiting for a barcode-confirm before dropping it
+//     would put a coded bad address on the clipboard for the whole window
+//     between the keystroke and the sheet.
+//   * the 503 auto-log, through is503Label directly.
+// The OTHER question — "has this row left the working list?" — is answered by
+// isSetAside503 below.
+function is503Area(item) { return !!item && is503Label(item.label); }
+
+// isInbound503(item) -> "did this package arrive already re-inbounded to the
+// 503 pallet?" (#944 decision 3). The report's own IB_WORK_AREA, not a typed
+// value and not a store: nobody assigned this, the scan did.
+//
+// These rows are held OUT of both working lanes and shown in the 503s tab's own
+// group. Tyler, 2026-09-03: "we are the ones that assign all 503s, I only want
+// to work them in their section."
+function isInbound503(item) { return Ibno503.isInbound503(item); }
+
+// ─── THE TWO REMOTE LIFECYCLE ANSWERS (#971, ADR 0022 amendment) ────────────
+//
+// The 999 Desk put two people on one list, and #913 gave the OTHER desk's area
+// a way to reach this one. That created two row states this page had no
+// predicate for, and it answered BOTH of them with "the Goes To reads 503" —
+// which is the #740 shape exactly: one predicate answering two questions, on a
+// records-tier surface. Tyler, 2026-09-04, looking at the live two-device
+// screenshots: "I do want it to automatically go to the 503 tab, but only after
+// they mark it as done after generating the barcode."
+//
+// So there are two named questions here and neither is is503Area's,
+// isSetAside503's, isRemote's or IbnoFiled.isFiled's:
+//
+//   isRemoteAnsweredOnly(item)
+//     "The other desk typed an area into this row. Is it still MINE TO WORK?"
+//     YES while their file does not carry the label in `filed`. The row stays
+//     in Needs Manual Review carrying their area and their name pill; Tyler may
+//     accept it or type another and finish it himself, and it lands in the
+//     right column as HIS. It enters no tab, no badge, no isSetAside and no
+//     progress denominator on the strength of their keystroke alone.
+//
+//   isRemoteFiled(item)
+//     "Has the other desk generated the barcode and pressed marked-as-done on
+//     this row, for the sort day I have loaded?"
+//     YES means the work is finished and the credit is theirs. The row leaves
+//     the working list and auto-moves into the matching set-aside column — the
+//     503s tab if the area reads 503, the Work area assigned tab otherwise —
+//     attributed with their name and READ-ONLY there: no un-file control,
+//     because there is no local filing to take back.
+//
+// A2, AND IT IS THE PROPERTY THAT MAKES THIS SAFE: an auto-moved row is NEVER
+// merged into filedStore or written into ActualArea as this device's own. The
+// whole state is DERIVED, live, from `deskRemoteState` — so their clearing
+// clears it (item 2's return path is free), it can never re-publish as Tyler's,
+// and a lane that goes quiet cannot leave a residue behind on this device.
+//
+// AND IT READS DATA, NEVER A VIEW. `deskRemoteState` is the in-memory map the
+// pull built; nothing here consults the DOM, the Post Sort fold, the search box
+// or a filter chip. PR #984's blocking bug was a records predicate sourced from
+// earlyVisibleItems(), which IS the fold, and a fold-hidden row read as "handed
+// to the pallet". A view toggle must never answer a data question.
+
+// remoteFiledBy(label) -> WHOSE marked-done this is, or ''. Gated on the loaded
+// sort day at both ends (lib/desk-state.js says why it is asked twice).
+function remoteFiledBy(label) {
+  return DeskState.filedBy(deskRemoteState, label, currentSortDay);
+}
+
+function isRemoteFiled(item) { return !!remoteFiledBy(item && item.label); }
+
+function isRemoteAnsweredOnly(item) {
+  const label = item && item.label;
+  if (!label) return false;
+  return ActualArea.isRemote(actualAreaStore, label) && !remoteFiledBy(label);
+}
+
+// ─── #990 SPLITS THE MARKED-DONE ANSWER BY AREA ─────────────────────────────
+//
+// Tyler, 2026-09-09, after working a shift with #971 shipped: "What I want is
+// if they mark as done then on my side it goes into the work area assigned as
+// well so we're all on the same page. But for the 503 and parked, I want it to
+// still be in the needs manual review tab but has a little note that shows that
+// it was parked or 503d, and who did it."
+//
+// So "have they marked it done?" and "has this row therefore LEFT my working
+// list?" are no longer the same question, and per ADR 0022 each gets its own
+// name. isRemoteFiled above is UNCHANGED and keeps answering the first one —
+// it is NOT quietly narrowed to return false for a 503, because a dozen call
+// sites read it and a predicate that lies about the fact it is named for is
+// exactly the #740 shape this file keeps paying for.
+//
+//   isRemoteFiledAway(item)
+//     "Has this row left MY working list because they finished it?"
+//     YES only when their marked-done carries a NORMAL area. That row moves to
+//     Work area assigned, credited to them and read-only, exactly as #971
+//     shipped it. THIS is the predicate on the answer path: isSetAside, both
+//     working-lane filters, the coded-row filter and remoteAssignedRows().
+//
+//   isRemoteFiled503(item)
+//     "Did they finish this row with a 503, so it STAYS mine to work and only
+//     carries a note?" It reaches the NOTE and nothing else — no tab, no badge,
+//     no isSetAside, no progress denominator (#990 decision A2: it does not
+//     count as done). The 503s tab is Tyler's own pallet handoff and a row he
+//     has not barcoded does not belong in it; #944 decision 2's "one package is
+//     never in two tabs" is what would break if it did.
+//
+//   isRemoteFiledOnly(item)
+//     "Is this row sitting in a set-aside tab on the strength of THEIR
+//     marked-done ALONE, with no local filing here to take back?" The read-only
+//     question, and the one the un-file controls ask. It is NOT isRemoteFiled:
+//     a row Tyler filed HIMSELF that they also marked done is HIS, and taking
+//     his own control away from it would be a records-tier button that vanished
+//     because somebody else pressed one on another device.
+//
+// THE AREA IS READ THROUGH is503Area, THE SAME READER THE LANES USE, so the
+// split cannot disagree with the 503 tag drawn on the row. It is still never
+// the TRIGGER — the marked-done is (that is #971 decision A4, unchanged) — it
+// only routes a marked-done that has already happened.
+function isRemoteFiledAway(item) { return isRemoteFiled(item) && !is503Area(item); }
+
+function isRemoteFiled503(item) { return isRemoteFiled(item) && is503Area(item); }
+
+function isRemoteFiledOnly(item) {
+  return isRemoteFiled(item) && !IbnoFiled.isFiled(filedStore, item && item.label);
+}
+
+// ─── THEIR PARK, READ FOR A NOTE AND FOR NOTHING ELSE (#990) ────────────────
+//
+// lib/desk-state.js's header is the contract and it is worth restating at the
+// call site: the `parked` store is PURE DISPLAY. `filedBy` is the single
+// recorded exception to that; this is NOT a second one.
+//
+//   A NOTE IS DISPLAY. isSetAside IS NOT.
+//
+// remoteParkedBy is allowed to paint `Parked · Cage PC` on a row and is not
+// allowed to decide anything: no isSetAside, no badge, no lane filter, no tab,
+// no progress denominator. The row stays fully Tyler's to work (#990 A1) — he
+// can still assign it, barcode-confirm it, or park it himself — and their park
+// never touches parkedStore here, which stays his own and is never auto-cleared
+// (#730). A mutation wiring this into isSetAside is shown RED by
+// tests/ibno-remote-503-park-note-dom.test.js.
+//
+// NOT DAY-GATED, unlike remoteFiledBy: a park carries across a sort day (#753)
+// while a filing resets on one. lib/desk-state.js says why the two reads must
+// not be flattened into one.
+function remoteParkedBy(label) {
+  return DeskState.parkedBy(deskRemoteState, label);
+}
+
+// remoteParkedDay(label) -> the sort day THEIR park was made on, or ''. Same
+// contract as remoteParkedBy: it feeds the `Parked · Cage PC · 9/8` note's date
+// (#990 decision 2) and decides nothing. Their file's own stamp is already
+// gated in DeskState.record(); this is the ENTRY's day, which is what makes a
+// park carried across a roll on their device readable as carried.
+function remoteParkedDay(label) {
+  return DeskState.parkedDay(deskRemoteState, label);
+}
+
+function isRemoteParked(item) { return !!remoteParkedBy(item && item.label); }
+
+// isSetAside503(item) -> "has this row left the working list because of 503?"
+//
+// The lanes', the chips' and the coded-rows' question, and the one is503Area
+// used to answer by accident. TWO ways in, and they are not the same way:
+//   * a typed 503 that has been BARCODED AND CONFIRMED (decision 1) — the
+//     barcoded half is lib/ibno-filed.js's, so the lane filters that already
+//     drop every filed row cover this arm by construction; and
+//   * an already-inbound-503 row (decision 3), which was never workable here.
+// Written out in full anyway rather than leaning on the neighbouring filter:
+// the two arms are separate decisions and a reader of any one call site should
+// not have to find the next line to know why the row is gone.
+function isSetAside503(item) {
+  return isInbound503(item) ||
+    (is503Area(item) && setAside503Predicate()(item));
+}
 
 // filed503SourceItems() -> every row the page currently holds that could be
 // filed 503: both reports, deduped in lib/ibno-parked.js (see
@@ -6703,7 +7122,176 @@ function filed503SourceItems() {
   return IbnoParked.loadedItems([manualItems, shapedEarlyItems(), resolvedItems]);
 }
 
-function filed503Rows() { return Ibno503.filedRows(filed503SourceItems(), actualAreaOf); }
+// ─── THE 503s TAB'S TWO GROUPS (#944) ───────────────────────────────────────
+//
+// handedOff503Rows() .. typed/one-clicked 503 AND barcoded-and-confirmed. The
+//   barcoded half is lib/ibno-filed.js's store, handed to lib/ibno-503.js as a
+//   PREDICATE rather than read there: "is it 503" and "is it barcoded" stay two
+//   answers, which is ADR 0022's rule and the whole shape of decision 1.
+// inbound503Rows() .... IB_WORK_AREA already reads 503 (decision 3).
+// filed503Rows() ...... both, in that order. Every surface of the tab — the
+//   badge, the header chip, the tbody, Copy all, Barcode all — reads THIS one
+//   function, so the count on a button can never disagree with the rows under
+//   it (#696).
+//
+// AND THE THIRD CASE, WHICH #944 CREATED AND MUST NOT LEAVE STANDING: a 503 row
+// that NO WORKING LANE CARRIES. Dock flex spreads a typed 503 across the whole
+// stop, and on the merged Post Sort view a sibling can be a package the lanes
+// fold away entirely (an unflagged work area — 5908 E GRANDVIEW RD in the real
+// 2026-08-12 export is exactly this: 532488633187 is WA 999 and renders, its
+// stop-mate 532488632673 is WA 464 and does not). Before #944 that row was
+// visible in this tab, which was the only place it ever appeared. Gating the
+// tab on "barcoded" alone would stand it in a queue it cannot join: it is on no
+// lane, so it can never be checked for "Barcode selected", so it would sit
+// forever out of the tab, out of the lanes, and out of OPS2 (is503Area drops it
+// from every export) — a package on the report that the tool draws NOWHERE.
+// That is the #740 class exactly, so the rule is stated in the terms of the
+// decision rather than patched around: a 503 row with no handoff left to make
+// has already made it.
+//
+// isLaneWorkable503(label) answers that on the DATA, never on the DOM — a row
+// hidden by a collapsed bucket, a search box or a filter chip is still Tyler's
+// to work, and asking querySelector would file rows for the duration of a
+// keystroke in the search box.
+//
+// Built from the lanes' RAW SOURCES, never from workingLaneItems /
+// earlyLaneItems / codedItemsForLane: every one of those already filters on
+// isSetAside503, so asking them here would ask this question of itself. The
+// two sources are the two ways a row reaches a lane's tbody:
+//   manualItems ..... the full report's open rows;
+//   postSortItems ... the Post Sort early population, WHOLE and BEFORE the
+//                     disposition fold.
+//
+// THE FOLD IS NOT AN ANSWER TO THIS QUESTION (PR #984 review finding 1). This
+// read used to be earlyVisibleItems(), which IS the fold —
+// `postSortShowAll ? postSortItems : postSortItems.filter(earlyIsMine)` — so a
+// row the collapsed fold merely hid was read as having no handoff left to make
+// and filed itself into the tab under "barcoded and handed to the pallet"
+// while nobody had carded or walked it. Measured on the real 2026-08-12 export
+// in the DEFAULT fold state: typing 503 on 532488633187 (WA 999, mine)
+// dock-flexed to its stop-mate 532488632673 (WA 464, Other lane, hidden), and
+// the stop-mate landed in the tab with IbnoFiled.isFiled() false — badge 33→34,
+// "Copy all (34)" emitting a tracking number for a package on no pallet.
+// Turning Show all ON put the same row back in the Other lane with a live
+// .manual-check, so it was never stranded at all: the fold is a VIEW, and
+// answering a records question with it is the #740 shape this comment's own
+// first paragraph forbids. postSortItems is fold-independent, which is the
+// property the rule needs.
+//
+// RECURSION IS STILL AVOIDED, and now more plainly than before: postSortItems
+// is a module-level array, not a function, so this reads no predicate at all —
+// there is no path back through earlyIsMine, inWorkingPopulation or
+// isSetAside503 to ask this question of itself.
+//
+// CODED ROWS ARE DELIBERATELY ABSENT. A coded row still renders in the lane,
+// dimmed, with its Goes To box live (#697) -- but it renders from resolvedItems
+// and it carries NO .manual-check, so it can never be ticked for "Barcode
+// selected". Listing it as workable would stand it in a queue it cannot join
+// and it would sit tagged in the lane for the rest of the sort with no control
+// anywhere that could move it. So a coded 503 files on the keystroke, exactly
+// as it did before #944, and codedItemsForLane's own isSetAside503 filter then
+// takes it out of the lane -- one place, counted once.
+function laneWorkable503Labels() {
+  const set = new Set();
+  const add = it => { if (it && it.label) set.add(it.label); };
+  manualItems.forEach(add);
+  postSortItems.forEach(add);
+  return set;
+}
+
+// barcodeFiled503Rows() below is the ordinary handoff ONLY: typed 503,
+// barcoded, OK'd. THAT is the population the progress bar re-adds (see
+// workProgressLabels), deliberately narrower than the tab's — a stranded row
+// was never in the bar's total before #944, and adding it would inflate a
+// ratio's denominator with a row nothing scanned.
+function handed503Predicate() {
+  const workable = laneWorkable503Labels();
+  return it => IbnoFiled.isFiled(filedStore, it && it.label) ||
+    // THE STRANDED ARM IS NOT REACHABLE ON A ROW THAT IS MERELY THEIRS (#971
+    // item 1). "No lane carries it, so the handoff has already been made" is a
+    // statement about a 503 TYLER typed: the only controls that could have
+    // moved it are his, and if none exists the row would sit drawn nowhere.
+    // A remote 503 they have not marked done has a live control — theirs, on
+    // their device — so it is not stranded at all, and filing it here would put
+    // their unfinished row in his pallet handoff under his own name. That is
+    // decision A4's whole point: the AREA never triggers the move, the
+    // marked-done does.
+    // AND #990 CLOSES IT TO A REMOTE MARKED-DONE 503 FOR THE SAME REASON.
+    // Their 503 marked done now STAYS in Tyler's Needs Manual Review with a
+    // note, so it is not stranded either — but a CODED row (manualItems ->
+    // resolvedItems) drops out of laneWorkable503Labels(), which is the one
+    // shape that reaches this arm, and without this clause their marked-done
+    // 503 on a coded row would land in his pallet handoff under his own name
+    // by the back door #971 had just shut on the merely-typed case.
+    (!workable.has(it && it.label) && !isRemoteAnsweredOnly(it) && !isRemoteFiled(it));
+}
+
+// setAside503Predicate() -> "has this 503 row left the working list?", which is
+// handed503Predicate's question OR #971's remote-filed one. Composed at this
+// one call site rather than fused into either body: they are two separate
+// decisions with two separate triggers (a local barcode-confirm OK; another
+// desk's marked-done), and ADR 0022's rule is that a consumer names its own
+// question rather than borrowing a neighbour's name for it.
+// PARK WINS OVER A REMOTE MARKED-DONE, and only over the remote arm (#986
+// review, finding 1). A label Tyler has PARKED is his own state, and the parked
+// tab already draws it; without this the other desk's marked-done drew the same
+// package a second time in the 503s tab, which breaks #944 decision 2 ("one
+// package is never in two tabs") and reaches the pallet handoff — copyAll503()
+// reads filed503Rows(), so #copy-all-503 would emit a tracking number for a
+// package Tyler deliberately set down. Locally unreachable before #971 (you
+// cannot park and file the same row here); the trigger is the OTHER device, so
+// it is reachable the first morning an admin finishes a row Tyler parked.
+//
+// The park is READ, never written: nothing here clears, sets or auto-unparks
+// anything. Tyler's own state is never overridden by a remote signal and never
+// auto-cleared — when he unparks, the remote marked-done takes effect on the
+// very next repaint, because the whole thing is derived (A2).
+//
+// The LOCAL arm (handed503Predicate) is deliberately untouched: a row Tyler
+// barcoded and confirmed himself cannot also be parked, and narrowing it would
+// change a population that feeds the progress denominator.
+function setAside503Predicate() {
+  const handed = handed503Predicate();
+  // #990 REMOVES THE REMOTE ARM THAT #971 COMPOSED HERE, and the removal is the
+  // ticket. Tyler, 2026-09-09: "for the 503 and parked, I want it to still be
+  // in the needs manual review tab but has a little note". A 503 the other desk
+  // marked done is no longer set aside on this device at all: it stays in Needs
+  // Manual Review carrying a `503 · <name>` note (isRemoteFiled503), stays in
+  // the progress denominator as work remaining, and never enters the 503s tab —
+  // which is TYLER'S PALLET HANDOFF, and copyAll503() would otherwise point a
+  // scanner at a package he never barcoded (#944 decision 2).
+  //
+  // The two names are KEPT SEPARATE even though the answers now coincide. They
+  // are two questions — "did the local handoff happen" and "has this 503 left
+  // the working list" — and ADR 0022's rule is that a consumer names its own
+  // question rather than borrowing a neighbour's. Fusing them would make the
+  // next remote arm land in handed503Predicate, which feeds the progress
+  // denominator through barcodeFiled503Rows().
+  //
+  // #986 finding 1's park-outranks-marked-done clause went with the arm it
+  // guarded: there is no longer a remote path into this tab for a park to
+  // outrank. The Work area assigned tab keeps its copy, where the arm survives.
+  return it => handed(it);
+}
+
+// handedOff503Rows() is PINNED BACK to handed503Predicate (#986 review, finding
+// 4). It is not called by the page — its only callers are the two Chrome probes
+// in scripts/probes/ — and it silently acquired the remote arm when
+// setAside503Predicate() was composed above it, so a function documented as
+// "typed 503 AND barcoded-and-confirmed" quietly started answering a second
+// question. Pinned rather than deleted because scripts/probes/944-503-barcode-
+// handoff.js measures exactly the population this name promises.
+function handedOff503Rows() {
+  return Ibno503.handedOffRows(filed503SourceItems(), actualAreaOf, handed503Predicate());
+}
+function barcodeFiled503Rows() {
+  return Ibno503.handedOffRows(filed503SourceItems(), actualAreaOf,
+    it => IbnoFiled.isFiled(filedStore, it && it.label));
+}
+function inbound503Rows() { return Ibno503.inboundRows(filed503SourceItems()); }
+function filed503Rows() {
+  return Ibno503.tabRows(filed503SourceItems(), actualAreaOf, setAside503Predicate());
+}
 
 // The reappearance signal, computed LIVE against the report on screen rather
 // than persisted: "has it reappeared" can never go stale against the report it
@@ -6717,8 +7305,17 @@ function filed503Rows() { return Ibno503.filedRows(filed503SourceItems(), actual
 // it produce no signal at all, while `packages` undercounted whenever part of
 // a stop auto-coded. The lib header states the rule as "some row in that
 // report at the same BUILDING"; this is the population that makes that true.
+// AN ALREADY-INBOUND-503 ROW IS NOT A REAPPEARANCE (#944 decision 3). The
+// signal answers "did anyone actually fix this address after WE flagged it",
+// and a package that reached the pallet by its own inbound scan is not evidence
+// about that in either direction — it is not a row this desk assigned. Left in
+// and the chip lights on addresses nobody here ever flagged, on a report where
+// 33 such rows arrive at once, which is the false POSITIVE that makes a quiet
+// count unreadable. The log writer needs no matching filter: it records on
+// is503Label, the TYPED value, and an inbound row's Goes To is empty.
 function reportRowsForReappearance() {
-  return IbnoParked.loadedItems([manualItems, postSortItems, resolvedItems, autoItems]);
+  return IbnoParked.loadedItems([manualItems, postSortItems, resolvedItems, autoItems])
+    .filter(it => !isInbound503(it));
 }
 
 function notFixed503() { return Ibno503.reappeared(filed503Log, reportRowsForReappearance(), loadedReportDay); }
@@ -6767,7 +7364,53 @@ function render503Tab(rows, notFixed) {
   const tbody = document.getElementById('filed-503-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  rows.forEach(item => tbody.appendChild(build503Row(item)));
+  // TWO LABELLED GROUPS (#944). They arrive by different routes and one of them
+  // has no Goes To value at all, so drawing them as one undifferentiated list
+  // would say a package Tyler assigned and a package that scanned itself onto
+  // the pallet are the same fact. Split off ONE predicate, the same one the
+  // lanes exclude on, so the tab and the lane can never disagree about which
+  // group a row is in.
+  //
+  // Headers are drawn ONLY for a non-empty group, and a tab holding just one
+  // group draws no header at all — on the ordinary day nothing is inbound to
+  // 503 and this is the pre-#944 list, unchanged.
+  const inbound = rows.filter(it => isInbound503(it));
+  const handedOff = rows.filter(it => !isInbound503(it));
+  const both = inbound.length && handedOff.length;
+  if (handedOff.length) {
+    if (both) tbody.appendChild(build503GroupRow(Ibno503.handedOffGroupTitle(), handedOff.length));
+    handedOff.forEach(item => tbody.appendChild(build503Row(item)));
+  }
+  if (inbound.length) {
+    tbody.appendChild(build503GroupRow(Ibno503.inboundGroupTitle(), inbound.length));
+    inbound.forEach(item => tbody.appendChild(build503Row(item)));
+  }
+}
+
+// build503GroupRow(title, count) -> one group header inside the 503s tab.
+//
+// Reuses .manual-group-row / .g-title / .g-count, the merged lane's own header
+// styling, so both themes are correct with no new CSS — the shared-token
+// discipline the pill comments near the top of this file describe. NOT
+// collapsible and carrying no chevron: the lane's groups are workable buckets
+// with bulk controls, these are two labels on a set-aside list.
+function build503GroupRow(title, count) {
+  const tr = document.createElement('tr');
+  tr.className = 'manual-group-row group-503';
+  tr.dataset.group503 = title;
+  const td = document.createElement('td');
+  td.colSpan = 6;
+  const span = document.createElement('span');
+  span.className = 'g-title';
+  span.style.cursor = 'default';
+  span.textContent = title;
+  const n = document.createElement('span');
+  n.className = 'g-count';
+  n.textContent = String(count);
+  span.appendChild(n);
+  td.appendChild(span);
+  tr.appendChild(td);
+  return tr;
 }
 
 // A 503 row keeps its per-row chips for the same reason a parked one does: the
@@ -6785,6 +7428,30 @@ function build503Row(item) {
     '<td>' + reasonPills(item.reason) + '</td>' +
     '<td class="action-cell"></td>';
   attachLabelCopy(tr, item.label, item.scanBarcode, copyOptsFor(item));
+  // NO "Clear 503" ON AN ALREADY-INBOUND ROW (#944). Clear 503 empties the Goes
+  // To box, and an inbound-503 row's box is already empty — its membership is
+  // the report's IB_WORK_AREA, which this tool cannot and must not rewrite. A
+  // button that looked like it would return the row to the working list and
+  // then did nothing at all is worse than no button: it would read as a broken
+  // control on a records-tier surface, and the row would still be here.
+  if (isInbound503(item)) return tr;
+  // NO "Clear 503" ON AN AUTO-MOVED ROW EITHER (#971 item 2). The row is in
+  // this tab because THEIR file says they barcoded it and marked it done, and
+  // this device holds no filing to take back. Clearing the box here would
+  // delete the other desk's answer from a read-only surface and the row would
+  // reappear in the working list with their work silently undone -- and their
+  // very next publish would put the area straight back. The pill goes where the
+  // button would have been, so the cell says who did it instead of offering a
+  // control that does not belong to this device.
+  // #990: isRemoteFiledOnly, NOT isRemoteFiled. Their marked-done no longer
+  // puts a 503 row in this tab at all (setAside503Predicate lost that arm), so
+  // the only row that can be BOTH here and remote-filed is one TYLER barcoded
+  // and confirmed himself. That row is his: taking his Clear 503 away because
+  // an admin pressed marked-done on their device would strand a package he
+  // filed, on the surface that feeds the pallet handoff. The guard is kept
+  // rather than deleted because it is the correct statement of the question and
+  // the day a remote 503 is drawn here again it is already right.
+  if (isRemoteFiledOnly(item)) { attachRemoteFiledTag(tr); return tr; }
   const clear = document.createElement('button');
   clear.className = 'btn-park-mini';
   clear.textContent = 'Clear 503';
@@ -6804,6 +7471,40 @@ function build503Row(item) {
   clear.addEventListener('click', () => clear503(item.label));
   tr.querySelector('.action-cell').appendChild(clear);
   return tr;
+}
+
+// unfileClearedHandedOff503(changed, was503) -> Clear 503 on a HANDED-OFF row
+// takes the filing back with the flag (#944).
+//
+// `was503` IS NOT "was in the filing store" (PR #984 review finding 2). It is
+// the pre-write 503-MEMBERSHIP snapshot commit503 and record503Changes build
+// against is503Label — "did this row's Goes To read 503 before the write" — and
+// the body below asks the filing store a SEPARATE question one line later
+// (IbnoFiled.isFiled). It was called `wasFiled`, which made two different
+// "filed"s read as one inside a records-tier predicate: exactly the naming
+// hazard ADR 0022 exists about. Renamed, no behaviour change.
+//
+// Before #944 there was nothing to take back: a 503 row was never in the filing
+// store, so emptying its box was the whole undo. Now the row reaches the tab BY
+// being barcoded-and-confirmed, and clearing only the area would leave it filed
+// — out of the working lane (workingLaneItems drops every filed row, #734) and
+// out of ✅ Work area assigned too, because that tab's row needs an area to
+// name. The button's own title promises "returning it to the working list", and
+// a records-tier control that says that and does not do it is worse than a
+// missing one.
+//
+// Scoped to labels this change actually CLEARED (`was503[label]` true, 503
+// false now) so it can never reach a row that was filed for an ordinary belt
+// assignment — the same gate record503Changes uses for the same reason. Dock
+// flex is covered for free: `changed` is the whole stop the write spread to.
+function unfileClearedHandedOff503(changed, was503) {
+  const cleared = (Array.isArray(changed) ? changed : []).filter(
+    label => !!was503[label] && !is503Label(label) &&
+      IbnoFiled.isFiled(filedStore, label));
+  if (!cleared.length) return;
+  cleared.forEach(label => { filedStore = IbnoFiled.unfile(filedStore, label); });
+  if (!saveFiled()) warnFiledNotSaved();
+  scheduleDeskPublish();
 }
 
 // clear503(label) -> empty this row's Goes To through whichever commit path
@@ -6870,7 +7571,7 @@ function commitGoesToOwning(label, raw) {
 function build503Button(item) {
   const btn = document.createElement('button');
   btn.className = 'btn-503-mini';
-  const filed = isFiled503(item);
+  const filed = is503Area(item);
   btn.textContent = filed ? 'Clear 503' : '503';
   btn.title = filed
     ? 'Empty this row’s Goes To, returning it to the working list'
@@ -6897,7 +7598,7 @@ function build503Button(item) {
   // impossible instead of leaving it for #732 to discover.
   const commitFn = item && item.provenance === 'early' ? commitPostSortGoesTo : commitGoesTo;
   btn.addEventListener('click', () => {
-    commitFn(item.label, isFiled503(item) ? '' : Ibno503.AREA);
+    commitFn(item.label, is503Area(item) ? '' : Ibno503.AREA);
   });
   return btn;
 }
@@ -6961,7 +7662,37 @@ function buildAssignedRow(item) {
   const tr = buildManualRow(item, null);
   if (resolvedItems.some(it => it && it.label === item.label)) markRowCoded(tr, item);
   attachAssignedBackButton(tr);
+  attachRemoteFiledTag(tr);
   return tr;
+}
+
+// attachRemoteFiledTag(tr) -> the attribution on an auto-moved row (#971 item
+// 2, the #886 author-pill pattern).
+//
+// IT IS NOT THE GOES TO CELL'S .by-tag AND MUST NOT BE READ AS ONE. That pill
+// answers "who typed this area" (ActualArea.otherBy); this one answers "who
+// marked this row done", and the two can be different people -- or, on a row
+// Tyler answered himself and an admin then finished, only one of them can be
+// answered at all. Its own class, its own question: ADR 0022's rule applied to
+// a label on screen rather than to a predicate.
+//
+// It goes in the action cell, which on this row has no control in it: the cell
+// says WHO instead of offering a button, so the read-only-ness is visible
+// rather than an absence the eye has to notice. Styled with the shipped .by-tag
+// token, so both themes are correct with no new CSS.
+function attachRemoteFiledTag(tr) {
+  if (!tr || !tr.dataset || !tr.dataset.label) return;
+  const by = remoteFiledBy(tr.dataset.label);
+  if (!by) return;
+  const cell = tr.querySelector('td.action-cell');
+  if (!cell || cell.querySelector('.remote-filed-tag')) return;
+  const span = document.createElement('span');
+  span.className = 'by-tag remote-filed-tag';
+  span.dataset.by = by;
+  span.textContent = '\u2705 ' + by;
+  span.title = by + ' generated the barcode and marked this row done on their device. ' +
+    'This tool holds no filing for it \u2014 it returns to the working list by itself if their file stops carrying it.';
+  cell.appendChild(span);
 }
 
 // attachAssignedBackButton(tr) -> the tab's own action, the mirror of Unpark.
@@ -6974,6 +7705,19 @@ function buildAssignedRow(item) {
 // is idempotent, so a row that already has one does not grow a second.
 function attachAssignedBackButton(tr) {
   if (!tr || !tr.dataset || !tr.dataset.label) return;
+  // #971 item 2: NO UN-FILE CONTROL ON AN AUTO-MOVED ROW. There is nothing
+  // local to take back -- this device holds no filing for it, the row is here
+  // because THEIR file says they finished it -- so a control here would be a
+  // records-tier button that promises to move a row and then cannot, the same
+  // class as the "Clear 503" #944 withholds from an already-inbound row. The
+  // way back is theirs: it returns by itself when their file drops it.
+  // Guarded HERE rather than at the call sites because markRowCoded calls this
+  // too, and a guard in one caller would leave the other one wrong.
+  // #990: isRemoteFiledOnly again, and for the same reason as build503Row's.
+  // remoteAssignedRows() already holds out a label Tyler has filed locally, so
+  // a remote-filed row drawn HERE from assignedRows() is his own filing — and
+  // his own filing keeps its own control.
+  if (isRemoteFiledOnly({ label: tr.dataset.label })) return;
   const cell = tr.querySelector('td.action-cell');
   if (!cell || cell.querySelector('.btn-assigned-back')) return;
   const back = document.createElement('button');
@@ -6989,7 +7733,7 @@ function attachAssignedBackButton(tr) {
 // "Copy all" buttons use (#750, #760), so the three cannot drift apart on the
 // question of whether the clipboard actually took the batch.
 function copyAllAssigned() {
-  const rows = assignedRows();
+  const rows = assignedTabRows();
   if (!rows.length) return;
   const batch = setAsideCopyBatch(rows);
   const btn = document.getElementById('copy-all-assigned');
@@ -7014,7 +7758,7 @@ function copyAllAssigned() {
 // re-file what is already filed. The confirm panel belongs to the one act that
 // changes state, "Barcode selected" on the working list.
 function barcodeAllAssigned() {
-  const rows = assignedRows();
+  const rows = assignedTabRows();
   if (!rows.length) return;
   printBarcodesFor(rows.map(it => ({
     label: it.label,
@@ -8237,8 +8981,22 @@ const MERGED_VIEW_CTX = {
   // as a parked or 503 row. This is the line that makes "chip counts on the
   // merged sections exclude filed rows" true, so a chip can never promise rows
   // the list will not produce.
-  isSetAside: (item) => IbnoParked.isParked(parkedStore, item && item.label) || isFiled503(item)
-    || IbnoFiled.isFiled(filedStore, item && item.label),
+  // #971 (decision A3, a DELIBERATE reversal of the #949 invariant for this one
+  // state): a row the other desk barcoded and marked done is set aside on the
+  // same terms as one Tyler filed himself. It is done work — the credit is
+  // theirs — so a chip that still counted it would promise a row the list will
+  // not produce, which is the exact defect this reader exists to prevent. It is
+  // the ONLY thing on the answer path that reads the desk-state lane, and ADR
+  // 0022's amendment records that it does.
+  isSetAside: (item) => IbnoParked.isParked(parkedStore, item && item.label) || isSetAside503(item)
+    || IbnoFiled.isFiled(filedStore, item && item.label)
+  // #990 NARROWS THAT REVERSAL BY AREA. Only a NORMAL area marked done is
+  // finished work that leaves the list; a 503 they marked done stays in Needs
+  // Manual Review with a note and MUST still be counted as open work (decision
+  // A2 — "it does not count as done"), and their PARK reaches nothing here at
+  // all. isRemoteFiledAway is the predicate that answers this consumer's
+  // question; isRemoteFiled answers a different one and is no longer read here.
+    || isRemoteFiledAway(item),
   // #735: arrived since the previous drop of this sort day. Read through the
   // same one predicate the row badge reads, so the chip's count and the marks
   // on screen can never disagree. Because the count runs over countedRows,
@@ -8262,10 +9020,20 @@ function manualLaneItems(key) { return manualItems.filter(it => manualLaneOf(it)
 function workingLaneItems(key) {
   return manualLaneItems(key)
     .filter(it => !IbnoParked.isParked(parkedStore, it && it.label))
-    // Filed 503s leave the working list on exactly the same terms (#699): the
-    // row is answered, it is waiting on the 503 pallet, and it must not inflate
-    // a badge, a search note, or the progress bar while being invisible here.
-    .filter(it => !isFiled503(it))
+    // 503s leave the working list on exactly the same terms (#699) — but ONLY
+    // once they have actually left (#944). A row Tyler has just typed 503 into
+    // STAYS HERE, tagged, selectable, and counted, because the handoff has not
+    // happened yet: he still has to barcode it onto the pallet, and a row that
+    // vanished on the keystroke was one he could no longer select for the sheet
+    // that walks it there. It crosses at the barcode-confirm OK, which is the
+    // barcoded arm of isSetAside503 (and the reason the IbnoFiled filter below
+    // would already have caught it — the arm is spelled out anyway so this
+    // filter states its own rule).
+    //
+    // The other arm is the already-inbound-503 row, which was never workable
+    // here at all: it is on the pallet by its own inbound scan, and Tyler works
+    // those only in the 503s tab's own group (decision 3).
+    .filter(it => !isSetAside503(it))
     // And barcoded-and-confirmed rows on the same terms again (#734): the row
     // is handled and waiting in the ✅ Work area assigned tab, so it must stop
     // competing with open work. It leaves the progress POPULATION with the
@@ -8276,7 +9044,17 @@ function workingLaneItems(key) {
     // anything read as SCANNED. Nothing on the filing path touches
     // barcodeDoneStore, the scanned NUMERATOR is untouched by a filing, and
     // ADR 0022 invariant 2 is what forbids ever closing that gap.
-    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label))
+    // #971: AND a row the OTHER desk has barcoded and marked done. It is
+    // finished work and the credit is theirs, so it must stop competing with
+    // open work exactly as a locally filed row does. Nothing local was written
+    // to get it here and nothing local has to be unwritten to send it back —
+    // isRemoteFiled is derived live from their file, so it returns to this lane
+    // by itself the moment their file stops carrying it (item 2's return path).
+    // #990: isRemoteFiledAway, so a 503 they marked done STAYS in this lane
+    // (with a note, and in the progress denominator) while a normal area still
+    // leaves. The predicate carries the split; this filter does not respell it.
+    .filter(it => !isRemoteFiledAway(it));
 }
 // The same exclusion for the early (Post Sort) lane (#698 review finding 2):
 // a label parked from the main report can ALSO have an early row, and that
@@ -8287,8 +9065,16 @@ function workingLaneItems(key) {
 function workingEarlyLaneItems(key) {
   return earlyLaneItems(key)
     .filter(it => !IbnoParked.isParked(parkedStore, it && it.label))
-    .filter(it => !isFiled503(it))    // #699, same rule as the full-report lane
-    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));  // #734, same rule again
+    .filter(it => !isSetAside503(it))    // #699/#944, same rule as the full-report lane
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label))  // #734, same rule again
+    // #971: AND a row the OTHER desk has barcoded and marked done. It is
+    // finished work and the credit is theirs, so it must stop competing with
+    // open work exactly as a locally filed row does. Nothing local was written
+    // to get it here and nothing local has to be unwritten to send it back —
+    // isRemoteFiled is derived live from their file, so it returns to this lane
+    // by itself the moment their file stops carrying it (item 2's return path).
+    // #990: isRemoteFiledAway, same split as the full-report lane above.
+    .filter(it => !isRemoteFiledAway(it));
 }
 
 // Issue #673 review finding 2: every Needs Manual Review lane has an early-row
@@ -9420,7 +10206,7 @@ function autoExportPairs(lane) {
     // precisely the outcome #615 replaced. applyMergedReadyFilter hides the
     // same rows from the section, so screen and clipboard agree by
     // construction rather than by coincidence (#696's invariant).
-    .filter(item => !isFiled503(item))
+    .filter(item => !is503Area(item))
     .filter(item => !laneNamed || itemIsExpress(item) === isExp)
     // The code/category chips are built from the GROUND rows' facets and
     // applyAutoFilter only hides ground rows, so the filter narrows only the
@@ -9753,7 +10539,7 @@ function applyMergedReadyFilter() {
       // criterion 2). Hidden here rather than dropped from the render, so the
       // "showing X of Y" note below counts it and nothing vanishes without a
       // number (#611) — the same treatment a filter chip gives a row.
-      const visible = !isFiled503(item) && codeOk
+      const visible = !is503Area(item) && codeOk
         && IbnoMergedView.passes(item, f, MERGED_VIEW_CTX, null);
       tr.style.display = visible ? '' : 'none';
       lastVisible = visible;
@@ -10471,30 +11257,49 @@ function refreshAfter503Change(leaving) {
   }, 0);
 }
 
-// commit503(changed, wasFiled) -> the whole 503 side of a Goes To
+// commit503(changed, was503) -> the whole 503 side of a Goes To
 // commit, shared by BOTH commit paths (the full-report one and the early-lane
 // one) so a 503 typed in either place files the row, logs it, and dock-flexes
 // its stop identically. Two copies of this is how the early lane would quietly
 // become a place where 503 means less.
 //
-// wasFiled is the membership snapshot taken BEFORE the write, keyed by label,
-// so the re-render fires on a row LEAVING 503 as well as one entering it.
+// was503 is the 503-MEMBERSHIP snapshot taken BEFORE the write, keyed by label
+// and built against is503Label, so the re-render fires on a row LEAVING 503 as
+// well as one entering it. It says nothing about the filing store — see
+// unfileClearedHandedOff503, which asks that separately (review finding 2).
 // commitFn is the commit function THIS write went through, and the undo below
 // is routed back through that same one. Not through a label lookup: dock flex
 // from an early commit can reach a main-report label, and it is setEarly that
 // owns whatever setEarly wrote — clearing it through the other path would meet
 // the oursToTouch guard from the wrong side.
-function commit503(changed, wasFiled, commitFn) {
-  record503Changes(changed, wasFiled);
+function commit503(changed, was503, commitFn) {
+  record503Changes(changed, was503);
+  unfileClearedHandedOff503(changed, was503);
   const moved = (Array.isArray(changed) ? changed : []).some(
-    label => !!wasFiled[label] !== is503Label(label));
-  // The labels this commit is FILING, as opposed to the ones it is clearing:
-  // only a row LEAVING the working list moves the Work cursor, and only that
-  // move earns the advance copy (#966).
-  const filedNow = (Array.isArray(changed) ? changed : []).filter(
-    label => !wasFiled[label] && is503Label(label));
-  if (moved) refreshAfter503Change(filedNow);
-  announce503Filing(changed, wasFiled, commitFn);
+    label => !!was503[label] !== is503Label(label));
+  // NO ADVANCE COPY ON A 503 COMMIT ANY MORE (#966 → #944), and this is a
+  // deletion with a reason rather than a dropped feature.
+  //
+  // #966 hands refreshAfter503Change the labels this commit is FILING so
+  // copyWorkAdvanceStreet can copy the street of the row the cursor LANDS ON.
+  // Its whole premise is that the filed row LEAVES the working list and the
+  // cursor therefore moves. Decision 1 removes that premise: typing 503 keeps
+  // the row exactly where it is, the cursor does not move, and there is no
+  // landing row.
+  //
+  // Passing the labels anyway would be worse than useless. workAdvanceLanding
+  // computes the landing row by REMOVING those labels from the rendered list —
+  // a list they are not actually leaving — so it would name the NEXT package's
+  // row and copy ITS street to the clipboard while the cursor sat on the 503
+  // row. Tyler pastes a street for a package he is not holding. Park still
+  // advances and still copies; that path is untouched.
+  //
+  // The 503 advance copy now belongs to the barcode-confirm OK, which is where
+  // the rows actually leave. markFiledBatch's own restoreWorkCursor handles the
+  // cursor there; wiring the copy onto a BATCH landing (many rows leaving at
+  // once, not one) is a separate question and is not assumed here.
+  if (moved) refreshAfter503Change();
+  announce503Filing(changed, was503, commitFn);
 }
 
 // announce503Filing(changed, wasFiled, commitFn) -> the counted trace and the
@@ -10529,12 +11334,20 @@ function announce503Filing(changed, wasFiled, commitFn) {
     .filter(label => !before[label] && is503Label(label));
   if (!filedNow.length) return;
   const n = filedNow.length;
-  flashGoesToNote('🚫 Filed 503 — ' + n + ' package' + (n === 1 ? '' : 's') +
-    ' at this stop, waiting in the 503s tab', {
+  // #944 CHANGED WHAT THIS NOTICE MAY CLAIM. It used to read "waiting in the
+  // 503s tab", which was true the instant it was said — the row left the lane
+  // on the keystroke. It does not any more (decision 1), so saying it would
+  // send Tyler to a tab that does not have the package and, worse, teach him
+  // the handoff is finished when the sheet that walks it to the pallet has not
+  // been printed. The notice now says where the row IS and what is still owed.
+  flashGoesToNote('🚫 503 — ' + n + ' package' + (n === 1 ? '' : 's') +
+    ' at this stop, tagged and still in your list; barcode ' +
+    (n === 1 ? 'it' : 'them') + ' and confirm to hand ' +
+    (n === 1 ? 'it' : 'them') + ' to the pallet', {
     action: {
       label: 'Undo',
-      title: 'Put ' + (n === 1 ? 'this package' : 'these ' + n + ' packages') +
-        ' back in the working list by emptying the Goes To box again',
+      title: 'Take the 503 off ' + (n === 1 ? 'this package' : 'these ' + n + ' packages') +
+        ' by emptying the Goes To box again',
       // Re-checked at click time: a row already cleared from the tab is left
       // alone rather than committed over.
       onClick: () => filedNow.forEach(label => { if (is503Label(label)) commitFn(label, ''); }),
@@ -11156,7 +11969,68 @@ function filedSourceItems() {
   return IbnoParked.loadedItems([manualItems, shapedEarlyItems(), resolvedItems]);
 }
 
-function assignedRows() { return IbnoFiled.filedRows(filedSourceItems(), filedStore); }
+// assignedRows() -> what the ✅ Work area assigned TAB shows.
+//
+// #944 DECISION 2: a 503 row that files at the barcode-confirm OK goes to the
+// 503s tab ONLY, never also here. One package must never be counted in two
+// tabs — both badges would claim it, both "Copy all" buttons would emit it, and
+// the pallet handoff and the assigned list would each look complete while
+// describing the same box.
+//
+// The exclusion is on the AREA, is503Area, not on isSetAside503: every row that
+// reaches this list is filed by definition, so asking the barcoded half again
+// would be asking a question already answered, and asking isInbound503 would be
+// asking about rows that never enter the filing store at all.
+//
+// IT IS A TAB RULE, NOT A POPULATION RULE. workProgressLabels() below adds the
+// handed-off 503 rows back for exactly this reason — see the note there. ADR
+// 0022's line 140 is the warning: a consumer that narrows a population feeding
+// a RATIO breaks invariant 2 through the denominator without touching a tick.
+function assignedRows() {
+  return IbnoFiled.filedRows(filedSourceItems(), filedStore).filter(it => !is503Area(it));
+}
+
+// remoteAssignedRows() -> #971 item 2's other half: the rows ANOTHER desk
+// barcoded and marked done whose area is not 503.
+//
+// SEPARATE FROM assignedRows(), and the separation is load-bearing rather than
+// tidy. assignedRows() is TWO consumers wearing one name: it is the tab's row
+// list AND it is the population workProgressLabels() adds back to the progress
+// denominator. Decision A3 puts an auto-moved row in the tab and takes it OUT
+// of the denominator -- it is finished, and the bar's total is the work that
+// still needs Tyler -- so the two consumers genuinely diverge here, and folding
+// these rows into assignedRows() would silently re-add them to a ratio. That is
+// ADR 0022's line-140 hazard reached through the denominator, the failure #734
+// hit twice.
+//
+// Held out of this tab: a 503 (decision 2 -- the 503s tab claims it, and one
+// package is never in two tabs), an already-inbound 503 (it was never anyone's
+// assignment), and a label Tyler has ALSO filed locally, which assignedRows()
+// already carries with its own un-file control. His own filing wins: it is a
+// row he can still take back, and drawing it twice would give one package two
+// rows with two different actions.
+//
+// AND A LABEL TYLER HAS PARKED (#986 review, finding 1). Same rule, same
+// reason: the parked tab already draws it, so without this exclusion one
+// package appeared in ⏳ Parked AND ✅ Work area assigned at once. Park is
+// Tyler's own state and a remote signal never overrides it — and it is only
+// READ here, never cleared or written.
+function remoteAssignedRows() {
+  const mine = new Set(assignedRows().map(it => it && it.label));
+  return filedSourceItems().filter(it =>
+    // #990: isRemoteFiledAway carries the `!is503Area` half now, so the tab
+    // rule and the lifecycle predicate cannot drift apart on which rows a 503
+    // marked-done reaches. The already-inbound-503 exclusion stays its own
+    // clause: it is a different fact about the report, not about their file.
+    isRemoteFiledAway(it) && !mine.has(it && it.label) &&
+    !IbnoParked.isParked(parkedStore, it && it.label) &&
+    !isInbound503(it));
+}
+
+// assignedTabRows() -> what the tab DRAWS: his filings first, then theirs. One
+// function for the badge, the chip, the tbody, "Copy all" and "Barcode all", so
+// the count on a button can never disagree with the rows under it (#696).
+function assignedTabRows() { return assignedRows().concat(remoteAssignedRows()); }
 
 // filedSourceFor(label) -> WHICH REPORT this filing is being made from, read off
 // the row rather than off page mode flags. parkSourceFor's rule exactly: a
@@ -12341,6 +13215,134 @@ function byTagParts(label, byName) {
   };
 }
 
+// ─── THE OTHER DESK'S 503 / PARK NOTE (#990) ────────────────────────────────
+//
+// Tyler, 2026-09-09: "for the 503 and parked, I want it to still be in the
+// needs manual review tab but has a little note that shows that it was parked
+// or 503d, and who did it. Just a little tweak to the UI though nothing crazy."
+//
+// So: `503 · Cage PC` and `Parked · Cage PC`, drawn on the row where it already
+// sits in Needs Manual Review. Decision A3 asked for the shipped author pill to
+// gain a STATE rather than for a new widget, so this reuses `.by-tag` — the
+// same token, the same size, correct in both themes with no new CSS — and adds
+// `.desk-state-tag` only so the two can be told apart. That is exactly the
+// split .remote-filed-tag already makes (#971): one class per question.
+//
+// TWO PILLS, NOT ONE, WHEN A ROW IS BOTH (decision A5, and it is flagged in the
+// PR). 503-marked-done and parked are two separate facts, published by two
+// separate stores, each with its OWN author and its own lifetime: their file
+// can drop one and keep the other, and the two can be different people. Merging
+// them into one string would have to pick a name and would go stale on the next
+// pull. Order is fixed — 503 first, then Parked — so a repaint cannot reorder
+// them.
+//
+// IT IS A NOTE AND IT DECIDES NOTHING. It reads remoteFiledBy / remoteParkedBy
+// and paints; no store is written, no lifecycle branches on it, and the row
+// stays fully Tyler's to work (A1). lib/desk-state.js's header is the contract.
+//
+// THE PARK NOTE CARRIES THE PARK'S DATE (#990 decision 2, Tyler 2026-09-09:
+// "day gate it but show parked and the date"). Two halves, and they are
+// different mechanisms — read lib/desk-state.js's park-gate block before
+// changing either:
+//
+//   THE GATE lives in DeskState.record(): a desk file whose park store is
+//   stamped a foreign readable day carries no parks at all, so a file eight
+//   months old can no longer draw a live note. Nothing here has to check it.
+//
+//   THE DATE is DeskState.parkedDay — the day the PARK was made on, off the
+//   entry itself, not the file's. A park survives a sort-day roll on their
+//   device (#730/#753, never auto-cleared), so a CURRENT file legitimately
+//   carries old parks and this is the only thing that says which. An entry with
+//   no readable day draws no date rather than borrowing one.
+function deskStateNotes(item) {
+  return deskStateNotesFor(item && item.label);
+}
+
+// The same answer asked by LABEL, because repaintGoesTo() has a label and no
+// item. Both #990 predicates are label-deep already (is503Area is is503Label),
+// so this is the real function and deskStateNotes(item) is the item-shaped
+// front door the row builder uses.
+function deskStateNotesFor(label) {
+  if (!label) return [];
+  const item = { label: label };
+  const out = [];
+  // The 503 half asks isRemoteFiled503, NOT isRemoteFiled: a NORMAL area they
+  // marked done has already left this list for Work area assigned, so a note
+  // about it here would be drawn on a row that is not here.
+  if (isRemoteFiled503(item)) {
+    const by = remoteFiledBy(label);
+    if (by) {
+      out.push({
+        state: '503', by: by, text: '503 · ' + by,
+        title: by + ' marked this row done as a 503 on their device. It stays in your list '
+          + 'and stays yours to work — the note goes away by itself if their file stops carrying it.',
+      });
+    }
+  }
+  if (isRemoteParked(item)) {
+    const by = remoteParkedBy(label);
+    if (by) {
+      const day = remoteParkedDay(label);
+      const when = day ? shortParkDay(day) : '';
+      out.push({
+        state: 'parked', by: by, day: day,
+        text: 'Parked · ' + by + (when ? ' · ' + when : ''),
+        title: by + ' has this row parked on their device'
+          + (day ? ', parked on ' + day : '')
+          + '. It stays in your list and stays '
+          + 'yours to work — the note goes away by itself when they unpark it.',
+      });
+    }
+  }
+  return out;
+}
+
+// shortParkDay('2026-09-08') -> '9/8'. String arithmetic on a day that is
+// already an ISO string, never a Date: `new Date('2026-09-08')` is UTC midnight
+// and prints as the 7th in Phoenix, which is the one thing a date on a note
+// must not do. lib/ibno-parked.js's shortSortDay makes the same choice for the
+// same reason; this one is M/D because it rides inside a 102 px pill.
+function shortParkDay(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day == null ? '' : day).trim());
+  if (!m) return '';
+  return String(Number(m[2])) + '/' + String(Number(m[3]));
+}
+
+// ─── THE COLLAPSE: ONE NAME, ONE CHIP (#990 decision 1) ─────────────────────
+//
+// Row A stacked THREE chips in a 102 px cell — `503`, the author pill
+// `Cage PC · 12m`, and the note `503 · Cage PC` — and two of them said the same
+// person's name. Tyler chose Collapse (2026-09-09): when a note already names
+// the device that answered the box, the plain author pill is suppressed on that
+// row. Row A reads `503` + `503 · Cage PC`.
+//
+// IT IS A DISPLAY RULE AND NOTHING ELSE. No store is read that was not already
+// read, no predicate changes, and the fact itself is not lost — the note still
+// carries the name, and the tooltip on it still says who and what.
+//
+// SUPPRESSED ONLY WHEN THE NAMES MATCH. Two devices genuinely can be in play on
+// one row: they typed the area and somebody ELSE parked it. Then the note names
+// a different person from the pill, both facts are needed, and both are drawn.
+// A row with no note keeps its author pill exactly as #886/#975 shipped it.
+//
+// Asked in BOTH paint paths (goesToCell and repaintGoesTo), because a rule
+// applied in one is a rule a repaint undoes.
+function deskStateNamesAuthor(label, byName) {
+  const who = String(byName == null ? '' : byName).trim().toLowerCase();
+  if (!who) return false;
+  return deskStateNotesFor(label).some(function (n) {
+    return String(n.by == null ? '' : n.by).trim().toLowerCase() === who;
+  });
+}
+
+function deskStateNotesHtml(item) {
+  return deskStateNotes(item).map(function (n) {
+    return '<span class="by-tag desk-state-tag" data-state="' + ToolHelpers.escapeHtml(n.state) + '"'
+      + ' data-by="' + ToolHelpers.escapeHtml(n.by) + '"'
+      + ' title="' + ToolHelpers.escapeHtml(n.title) + '">' + ToolHelpers.escapeHtml(n.text) + '</span>';
+  }).join('');
+}
+
 // goesToCell(item, opts) -> opts.earlyLane: true when the caller's commit path
 // is commitPostSortGoesTo rather than commitGoesTo. Both lanes fill siblings at
 // the same address as of 2026-08-17, so the tooltip no longer denies
@@ -12369,7 +13371,12 @@ function goesToCell(item, opts) {
   const byName = v ? ActualArea.otherBy(actualAreaStore, item && item.label, deviceName) : '';
   // The pill's text and title in one read (#975). Built once, because both
   // halves of it come from the same arrival lookup.
-  const byParts = byName ? byTagParts(item && item.label, byName) : null;
+  //
+  // COLLAPSED AWAY when a #990 note on this same row already names this same
+  // device — see deskStateNamesAuthor. repaintGoesTo asks the identical
+  // question, so a repaint cannot put the chip back.
+  const byShown = byName && !deskStateNamesAuthor(item && item.label, byName) ? byName : '';
+  const byParts = byShown ? byTagParts(item && item.label, byShown) : null;
   const title = o.earlyLane
     ? 'Where this package actually goes. Typing here also fills any other row at the SAME address that is still empty — it never overwrites a confirmed area.'
     : 'Where this package actually goes. Typing here also fills any other review row at the SAME address.';
@@ -12389,7 +13396,16 @@ function goesToCell(item, opts) {
     ' title="' + ToolHelpers.escapeHtml(title) + '">' +
     (auto ? '<span class="same-addr" title="Filled automatically because another package shares this exact address">same addr</span>' : '') +
     (early ? '<span class="early-tag" title="Pre-filled by the Post Sort early lane — not yet confirmed by a scan on this report">early</span>' : '') +
+    // #944 decision 1: the row now STAYS in the lane after 503 is typed, until
+    // the barcode-confirm OK hands it to the pallet. Say so on the row — an
+    // untagged 503 sitting among open work is a package that gets worked twice.
+    (Ibno503.is503(v) ? '<span class="a503-tag" title="Bad address — 503, the pallet. It stays in this list, and still selectable, until you barcode it and confirm on the panel; then it moves to the 503s tab.">503</span>' : '') +
     (byParts ? '<span class="by-tag" title="' + ToolHelpers.escapeHtml(byParts.title) + '">' + ToolHelpers.escapeHtml(byParts.text) + '</span>' : '') +
+    // #990: their 503-marked-done / their park, as a note on a row that is
+    // still Tyler's. AFTER the author pill on purpose — that one says who typed
+    // the area, this one says what they then did with the row, and reading them
+    // in that order is the sentence.
+    deskStateNotesHtml(item) +
     noteHtml +
     '</td>';
 }
@@ -12899,12 +13915,44 @@ function repaintGoesTo(label) {
     } else if (!early && etag) {
       etag.remove();
     }
+    // The 503 pill (#944), repainted for the same reason .early-tag is: the
+    // value in this box can change under a rendered row — a dock-flexed
+    // sibling, a Clear from the tab, a re-typed area — and a tag that outlived
+    // its value would say "bad address, pallet" over a real belt number.
+    // Matched on its OWN class, so it can never be mistaken for the early pill
+    // (or vice versa) by the querySelector above.
+    let tag503 = cell.querySelector('.a503-tag');
+    const is503Now = Ibno503.is503(value);
+    if (is503Now && !tag503) {
+      tag503 = document.createElement('span');
+      tag503.className = 'a503-tag';
+      tag503.title = 'Bad address — 503, the pallet. It stays in this list, and still selectable, until you barcode it and confirm on the panel; then it moves to the 503s tab.';
+      tag503.textContent = '503';
+      cell.appendChild(tag503);
+    } else if (!is503Now && tag503) {
+      tag503.remove();
+    }
     // The author pill (#886). Repainted here for the same reason .early-tag is:
     // typing in this box commits through ActualArea.set with THIS device's `by`,
     // so a row that showed the Admin's name must lose it the moment Tyler takes
     // the answer over — otherwise the pill outlives the fact it reports.
-    let btag = cell.querySelector('.by-tag');
-    const byNow = value ? ActualArea.otherBy(actualAreaStore, label, deviceName) : '';
+    //
+    // `:not(.desk-state-tag)` IS LOAD-BEARING AND WAS A REAL BUG (#990 review,
+    // finding 1). #990's note reuses this same .by-tag token, and on a row with
+    // NO area — a row they parked, which is the whole point of the parked note
+    // — the note is the ONLY .by-tag in the cell while `byNow` is ''. The
+    // unqualified selector matched it and the `else` branch below DELETED it,
+    // on every commit, every desk pull and every dropped Day Export. Reproduced
+    // in jsdom and in a two-device Chrome run: after a pull the row read
+    // `Cage PC · 1m` instead of `Parked · Cage PC`. Qualify by class, the same
+    // way .a503-tag and .early-tag are told apart above.
+    let btag = cell.querySelector('.by-tag:not(.desk-state-tag)');
+    // THE COLLAPSE (#990 decision 1, Tyler 2026-09-09). Asked here as well as in
+    // goesToCell because this path CREATES the pill: without it a repaint would
+    // hand row A back the `Cage PC · 12m` chip the build path had suppressed,
+    // and the two paint paths would disagree about the same row.
+    const byWho = value ? ActualArea.otherBy(actualAreaStore, label, deviceName) : '';
+    const byNow = deskStateNamesAuthor(label, byWho) ? '' : byWho;
     if (byNow) {
       if (!btag) {
         btag = document.createElement('span');
@@ -15116,6 +16164,25 @@ function workProgressLabels() {
   // area, so it is neither worked nor scanned and would only ever drag the bar
   // down against a package Tyler has deliberately set down.
   assignedRows().forEach(it => add(it.label));
+  // AND THE HANDED-OFF 503 ROWS, WHICH assignedRows() NO LONGER CARRIES (#944).
+  //
+  // Decision 2 takes a barcode-confirmed 503 row out of the ✅ Work area
+  // assigned TAB. That is a tab rule and it must not become a population rule
+  // here, because this is the ratio ADR 0022 line 140 is about: before the OK
+  // the row is in the working lane and therefore in this total (decision 1);
+  // if the OK moved it out, then confirming a batch of 503s would shrink the
+  // DENOMINATOR with nothing scanned, and the scanned half of the bar would
+  // climb on work nobody did. That is invariant 2 broken through the
+  // denominator — the exact failure #734 hit twice — reached this time by a
+  // rule about which tab a row is drawn in.
+  //
+  // The already-inbound-503 rows are deliberately NOT added. They have never
+  // been in this population: they land in Other work areas (503 is not a
+  // Flagged Work Area, decision 4) and the bar reads the MINE lanes plus filed
+  // rows only, so they were outside it before #944 and are outside it after.
+  // Adding them here would inflate a total by rows the bar has never counted,
+  // which is the same ratio hazard pointing the other way.
+  barcodeFiled503Rows().forEach(it => add(it.label));
   return labels;
 }
 function workLabels() { return workRows().map(tr => tr.getAttribute('data-label')); }
@@ -17420,10 +18487,27 @@ function dismissBarcodeConfirm() {
 function applyBarcodeConfirm() {
   const labels = barcodeConfirmBatch.filter(r => r.checked).map(r => r.label);
   if (!labels.length) return;
+  // WHERE THE ROWS WENT, counted BEFORE the write (#944). A 503 row in this
+  // batch lands in the 🚫 503s tab and NOT in ✅ Work area assigned (decision
+  // 2), so a message naming only the assigned tab would send Tyler to a tab
+  // that does not have his package — on the one act that made it disappear from
+  // the list he was working. Read off the area store, which markFiledBatch does
+  // not touch, so before/after would give the same answer; taken first anyway
+  // because a count read after a re-render is a count read from a moved list.
+  const n503 = labels.filter(is503Label).length;
   const n = markFiledBatch(labels);
   dismissBarcodeConfirm();
-  flashGoesToNote('Marked ' + n + ' as done — ' + (n === 1 ? 'it is' : 'they are') +
-    ' in the Work area assigned tab at the page bottom, still codeable. Nothing was counted as scanned.');
+  const nAssigned = n - n503;
+  // "Still codeable" is the ✅ Work area assigned tab's promise and is NOT true
+  // of a 503 — no OPS2 code for a 503 row, ever (#699 criterion 2) — so it is
+  // said only where it holds.
+  const where = n503 && nAssigned
+    ? (nAssigned + ' in the Work area assigned tab, still codeable, and ' + n503 +
+       ' on the 503 pallet in the 503s tab')
+    : (n503 ? ('on the 503 pallet, in the 503s tab and not Work area assigned')
+            : ((n === 1 ? 'it is' : 'they are') + ' in the Work area assigned tab, still codeable'));
+  flashGoesToNote('Marked ' + n + ' as done — ' + where +
+    ' at the page bottom. Nothing was counted as scanned.');
 }
 
 // laneBarcodeCardPlan(cfg) -> { entries, plan, cardCount } — how many cards a
@@ -18064,11 +19148,17 @@ function codedItemsForLane(laneKey) {
     // list AND in the 503s tab at once, while the badge, the progress bar and
     // every set-aside count excluded it — the row visibly in two places and
     // counted in neither.
-    .filter(it => !isFiled503(it))
+    .filter(it => !isSetAside503(it))
     // #734: and a coded row that was then barcoded-and-confirmed, for the same
     // reason. It renders from resolvedItems, which the two working-lane filters
     // above never see.
-    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label));
+    .filter(it => !IbnoFiled.isFiled(filedStore, it && it.label))
+    // #971: and a coded row the other desk has marked done, for the third time
+    // and the same reason. These render from resolvedItems, which neither
+    // working-lane filter above ever sees.
+    // #990: isRemoteFiledAway, same split again — a coded row they marked done
+    // with a 503 stays drawn in the lane, dimmed, with its Goes To box live.
+    .filter(it => !isRemoteFiledAway(it));
 }
 
 // Every lane's coded rows, because codedHidden hides every lane's coded rows —
@@ -18280,7 +19370,7 @@ function copyResolvedTable() {
     // row and only then decide the address is bad and type 503 into it. The
     // record in Manually Resolved is deliberately untouched (it is the audit
     // trail, spec #690 story 33) — only the OPS2 export drops the row.
-    .filter(i => !isFiled503(i))
+    .filter(i => !is503Area(i))
     .map(i => copyValueFor(i.label, i.scanBarcode) + '\t' + i.code);
   if (!lines.length) return;
   const text = lines.join('\n');
@@ -18299,7 +19389,7 @@ function downloadResolvedTable() {
     // a file instead of the clipboard, so the same exclusion applies — a 503
     // downloaded and pasted into ITQA resolves the package while the address
     // stays wrong, which is exactly the outcome #615 replaced.
-    .filter(i => !isFiled503(i))
+    .filter(i => !is503Area(i))
     .map(i => [i.label, i.code]);
   if (!rows.length) return;
   const content = ToolHelpers.buildTSV([], rows).split('\n').slice(1).join('\n') + '\n';
@@ -19257,18 +20347,82 @@ function handleFile(file) {
 // start carries today's early-sort rows too, but loading it as the PRIMARY
 // report misses the rest of today's rows entirely. Purely informational: it
 // never blocks or alters the load that already happened.
+//
+// The today / not-today decision is ReportFreshness.inboundFreshness's (issue
+// #464) — the SAME call the Address Catcher's inbound banner makes, instead of
+// the hand-rolled `sortDate === today` this used to do. The ONE behaviour that
+// changes is that 'unknown' (blank / unparseable sort date) now SHOWS: the old
+// compare started `if (!sortDate || ...)` and hid the note, so the one case
+// where the tool cannot tell you what day the loaded report is for was the one
+// case it said nothing about.
+//
+// The today-vs-stale answer itself is UNCHANGED, in every timezone. The
+// replaced code compared against ToolHelpers.isoDate(), which is already
+// getFullYear/getMonth/getDate (lib/tool-helpers.js) — already the local
+// calendar frame, the same frame inboundFreshness pins its reference day to.
+// There was no UTC-rollover bug here to fix; do not build on one.
+//
+// One narrow case flips the other way: a FUTURE-dated report. `sortDate ===
+// today` was false for tomorrow's date so the note showed; inboundFreshness
+// returns 'today' for ageDays < 0, so it is now SILENT. Deliberate (a device
+// or export an hour ahead must not read as a day stale), and the cost is that
+// a genuinely mis-dated future report says nothing.
+//
+// The 'unknown' wording is GATED on hasInboundDateColumn — see there.
+// Freshness is a DATA question, answered from the loaded rows — never from
+// what the view happens to be showing.
 function showSortDateNote(rows) {
   const el = document.getElementById('sort-date-note');
   const sortDate = IbnoSession.reportSortDate(rows);
   const today = ToolHelpers.isoDate();
-  if (!sortDate || sortDate === today) {
+  const f = ReportFreshness.inboundFreshness(sortDate, new Date());
+  if (f.status === 'today') {
     el.style.display = 'none';
     el.textContent = '';
     return;
   }
-  el.textContent = `This report's sort date is ${sortDate}, today is ${today}` +
-    ` — if this is yesterday's report, load today's report first, then use Merge yesterday's report.`;
+  if (f.status === 'unknown') {
+    // Not an Inbound and Van Scans report at all -> nothing to say about its
+    // sort date. Same silence the pre-#464 compare gave, for a real reason.
+    if (!hasInboundDateColumn(rows)) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.textContent = `Couldn't read this report's sort date, so there's no telling whether it's today's` +
+      ` (today is ${today}) — if it's yesterday's, load today's report first, then use Merge yesterday's report.`;
+  } else {
+    el.textContent = `This report's sort date is ${sortDate}, today is ${today}` +
+      ` — if this is yesterday's report, load today's report first, then use Merge yesterday's report.`;
+  }
   el.style.display = 'block';
+}
+
+// hasInboundDateColumn(rows) -> does this file actually carry the Inbound and
+// Van Scans report's INBOUND_DATE column?
+//
+// detectReportKind returns 'main' for ANY unrecognized header BY DESIGN, so
+// files that are not this report at all reach showSortDateNote. Three real
+// exports in reports/source-files/ do exactly that today — the *Inbound Scan –
+// No Van Scan – During Sort* pulls dated 2026-07-07, 2026-07-15 and
+// 2026-07-31. They carry PKG_LABEL_XREF but have NO INBOUND_DATE column, so
+// the sort date reads 'unknown' and the note fires. Its wording would be
+// confidently wrong (there is no sort date because this is not that report)
+// and its advice actively harmful (it recommends an early-sort merge that
+// would be incorrect). So: no INBOUND_DATE column, no note — silent, exactly
+// as before #464.
+//
+// This is the SAME condition IbnoSession.sliceReport requires, read the same
+// way (IbnoRules.findHeaderIndex, whose signature is PKG_LABEL_XREF +
+// INBOUND_DATE). It gates the WORDING only — it never suppresses 'stale' or
+// 'today', both of which already imply a readable INBOUND_DATE.
+function hasInboundDateColumn(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const header = rows[IbnoRules.findHeaderIndex(rows)];
+  if (!Array.isArray(header)) return false;
+  return header.some(function (c) {
+    return String(c == null ? '' : c).trim().toUpperCase() === 'INBOUND_DATE';
+  });
 }
 
 // ─── EARLY-SORT MERGE (#459) ────────────────────────────────────────────────
