@@ -1,0 +1,559 @@
+{
+  "entries": [
+    {
+      "id": "pr-994",
+      "pr": 994,
+      "issue": 993,
+      "tool": "ibno-coder",
+      "title": "Mark selected rows as done without printing a barcode sheet",
+      "summary": "Both manual lists now have a Mark selected as done button beside Barcode selected. Use it to clear rows you have already handled, without printing a sheet.",
+      "watchFor": [
+        "The rows go straight to Work area assigned, so there is no printed sheet to tick off afterwards.",
+        "A confirm panel opens first, so a mis-click on its own clears nothing."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report",
+        "Tick two rows in Needs Manual Review",
+        "Click Mark selected as done and read the confirm panel",
+        "Confirm, and the rows move to Work area assigned"
+      ],
+      "mergedAt": "2026-09-10",
+      "commit": "3b1a86f",
+      "shippedAt": null,
+      "order": 0
+    },
+    {
+      "id": "pr-1004",
+      "pr": 1004,
+      "issue": 998,
+      "tool": "ibno-coder",
+      "title": "Station tab pulls station packages out of Needs Review",
+      "summary": "Packages addressed to the station itself now leave Needs Manual Review and get their own Station tab under Set aside. They also stop counting against the progress line.",
+      "watchFor": [
+        "Only packages with the station zip 85027 can match the station. A same-numbered street anywhere else never will.",
+        "The list of other names for the station starts empty on purpose, so nothing matches by guesswork.",
+        "On a sort that runs past midnight the packages count to the sort day, not to the clock on the wall."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report",
+        "Open Set aside and click Station",
+        "Check Needs Manual Review: none of those tracking numbers is in it",
+        "The progress line no longer counts them either"
+      ],
+      "mergedAt": "2026-09-11",
+      "commit": "bc1f21c",
+      "shippedAt": null,
+      "order": 1
+    },
+    {
+      "id": "pr-1008",
+      "pr": 1008,
+      "issue": 999,
+      "tool": "ibno-coder",
+      "title": "The Station tab remembers the day: delivered, carry-overs and four counts",
+      "summary": "The Station tab now remembers the packages it saw earlier in the day. The header counts total, delivered, still needing and coded, and a package carried over from a previous day shows how old it is.",
+      "watchFor": [
+        "Delivered is worked out fresh from each report, never saved. A package that turns up again counts as still out.",
+        "Overnight the delivered ones drop off and the ones still needing a scan carry over."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report",
+        "Open Set aside then Station and read the four counts in the header",
+        "Load a later Post Sort report that no longer lists one of those packages",
+        "That row shows as delivered and the counts move by exactly one"
+      ],
+      "mergedAt": "2026-09-11",
+      "commit": "c56db50",
+      "shippedAt": null,
+      "order": 2
+    },
+    {
+      "id": "pr-1009",
+      "pr": 1009,
+      "issue": 1000,
+      "tool": "ibno-coder",
+      "title": "Not ours, To Station, Park and Undo on a package",
+      "summary": "Station and Needs Review rows get four buttons: Not ours, To Station, Park and Undo. Your choice sticks to that tracking number, so the next report does not undo it.",
+      "watchFor": [
+        "Not ours also clears the package from the day, so it cannot come back as a carry-over.",
+        "To Station on a parked row releases the park.",
+        "A package you marked still open goes back to normal once a Post Sort report lists it again."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report",
+        "Open Set aside then Station and click Not ours on a row",
+        "It is back in Needs Manual Review and the Station badge drops by one",
+        "Click To Station on a Needs Review row and it stays in Station on the next report"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "9bc81d6",
+      "shippedAt": null,
+      "order": 3
+    },
+    {
+      "id": "pr-1011",
+      "pr": 1011,
+      "issue": 1010,
+      "tool": "ibno-coder",
+      "title": "Publishing the tool works from the Windows machine too",
+      "summary": "The scripts that publish the tool to the staging and cage PC sites now run on the Windows machine as well as the Mac. Nothing inside the tool changed.",
+      "watchFor": [
+        "There is nothing to see on screen. If you are hunting for a difference in the tool, there is not one."
+      ],
+      "howToSee": [
+        "This one is about publishing, not about the tool",
+        "Publishing from the Windows machine now finishes instead of stopping with an error",
+        "What gets published is the same either way"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "fa2c153",
+      "shippedAt": null,
+      "order": 4
+    },
+    {
+      "id": "pr-1013",
+      "pr": 1013,
+      "issue": 1001,
+      "tool": "ibno-coder",
+      "title": "Copy the Station list for Teams, and edit the station settings",
+      "summary": "A Copy button on the Station tab puts the packages still needing a scan on the clipboard as plain Teams text. Settings gains fields for the other station names, the station route and the closing line.",
+      "watchFor": [
+        "The button is only on a supervisor device. An admin machine does not get it.",
+        "The text is deliberately plain, because Teams turns a pasted dash into a bullet list.",
+        "It copies exactly the packages the Station badge counts, no more and no fewer."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report on a supervisor device",
+        "Open Set aside then Station and click Copy",
+        "Paste into Teams and read the list and the closing line",
+        "Change the closing line in Settings, save, and copy again"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "aa231ac",
+      "shippedAt": null,
+      "order": 5
+    },
+    {
+      "id": "pr-1015",
+      "pr": 1015,
+      "issue": 1003,
+      "tool": "address-catcher",
+      "title": "Address Catcher leaves station packages out of the report",
+      "summary": "Address Catcher now drops station packages the moment it reads the report, so one cannot turn up in a band, the worklist, an advisory, a misroute flag or an area suggestion.",
+      "watchFor": [
+        "The record count comes out a few rows short of the scan count. That gap is the station packages and it is expected.",
+        "With the station settings missing, nothing is dropped at all. It would rather show you too much than hide a real bad address.",
+        "Sending a package to Station in the coder also drops it here the next time you load the report."
+      ],
+      "howToSee": [
+        "Open Address Catcher and load today's Inbound and Van Scans report",
+        "The record count is short by the number of station packages",
+        "Look for a station tracking number in the bands: it is not there",
+        "Send a row to Station in the coder, reload the report here, and that row is gone too"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "e673860",
+      "shippedAt": null,
+      "order": 6
+    },
+    {
+      "id": "pr-1016",
+      "pr": 1016,
+      "issue": 1002,
+      "tool": "ibno-coder",
+      "title": "Station rows and your choices ride along in the Day Export",
+      "summary": "The Day Export file now carries the Station list and your Not ours, To Station and Park choices, so the Cage A admin sees the same Station tab you do.",
+      "watchFor": [
+        "An import adds to what is already on the other device. It never wipes what is there.",
+        "A package you parked or marked still open is not marked delivered by an import.",
+        "Anything the import refuses is named in the import summary rather than dropped quietly."
+      ],
+      "howToSee": [
+        "Load today's report and click Not ours on one station row",
+        "Export the day file from the 999 Desk panel",
+        "Import it on the other device and open Set aside then Station",
+        "The same rows and the same choices are there, and the summary names both lists"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "297d468",
+      "shippedAt": null,
+      "order": 7
+    },
+    {
+      "id": "pr-1023",
+      "pr": 1023,
+      "issue": 1020,
+      "tool": "ibno-coder",
+      "title": "A list of what is on staging and not yet in production",
+      "summary": "The list behind this drawer. Every merged change that has not reached the cage PC yet gets one entry, and a check stops a change from going out without one.",
+      "watchFor": [
+        "A change merged minutes ago can show no merge date until the list is rebuilt."
+      ],
+      "howToSee": [
+        "Open this drawer: everything you are reading comes from that list",
+        "Each card links to the change it describes",
+        "The list is published with the build, so it is never older than the page you are on"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "0c915f0",
+      "shippedAt": null,
+      "order": 8
+    },
+    {
+      "id": "pr-1024",
+      "pr": 1024,
+      "issue": 1022,
+      "tool": "ibno-coder",
+      "title": "The Release queue: a pinned issue you tick to choose what ships next",
+      "summary": "A pinned Release queue issue lists the same changes with a checkbox each. Tick the ones you want on the cage PC and a script works out how to ship them.",
+      "watchFor": [
+        "Ticking from the top down is the cheap path. Ticking out of order means pulling changes apart one at a time, which costs another round of review.",
+        "Nothing ships because it is ticked. Someone still has to publish.",
+        "A tick follows the change it is on, so the list reordering cannot move your tick onto something else."
+      ],
+      "howToSee": [
+        "Open the pinned Release queue issue linked at the top of this drawer",
+        "Tick the top two changes and run the picks step",
+        "Read what it prints: a checkpoint, or a warning that you ticked out of order",
+        "Once the cage PC is published, the shipped ones move to Already on production"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "52a6172",
+      "shippedAt": null,
+      "order": 9
+    },
+    {
+      "id": "pr-1026",
+      "pr": 1026,
+      "issue": 1021,
+      "tool": "ibno-coder",
+      "title": "A What’s new button on staging, listing what the cage PC does not have yet",
+      "summary": "On the staging site only, a What’s new button opens this drawer and lists every change that is on staging and not yet on the cage PC, in the order it will ship. Anything already on the cage PC is tucked underneath.",
+      "watchFor": [
+        "The cage PC site has no such button, and no hidden one either.",
+        "The list is re-read every time you open the drawer, so it always matches the build you are on."
+      ],
+      "howToSee": [
+        "Open the staging site, not the cage PC site",
+        "Click What’s new beside Code Lookup",
+        "The changes list in the order they will ship",
+        "Open the cage PC site instead and there is no button at all"
+      ],
+      "mergedAt": "2026-09-12",
+      "commit": "330c15c",
+      "shippedAt": null,
+      "order": 10
+    },
+    {
+      "id": "pr-1029",
+      "pr": 1029,
+      "issue": 1028,
+      "tool": "ibno-coder",
+      "title": "What’s new cards you can skim, with a Tested tick",
+      "summary": "The What’s new cards now start closed, so you see the change and one line about it. Open one to read what changed, what to watch for and how to try it, and tick Tested once you have checked it.",
+      "watchFor": [
+        "A ticked card drops to the bottom of the list and keeps a tick mark while it is closed.",
+        "The ticks are saved on this device only. They never travel in the Day Export and the cage PC never sees them.",
+        "The words on the cards are plainer now. The full engineering detail is still one click away on each change."
+      ],
+      "howToSee": [
+        "Open What’s new on staging: every card is closed",
+        "Click a title to open one and read What changed, Watch for and Try it",
+        "Tick Tested on a card and watch it drop to the bottom",
+        "Reload the page, open the drawer again, and the tick is still there"
+      ],
+      "mergedAt": "2026-09-14",
+      "commit": "0a12b4a",
+      "shippedAt": null,
+      "order": 11
+    },
+    {
+      "id": "pr-1031",
+      "pr": 1031,
+      "issue": 1030,
+      "tool": "ibno-coder",
+      "title": "Write feedback on a What’s new card and send it back",
+      "summary": "Open a card on What’s new and there is now a box under Try it where you can write what you saw, saved on this device as you type. Copy all feedback puts every note on the clipboard, and if this browser holds a GitHub token each card also gets a Send to GitHub button that posts your note as a comment on that change.",
+      "watchFor": [
+        "The Send button only appears when this browser already holds a GitHub token. Without one you still get Copy all feedback.",
+        "A card you have written on shows a small speech bubble in its header, and the top line counts how many have feedback.",
+        "Edit a note you already sent and the button re-arms, so you can send the new version.",
+        "The notes are saved on this device only. They never travel in the Day Export and the cage PC never sees them."
+      ],
+      "howToSee": [
+        "Open What’s new on staging and click a card title to open it",
+        "Type something in the Feedback box under Try it",
+        "Close the card and look for the speech bubble beside the Tested tick",
+        "Click Copy all feedback and paste it somewhere to read it back"
+      ],
+      "mergedAt": "2026-09-14",
+      "commit": "87e615a",
+      "shippedAt": null,
+      "order": 12
+    },
+    {
+      "id": "pr-1032",
+      "pr": 1032,
+      "issue": null,
+      "tool": "ibno-coder",
+      "title": "Send to GitHub works from the work PC again",
+      "summary": "Send to GitHub was answering 401 on a token that was fine, because the tool was reading the saved token without unwrapping it. It now reads the token the same way it was saved.",
+      "watchFor": [
+        "If Send still says 401, the token itself has expired. Save a fresh one in Settings.",
+        "The button only shows when a token is saved on that device."
+      ],
+      "howToSee": [
+        "Open What’s new on the work PC and open a card",
+        "Type a note and click Send to GitHub",
+        "The line under the box reads Sent with a link to the comment"
+      ],
+      "mergedAt": "2026-09-14",
+      "commit": "868f1af",
+      "shippedAt": null,
+      "order": 13
+    },
+    {
+      "id": "pr-1033",
+      "pr": 1033,
+      "issue": null,
+      "tool": "ibno-coder",
+      "title": "Set a GitHub token for feedback, and failures that tell you what to do",
+      "summary": "Send to GitHub now has its own token, set from a GitHub token button in the drawer, so it does not have to borrow one from a sync channel that points at a different repo. When a send fails, the line under the box says what went wrong and what to do about it.",
+      "watchFor": [
+        "A token scoped to another repo gets a 404, not a permission error. The message now says so.",
+        "The token is saved on this device only. It is never copied, exported, or shown again after you save it.",
+        "If no token is set, Send is hidden and Copy all feedback still works."
+      ],
+      "howToSee": [
+        "Open What’s new and click GitHub token",
+        "Paste a token with Issues read and write on the work repo, and click Save",
+        "Send to GitHub appears on every card",
+        "Send a note and read the line under the box"
+      ],
+      "mergedAt": "2026-09-14",
+      "commit": "8b5a07f",
+      "shippedAt": null,
+      "order": 14
+    },
+    {
+      "id": "pr-1046",
+      "pr": 1046,
+      "issue": 1039,
+      "tool": "ibno-coder",
+      "title": "Pressing 33 or 65 no longer opens the package details",
+      "summary": "The 33 and 65 buttons, Apply and Done now code the row and nothing else. The row stays where it is, at the same height, so the next button is still under your finger and you can run straight down the list.",
+      "watchFor": [
+        "The row still dims and shows Coded 33 with an Undo, the same as before.",
+        "Clicking anywhere else on the row — the name or address cell — still opens the details, on purpose.",
+        "If the row you code was showing its details, coding it closes them. Other rows you opened stay open."
+      ],
+      "howToSee": [
+        "Load today's Inbound and Van Scans report",
+        "In Needs Manual Review, click the orange 33 on four rows in a row as fast as you can",
+        "No details panel opens under any of them and the list does not move",
+        "Click the address on the next row down: the details still open there"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "14c6b15",
+      "shippedAt": null,
+      "order": 15
+    },
+    {
+      "id": "pr-1048",
+      "pr": 1048,
+      "issue": 1036,
+      "tool": "ibno-coder",
+      "title": "The 503 button now moves the package to the 503s tab in one click",
+      "summary": "Clicking 503 on a Needs Manual Review row now tags it AND hands it off: the row leaves your list and shows up in the 503s tab right away. Typing 503 into Goes To works exactly as it did before — that row stays in your list until you barcode and confirm it.",
+      "watchFor": [
+        "Only the package you clicked is handed off. Another package at the same stop still gets the 503 tag, but stays in your list for the barcode sheet.",
+        "Clear 503 on the tab row brings the package back to your list and takes the filing back with it.",
+        "In Work mode the cursor moves to the next row after the click, and that row’s street goes on the clipboard, the same way Park already works.",
+        "The tool sometimes refuses to set the area, when the report has no readable sort date or already confirmed that area. Nothing is filed and you see the refusal instead."
+      ],
+      "howToSee": [
+        "Load today’s Post Sort report",
+        "Click 503 on a row in Needs Manual Review",
+        "Open Set aside and click 503s — the package is already there",
+        "Type 503 into another row’s Goes To instead: that one stays in the list",
+        "Click Clear 503 on the tab row and the first package comes back"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "a8b5940",
+      "shippedAt": null,
+      "order": 16
+    },
+    {
+      "id": "pr-1049",
+      "pr": 1049,
+      "issue": 1040,
+      "tool": "ibno-coder",
+      "title": "The page opens folded shut, and remembers what you opened",
+      "summary": "Every section now starts collapsed on every load, so a report lands as a short list of headers with counts instead of a wall of rows, and what you open is remembered across a refresh. The Collapse all and Expand all buttons moved up into the purple bar at the top, so they stay on screen no matter how far you scroll.",
+      "watchFor": [
+        "A refresh used to open everything back up. It no longer does — only the sections you opened yourself come back.",
+        "A re-drop of today’s report keeps what you had open. A report from a new sort day starts with everything shut.",
+        "Every collapsed header still shows its count, so a folded page still tells you where the work is.",
+        "Work mode, unchanged: a load still opens the section holding the cursor, and on a Post Sort load all three buckets — so there the sections are remembered, the buckets are not."
+      ],
+      "howToSee": [
+        "Drop a report — every section lands folded shut",
+        "Click a section header to open it",
+        "Press F5 — that section is open again and the rest are still shut",
+        "Use the Collapse all and Expand all buttons in the purple bar at the top of the page"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "9e8137b",
+      "shippedAt": null,
+      "order": 17
+    },
+    {
+      "id": "pr-1052",
+      "pr": 1052,
+      "issue": 1018,
+      "tool": "ibno-coder",
+      "title": "The production deploy refuses to run from the wrong branch",
+      "summary": "Sending the coder to the cage PC now stops unless the computer is on the release branch and that branch has been pushed. Deploys to the staging site are unchanged.",
+      "watchFor": [
+        "A refused deploy leaves the live site exactly as it was. Nothing is built and nothing is copied, so there is no half-finished update to clean up.",
+        "Sitting on a detached commit is refused too, even when it is the exact tip of release. Check the release branch out first.",
+        "If the release branch has commits that were never pushed, the deploy stops and tells you to push them first.",
+        "The refusal names the branch you are on and the exact commands to fix it."
+      ],
+      "howToSee": [
+        "Try a production deploy from a main checkout",
+        "Read the refusal: it names the branch you are on and what to run instead",
+        "Check out the release branch and run the same command again",
+        "The deploy runs as before and the live site updates"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "0c84a21",
+      "shippedAt": null,
+      "order": 18
+    },
+    {
+      "id": "pr-1047",
+      "pr": 1047,
+      "issue": 1038,
+      "alsoCloses": [
+        1051
+      ],
+      "tool": "ibno-coder",
+      "title": "The other desk's Goes To prints on the barcode card, and says if it is a guess",
+      "summary": "When the other desk types a Goes To, your printed card now shows that area instead of a dash. If they typed it on the post sort lane, the card carries the same unconfirmed line their own card carries.",
+      "watchFor": [
+        "An area they typed on the post sort lane prints with the line reading unconfirmed, post sort early guess, not yet scanned. Their card says the same thing, so the two desks agree.",
+        "An area they answered against the full report prints plain, with no line. The line is about which report a value was typed against, not about who typed it.",
+        "Both desks must be on this build. An older one refuses the new file and shows a dash again, and tells you to update that device.",
+        "A row with no area, or an area that came from the report itself, still prints a dash on purpose."
+      ],
+      "howToSee": [
+        "Load today's report on both desks and update both",
+        "On the other desk, type a Goes To on the post sort lane - say 140",
+        "Wait for your screen to pick it up; the box shows 140 with their name",
+        "Tick that row, click Barcode selected, and read the card: 140 with the unconfirmed line under it"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "658ceb3",
+      "shippedAt": null,
+      "order": 19
+    },
+    {
+      "id": "pr-1055",
+      "pr": 1055,
+      "issue": 1035,
+      "tool": "ibno-coder",
+      "title": "FTrack and E-OPS links beside every tracking number",
+      "summary": "The Station tab tracking number is now click-to-copy with an FTrack link beside it. E-OPS links now sit next to FTrack on 503s, Parked and Manually Resolved as well.",
+      "watchFor": [
+        "E-OPS only appears on an Express package. A Ground row shows FTrack alone, which is right - there is no E-OPS entry to open for a Ground package.",
+        "Clicking either link never copies the tracking number and never opens the row. Click the number itself to copy it - on Full barcode it copies the scan barcode instead.",
+        "A station package the report has stopped carrying keeps both links, so you can still look it up while it sits in the cage.",
+        "Repeat History and the Recurring list still show FTrack alone. Neither one records whether a package was Express."
+      ],
+      "howToSee": [
+        "Load the Inbound and Van Scans report",
+        "Open Set aside and click Station",
+        "Click a tracking number to copy it, then click FTrack beside it",
+        "Find an Express row in Needs Manual Review and check E-OPS sits next to FTrack"
+      ],
+      "mergedAt": "2026-09-18",
+      "commit": "a801ede",
+      "shippedAt": null,
+      "order": 20
+    },
+    {
+      "id": "pr-1059",
+      "pr": 1059,
+      "issue": 1037,
+      "tool": "ibno-coder",
+      "title": "To Station is now a button with an arrow for more moves",
+      "summary": "To Station still works with one click. The small arrow beside it opens a list with To Station, Mark as done, Park, 503 and Not ours, so a row can be moved without hunting for the right button.",
+      "watchFor": [
+        "Each item does exactly what the button of that name does, including the 503 one, so nothing new is written and nothing behaves differently.",
+        "Park and 503 keep their own buttons in the row as well. Use whichever you already reach for.",
+        "On the last row of a long list the menu opens upward so the bottom item is never off the screen.",
+        "While the menu is open the arrow keys move inside it and do not step the work cursor. Press Escape to close it and the arrow goes back to the list."
+      ],
+      "howToSee": [
+        "Load today's report and find a row in Needs Manual Review",
+        "Click the small arrow to the right of To Station",
+        "Pick Mark as done and watch the row move to the Work area assigned tab",
+        "Scroll to the last row and open the arrow again: the menu opens upward"
+      ],
+      "mergedAt": "2026-09-19",
+      "commit": "a4ebf8b",
+      "shippedAt": null,
+      "order": 21
+    },
+    {
+      "id": "pr-1061",
+      "pr": 1061,
+      "issue": 1041,
+      "tool": "ibno-coder",
+      "title": "Back to the top, and jump straight to a section",
+      "summary": "A Top button now floats in the bottom left corner once you scroll, and the purple bar carries a chip for each section so you can jump straight to one.",
+      "watchFor": [
+        "The button sits bottom left on purpose. Bottom right is where the day and night toggle lives, and where a row keeps its own buttons on the last line you can see.",
+        "The Home key takes you to the top and the End key to the bottom, but neither fires while you are typing in a code box or in the Goes To box.",
+        "On a phone the chips drop their counts and shrink, so the purple bar does not eat the screen.",
+        "A chip opens the section it jumps to, so a jump never lands on a folded section."
+      ],
+      "howToSee": [
+        "Load today Inbound and Van Scans report",
+        "Scroll down into Ready to Enter until the Top button appears in the bottom left corner",
+        "Click a chip in the purple bar and watch that section land just under the bar",
+        "Press the Home key with nothing selected and the page goes back to the top"
+      ],
+      "mergedAt": "2026-09-19",
+      "commit": "78f0177",
+      "shippedAt": null,
+      "order": 22
+    },
+    {
+      "id": "pr-1060",
+      "pr": 1060,
+      "issue": 1042,
+      "tool": "ibno-coder",
+      "title": "Load New File empties the review list, and both reports load from the drop zone",
+      "summary": "After Load New File the empty Needs Manual Review box is gone and the drop zone offers both reports side by side. Set aside stays only while one of its tabs still holds packages.",
+      "watchFor": [
+        "Set aside stays while any tab still holds packages. Station packages carry over from day to day, so on a real sort the strip is usually still there, counting what is left.",
+        "The park is never cleared. The parked tab reads zero while no report is loaded, because there is no row to draw yet, and the package is back the moment you load the next report.",
+        "Post Sort is the first tile because it takes the main slot. Once a report is loaded the drop zone stands down, so swap in a fresh pull from the review strip as before.",
+        "In dark mode the drop zone outline is light purple now. It used to be a faint grey a shade off the page and was easy to miss on an empty screen."
+      ],
+      "howToSee": [
+        "Load today report and code a few rows",
+        "Click Load New File",
+        "Needs Manual Review is gone, and the drop zone with both loads is back",
+        "Park a row and click Load New File again: the parked tab reads zero, and the park itself is kept",
+        "Load a report and the parked package is counted again and ready to unpark"
+      ],
+      "mergedAt": null,
+      "commit": null,
+      "shippedAt": null
+    }
+  ],
+  "queueIssue": 1025
+}
