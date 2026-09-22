@@ -19,7 +19,7 @@
       ],
       "mergedAt": "2026-09-10",
       "commit": "3b1a86f",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 0
     },
     {
@@ -42,7 +42,7 @@
       ],
       "mergedAt": "2026-09-11",
       "commit": "bc1f21c",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 1
     },
     {
@@ -64,7 +64,7 @@
       ],
       "mergedAt": "2026-09-11",
       "commit": "c56db50",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 2
     },
     {
@@ -87,7 +87,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "9bc81d6",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 3
     },
     {
@@ -107,7 +107,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "fa2c153",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 4
     },
     {
@@ -130,7 +130,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "aa231ac",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 5
     },
     {
@@ -153,7 +153,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "e673860",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 6
     },
     {
@@ -176,7 +176,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "297d468",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 7
     },
     {
@@ -196,7 +196,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "0c915f0",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 8
     },
     {
@@ -219,7 +219,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "52a6172",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 9
     },
     {
@@ -241,7 +241,7 @@
       ],
       "mergedAt": "2026-09-12",
       "commit": "330c15c",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 10
     },
     {
@@ -264,7 +264,7 @@
       ],
       "mergedAt": "2026-09-14",
       "commit": "0a12b4a",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 11
     },
     {
@@ -288,7 +288,7 @@
       ],
       "mergedAt": "2026-09-14",
       "commit": "87e615a",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 12
     },
     {
@@ -309,7 +309,7 @@
       ],
       "mergedAt": "2026-09-14",
       "commit": "868f1af",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 13
     },
     {
@@ -332,7 +332,7 @@
       ],
       "mergedAt": "2026-09-14",
       "commit": "8b5a07f",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 14
     },
     {
@@ -355,7 +355,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "14c6b15",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 15
     },
     {
@@ -380,7 +380,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "a8b5940",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 16
     },
     {
@@ -404,7 +404,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "9e8137b",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 17
     },
     {
@@ -428,7 +428,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "0c84a21",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 18
     },
     {
@@ -455,7 +455,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "658ceb3",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 19
     },
     {
@@ -479,7 +479,7 @@
       ],
       "mergedAt": "2026-09-18",
       "commit": "a801ede",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 20
     },
     {
@@ -503,7 +503,7 @@
       ],
       "mergedAt": "2026-09-19",
       "commit": "a4ebf8b",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 21
     },
     {
@@ -527,7 +527,7 @@
       ],
       "mergedAt": "2026-09-19",
       "commit": "78f0177",
-      "shippedAt": null,
+      "shippedAt": "2026-09-19",
       "order": 22
     },
     {
@@ -550,9 +550,10 @@
         "Park a row and click Load New File again: the parked tab reads zero, and the park itself is kept",
         "Load a report and the parked package is counted again and ready to unpark"
       ],
-      "mergedAt": null,
-      "commit": null,
-      "shippedAt": null
+      "mergedAt": "2026-09-19",
+      "commit": "7c17478",
+      "shippedAt": "2026-09-19",
+      "order": 23
     }
   ],
   "queueIssue": 1025
