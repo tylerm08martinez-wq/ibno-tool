@@ -980,6 +980,12 @@
       margin-bottom: 6px;
     }
     #settings-panel .hint-text { font-size: 11px; color: var(--text-faint); margin-bottom: 10px; }
+    /* A checkbox setting reads as a sentence, not a section heading, so it
+       drops the heading label's caps and weight. */
+    #settings-panel label.settings-check {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text);
+    }
     /* #station-aliases-input rides the SAME rule as the Flagged Work Areas box
        (#1001): one more selector rather than a second block, so the two boxes
        cannot drift and dark mode comes free through the same vars. */
@@ -2638,6 +2644,19 @@
     <div class="settings-actions">
       <button class="btn btn-purple" id="save-device-name" onclick="saveDeviceName()">Save device name</button>
       <span id="device-name-status">&#10003; Saved</span>
+    </div>
+
+    <!-- ── THE ADDRESS CHIP (Tyler, 2026-10-26) ─────────────────────────────
+         SUPERVISOR DEVICES ONLY, gated like the station config editor above
+         (fillFtrackAddressSettings). The admins work no-address rows from the
+         FTrack history page on purpose; this is Tyler's shortcut to the
+         delivery page when he just needs the address. A UI permission, not a
+         security boundary — see lib/desk-roles.js. -->
+    <div id="ftrack-address-settings">
+    <hr class="settings-divider">
+    <label>FTrack Address chip</label>
+    <div class="hint-text">Adds an <strong>Address &#8599;</strong> chip beside FTrack on rows with no house number and street (the same rows <em>Hide no-address</em> counts). It opens FTrack's delivery page, which shows the address, one click sooner than the history page. The FTrack chip still opens the full history. This device only, and saved as soon as you tick it.</div>
+    <label class="settings-check" for="ftrack-address-toggle"><input type="checkbox" id="ftrack-address-toggle" onchange="setFtrackAddressChip(this.checked)"> Show the Address chip on no-address rows</label>
     </div>
 
     <hr class="settings-divider">
@@ -4610,6 +4629,7 @@ function toggleSettings() {
     // what is actually saved, not what was typed into it last time, and the
     // device name — which is what the gate reads — can have changed since.
     fillStationSettings();
+    fillFtrackAddressSettings();
     fillSyncSettings();
     // The desk channel's fields, on the same terms as the Repeat History's
     // above — and this call is not cosmetic (#918 review finding 1). Without
@@ -4844,6 +4864,12 @@ function saveDeviceName() {
     // Save. Both writers re-ask the gate, so nothing could be written, but
     // the page was showing an affordance the device no longer has.
     fillStationSettings();
+    // AND THE ADDRESS CHIP, same gate, same reason: its toggle, and the
+    // Ready to Enter rows, which the two renders above do not reach.
+    // addressChip() asks the gate at render time, so a rebuilt row follows
+    // the new name; this is what rebuilds the auto-coded ones.
+    fillFtrackAddressSettings();
+    renderAutoSectionRows();
     restoreWorkCursor(cursorLabel);
     // THE DEVICE NAME IS THE 999 DESK CHANNEL'S OFF SWITCH, IN BOTH DIRECTIONS
     // (#918 round-three finding 5). deskPublishReady() has always required it,
@@ -9322,7 +9348,7 @@ function build503Row(item) {
   tr.dataset.label = item.label;
   tr.innerHTML =
     '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(item.label) + '</span>' +
-      '<span class="row-chips">' + FTrack.ftrackLink(item.label) + setAsideBarcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
+      '<span class="row-chips">' + FTrack.ftrackLink(item.label) + addressChip(item) + setAsideBarcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(item.category || '\u2014') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(item.ibWork || '\u2014') + '</td>' +
     '<td>' + recipientCellHtml(item.firm, item.address) + '</td>' +
@@ -11002,7 +11028,7 @@ function buildParkedRow(item, badges) {
   tr.innerHTML =
     '<td class="mono"><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(item.label) + '</span>' +
       carriedParkMarker(item.label) +
-      '<span class="row-chips">' + FTrack.ftrackLink(item.label) + setAsideBarcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
+      '<span class="row-chips">' + FTrack.ftrackLink(item.label) + addressChip(item) + setAsideBarcodeChip(item) + streetChip(item) + eopsChip(item) + '</span></td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(item.category || '\u2014') + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(item.ibWork || '\u2014') + '</td>' +
     '<td>' + recipientCellHtml(item.firm, item.address) + '</td>' +
@@ -13036,7 +13062,7 @@ function buildAutoRow(item, idx) {
     codeCellHtml = '<span class="code-pill">' + ToolHelpers.escapeHtml(code) + '</span>';
   }
   tr.innerHTML =
-    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + barcodeChip(item) + streetChip(item) + eopsChip(item) + '</td>' +
+    '<td class="mono"><span class="expand-indicator">&#9654;</span><span class="label-copy" title="Click to copy">' + ToolHelpers.escapeHtml(label) + '</span>' + recurringPill(label) + FTrack.ftrackLink(label) + addressChip(item) + barcodeChip(item) + streetChip(item) + eopsChip(item) + '</td>' +
     '<td>' + codeCellHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(category) + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '—') + '</td>' +
@@ -20606,6 +20632,64 @@ function streetChip(item) {
     ToolHelpers.escapeHtml(street) + '" onclick="copyStreetChip(this)">&#9106; St</button>';
 }
 
+// ─── THE ADDRESS CHIP: FTrack's delivery page (Tyler, 2026-10-26) ─────────────
+//
+// "one is the delivery page that shows the address for them for the blank ones
+// ... that can help us look at those with one less click. i want that one to
+// be some kind of setting i can enable ... since i want the admins to look at
+// the ftrack history but sometimes i just need to quickly do it."
+//
+// So it renders only when ALL THREE hold:
+//   1. this is a supervisor device (DeskRoles), asked at render time like every
+//      other supervisor gate, so a rename takes effect on the next render;
+//   2. the toggle in Settings is on (off by default, and on this device only);
+//   3. the row has NO ADDRESS by IbnoMergedView.hasAddress, the same predicate
+//      the Hide no-address chip counts, so "the blank ones" means one thing.
+// It sits BESIDE the FTrack chip, never in place of it: the history page stays
+// one click away on the same row.
+const FTRACK_ADDRESS_CHIP_KEY = 'ibno_ftrack_address_chip';
+
+function ftrackAddressChipOn() {
+  return DeskRoles.isSupervisorDevice(deviceName) &&
+    toolStorage.get(FTRACK_ADDRESS_CHIP_KEY, false) === true;
+}
+
+function addressChip(item) {
+  if (!item || !ftrackAddressChipOn()) return '';
+  if (IbnoMergedView.hasAddress(item, MERGED_VIEW_CTX)) return '';
+  return FTrack.ftrackDeliveryLink(item.label);
+}
+
+// The toggle's own section is hidden on an admin device, and the writer below
+// refuses there too: a hidden checkbox is an affordance, the refusal is the
+// behaviour (the station config editor's rule).
+function fillFtrackAddressSettings() {
+  const box = document.getElementById('ftrack-address-settings');
+  if (!box) return;
+  const allowed = DeskRoles.isSupervisorDevice(deviceName);
+  box.style.display = allowed ? '' : 'none';
+  const cb = document.getElementById('ftrack-address-toggle');
+  if (cb) cb.checked = allowed && ftrackAddressChipOn();
+}
+
+// Saved on the click, no Save button: it changes only what a chip links to on
+// this screen, so there is nothing to confirm. Off REMOVES the key rather than
+// storing false, so an unticked device carries nothing. Then a repaint, work
+// cursor carried across it. renderEarlyLane() redraws both lanes AND the Set
+// aside strip (it calls renderSetAside itself), so Parked and 503s come with
+// it. It does not reach Ready to Enter, and the main report has no-address
+// rows there too (4 on the inbox export, PR #1089 review), hence the second call.
+function setFtrackAddressChip(on) {
+  if (!DeskRoles.isSupervisorDevice(deviceName)) { fillFtrackAddressSettings(); return; }
+  if (on) toolStorage.set(FTRACK_ADDRESS_CHIP_KEY, true);
+  else toolStorage.remove(FTRACK_ADDRESS_CHIP_KEY);
+  fillFtrackAddressSettings();
+  const cursorLabel = workCursorLabel();
+  renderEarlyLane();
+  renderAutoSectionRows();
+  restoreWorkCursor(cursorLabel);
+}
+
 function copyStreetChip(btn) {
   const street = btn.dataset.street || '';
   if (!street) return;
@@ -22129,7 +22213,7 @@ function buildManualRow(item, bucket) {
       // "Barcode selected" prints through. A row still awaiting the lookup, or
       // holding a conflict, shows no chip — and its state is already named by
       // the tag next to the label (postSortBarcodeTagHtml).
-      '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) +
+      '<span class="row-chips">' + recurringPill(label) + FTrack.ftrackLink(label) + addressChip(item) +
         (isEarly ? earlyBarcodeChip(item) : barcodeChip(item)) + streetChip(item) + eopsChip(item) + '</span></td>' +
     '<td class="cat-text">' + categoryHtml + '</td>' +
     '<td class="cat-text">' + ToolHelpers.escapeHtml(inboundDate || '\u2014') + '</td>' +

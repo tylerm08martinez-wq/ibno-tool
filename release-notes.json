@@ -554,6 +554,30 @@
       "commit": "7c17478",
       "shippedAt": "2026-09-19",
       "order": 23
+    },
+    {
+      "id": "pr-1089",
+      "pr": 1089,
+      "issue": 1088,
+      "tool": "ibno-coder",
+      "title": "FTrack opens the new site, and a quick Address chip for no-address rows",
+      "summary": "Every FTrack button, in every tool, now opens the new FTrack site. On your device you can also turn on an Address chip in Settings, which opens the FTrack delivery page with the address on rows with no street.",
+      "watchFor": [
+        "The Address chip is off until you tick it in Settings, and only your device has the checkbox. The admins see only the FTrack chip, which still opens the full history.",
+        "It shows only on rows with no house number and street, the same rows Hide no-address counts. A row with a real address never gets one.",
+        "If FTrack opens a blank or error page, tell me. The history link reuses the old link's settings, which only the FedEx network can confirm."
+      ],
+      "howToSee": [
+        "Load today's report and click FTrack on any row: it opens on ftrack.prod.cloud.fedex.com",
+        "Open Settings and tick Show the Address chip on no-address rows",
+        "Rows with no street now show Address next to FTrack, with no reload",
+        "Click Address: the FTrack delivery page opens in a new tab with the address",
+        "Untick the box and the chips go away"
+      ],
+      "mergedAt": null,
+      "commit": null,
+      "shippedAt": null,
+      "order": 25
     }
   ],
   "queueIssue": 1025
